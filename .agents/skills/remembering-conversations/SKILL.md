@@ -1,6 +1,15 @@
 ---
 name: remembering-conversations
+<<<<<<< HEAD
 description: Use when user asks 'how should I...' or 'what's the best approach...' after exploring code, OR when you've tried to solve something and are stuck, OR for unfamiliar workflows, OR when user references past work. Searches conversation history.
+=======
+description: >-
+  Use when user asks 'how should I...' or 'what's the best approach...' after
+  exploring code, OR when you've tried to solve something and are stuck, OR for
+  unfamiliar workflows, OR when user references past work. Searches conversation
+  history.
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Remembering Conversations

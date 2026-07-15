@@ -1,6 +1,16 @@
 ---
 name: project-blogger-integration
+<<<<<<< HEAD
 description: Use this skill when working on anything that bridges xBotz with the Blogger shortlink-rotator project. Covers the Blogger architecture, how the shortlink system works, how the bot generates/shares shortlinks via the XMissions rotator_blogs mission type, environment wiring, database management, build pipeline, and deployment integration patterns.
+=======
+description: >-
+  Use this skill when working on anything that bridges xBotz with the Blogger
+  shortlink-rotator project. Covers the Blogger architecture, how the shortlink
+  system works, how the bot generates/shares shortlinks via the XMissions
+  rotator_blogs mission type, environment wiring, database management, build
+  pipeline, and deployment integration patterns.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Blogger Integration — Shortlink Rotator

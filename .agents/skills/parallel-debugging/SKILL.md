@@ -1,7 +1,17 @@
 ---
 name: parallel-debugging
+<<<<<<< HEAD
 description: Debug complex issues using competing hypotheses with parallel investigation, evidence collection, and root cause arbitration. Use this skill when debugging bugs with multiple potential causes, performing root cause analysis, or organizing parallel investigation workflows.
 version: 1.0.2
+=======
+description: >-
+  Debug complex issues using competing hypotheses with parallel investigation,
+  evidence collection, and root cause arbitration. Use this skill when debugging
+  bugs with multiple potential causes, performing root cause analysis, or
+  organizing parallel investigation workflows.
+version: 1.0.2
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Parallel Debugging

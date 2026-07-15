@@ -1,6 +1,15 @@
 ---
 name: responsive-design
+<<<<<<< HEAD
 description: Implement modern responsive layouts using container queries, fluid typography, CSS Grid, and mobile-first breakpoint strategies. Use when building adaptive interfaces, implementing fluid layouts, or creating component-level responsive behavior.
+=======
+description: >-
+  Implement modern responsive layouts using container queries, fluid typography,
+  CSS Grid, and mobile-first breakpoint strategies. Use when building adaptive
+  interfaces, implementing fluid layouts, or creating component-level responsive
+  behavior.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Responsive Design
@@ -18,6 +27,7 @@ Master modern responsive design techniques to create interfaces that adapt seaml
 - Creating adaptive navigation patterns
 - Building responsive tables and data displays
 
+<<<<<<< HEAD
 ## Core Capabilities
 
 ### 1. Container Queries
@@ -493,6 +503,11 @@ function ResponsiveDataTable({ data, columns }) {
   font-size: clamp(2rem, 5vw, 4rem);
 }
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -514,6 +529,7 @@ function ResponsiveDataTable({ data, columns }) {
 - **Touch Targets**: Buttons too small to tap accurately
 - **Aspect Ratio**: Images squishing or stretching
 - **Z-Index Stacking**: Overlays breaking on different screens
+<<<<<<< HEAD
 
 ## Resources
 
@@ -522,3 +538,5 @@ function ResponsiveDataTable({ data, columns }) {
 - [Every Layout](https://every-layout.dev/)
 - [Responsive Images Guide](https://web.dev/responsive-images/)
 - [CSS Grid Garden](https://cssgridgarden.com/)
+=======
+>>>>>>> 2ecb89d (update)

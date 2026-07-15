@@ -73,6 +73,7 @@ Accept: application/vnd.api+json; version=1
 /api/users?version=1
 ```
 
+<<<<<<< HEAD
 ## REST API Design Patterns
 
 ### Pattern 1: Resource Collection Design
@@ -484,6 +485,11 @@ def create_context():
         }
     }
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -516,6 +522,7 @@ def create_context():
 - **Poor Documentation**: Undocumented APIs frustrate developers
 - **Ignoring HTTP Semantics**: POST for idempotent operations breaks expectations
 - **Tight Coupling**: API structure shouldn't mirror database schema
+<<<<<<< HEAD
 
 ## Resources
 
@@ -526,3 +533,5 @@ def create_context():
 - **assets/graphql-schema-template.graphql**: Complete GraphQL schema example
 - **assets/api-design-checklist.md**: Pre-implementation review checklist
 - **scripts/openapi-generator.py**: Generate OpenAPI specs from code
+=======
+>>>>>>> 2ecb89d (update)

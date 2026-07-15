@@ -1,6 +1,15 @@
 ---
 name: uv-package-manager
+<<<<<<< HEAD
 description: Master the uv package manager for fast Python dependency management, virtual environments, and modern Python project workflows. Use when setting up Python projects, managing dependencies, or optimizing Python development workflows with uv.
+=======
+description: >-
+  Master the uv package manager for fast Python dependency management, virtual
+  environments, and modern Python project workflows. Use when setting up Python
+  projects, managing dependencies, or optimizing Python development workflows
+  with uv.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # UV Package Manager
@@ -342,6 +351,7 @@ uv pip freeze > requirements.txt
 uv pip freeze --require-hashes > requirements.txt
 ```
 
+<<<<<<< HEAD
 ## Advanced Workflows
 
 ### Pattern 12: Monorepo Support
@@ -832,3 +842,6 @@ uv --version                # Show version
 8. **Use workspaces** - For monorepo projects
 9. **Export for compatibility** - Generate requirements.txt when needed
 10. **Read the docs** - uv is feature-rich and evolving
+=======
+For advanced workflows including Docker integration, lockfile management, performance optimization, tool comparison, common workflows, tool integration, troubleshooting, best practices, migration guides, and command reference, see [references/advanced-patterns.md](references/advanced-patterns.md)
+>>>>>>> 2ecb89d (update)

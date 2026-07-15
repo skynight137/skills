@@ -11,6 +11,7 @@ Example:
 """
 
 import fnmatch
+<<<<<<< HEAD
 from pathlib import Path
 import sys
 import zipfile
@@ -18,6 +19,13 @@ import zipfile
 from scripts.quick_validate import validate_skill
 
 
+=======
+import sys
+import zipfile
+from pathlib import Path
+from scripts.quick_validate import validate_skill
+
+>>>>>>> 2ecb89d (update)
 # Patterns to exclude when packaging skills.
 EXCLUDE_DIRS = {"__pycache__", "node_modules"}
 EXCLUDE_GLOBS = {"*.pyc"}
@@ -90,9 +98,15 @@ def package_skill(skill_path, output_dir=None):
 
     # Create the .skill file (zip format)
     try:
+<<<<<<< HEAD
         with zipfile.ZipFile(skill_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
             # Walk through the skill directory, excluding build artifacts
             for file_path in skill_path.rglob("*"):
+=======
+        with zipfile.ZipFile(skill_filename, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Walk through the skill directory, excluding build artifacts
+            for file_path in skill_path.rglob('*'):
+>>>>>>> 2ecb89d (update)
                 if not file_path.is_file():
                     continue
                 arcname = file_path.relative_to(skill_path.parent)

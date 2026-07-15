@@ -211,6 +211,7 @@ async def call_downstream_service(endpoint: str, data: dict) -> dict:
         return response.json()
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: The Four Golden Signals with Prometheus
@@ -385,6 +386,11 @@ async def process_order(order_id: str) -> Order:
 
         return order
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

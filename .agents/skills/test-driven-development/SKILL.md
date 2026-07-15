@@ -1,6 +1,13 @@
 ---
 name: test-driven-development
+<<<<<<< HEAD
 description: Use when implementing any feature or bugfix, before writing implementation code
+=======
+description: >-
+  Use when implementing any feature or bugfix, before writing implementation
+  code
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Test-Driven Development (TDD)
@@ -356,7 +363,11 @@ Never fix bugs without a test.
 
 ## Testing Anti-Patterns
 
+<<<<<<< HEAD
 When adding mocks or test utilities, read @testing-anti-patterns.md to avoid common pitfalls:
+=======
+When adding mocks or test utilities, read [testing-anti-patterns.md](testing-anti-patterns.md) to avoid common pitfalls:
+>>>>>>> 2ecb89d (update)
 - Testing mock behavior instead of real behavior
 - Adding test-only methods to production classes
 - Mocking without understanding dependencies

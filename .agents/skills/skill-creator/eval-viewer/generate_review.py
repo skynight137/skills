@@ -14,6 +14,7 @@ No dependencies beyond the Python stdlib are required.
 
 import argparse
 import base64
+<<<<<<< HEAD
 import contextlib
 from functools import partial
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -21,19 +22,31 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+=======
+import json
+import mimetypes
+import os
+>>>>>>> 2ecb89d (update)
 import re
 import signal
 import subprocess
 import sys
 import time
 import webbrowser
+<<<<<<< HEAD
 
+=======
+from functools import partial
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+>>>>>>> 2ecb89d (update)
 
 # Files to exclude from output listings
 METADATA_FILES = {"transcript.md", "user_notes.md", "metrics.json"}
 
 # Extensions we render as inline text
 TEXT_EXTENSIONS = {
+<<<<<<< HEAD
     ".txt",
     ".md",
     ".json",
@@ -60,6 +73,11 @@ TEXT_EXTENSIONS = {
     ".sql",
     ".r",
     ".toml",
+=======
+    ".txt", ".md", ".json", ".csv", ".py", ".js", ".ts", ".tsx", ".jsx",
+    ".yaml", ".yml", ".xml", ".html", ".css", ".sh", ".rb", ".go", ".rs",
+    ".java", ".c", ".cpp", ".h", ".hpp", ".sql", ".r", ".toml",
+>>>>>>> 2ecb89d (update)
 }
 
 # Extensions we render as inline images
@@ -155,12 +173,29 @@ def build_run(root: Path, run_dir: Path) -> dict | None:
     grading = None
     for candidate in [run_dir / "grading.json", run_dir.parent / "grading.json"]:
         if candidate.exists():
+<<<<<<< HEAD
             with contextlib.suppress(json.JSONDecodeError, OSError):
                 grading = json.loads(candidate.read_text())
             if grading:
                 break
 
     return {"id": run_id, "prompt": prompt, "eval_id": eval_id, "outputs": output_files, "grading": grading}
+=======
+            try:
+                grading = json.loads(candidate.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+            if grading:
+                break
+
+    return {
+        "id": run_id,
+        "prompt": prompt,
+        "eval_id": eval_id,
+        "outputs": output_files,
+        "grading": grading,
+    }
+>>>>>>> 2ecb89d (update)
 
 
 def embed_file(path: Path) -> dict:
@@ -173,28 +208,61 @@ def embed_file(path: Path) -> dict:
             content = path.read_text(errors="replace")
         except OSError:
             content = "(Error reading file)"
+<<<<<<< HEAD
         return {"name": path.name, "type": "text", "content": content}
+=======
+        return {
+            "name": path.name,
+            "type": "text",
+            "content": content,
+        }
+>>>>>>> 2ecb89d (update)
     elif ext in IMAGE_EXTENSIONS:
         try:
             raw = path.read_bytes()
             b64 = base64.b64encode(raw).decode("ascii")
         except OSError:
             return {"name": path.name, "type": "error", "content": "(Error reading file)"}
+<<<<<<< HEAD
         return {"name": path.name, "type": "image", "mime": mime, "data_uri": f"data:{mime};base64,{b64}"}
+=======
+        return {
+            "name": path.name,
+            "type": "image",
+            "mime": mime,
+            "data_uri": f"data:{mime};base64,{b64}",
+        }
+>>>>>>> 2ecb89d (update)
     elif ext == ".pdf":
         try:
             raw = path.read_bytes()
             b64 = base64.b64encode(raw).decode("ascii")
         except OSError:
             return {"name": path.name, "type": "error", "content": "(Error reading file)"}
+<<<<<<< HEAD
         return {"name": path.name, "type": "pdf", "data_uri": f"data:{mime};base64,{b64}"}
+=======
+        return {
+            "name": path.name,
+            "type": "pdf",
+            "data_uri": f"data:{mime};base64,{b64}",
+        }
+>>>>>>> 2ecb89d (update)
     elif ext == ".xlsx":
         try:
             raw = path.read_bytes()
             b64 = base64.b64encode(raw).decode("ascii")
         except OSError:
             return {"name": path.name, "type": "error", "content": "(Error reading file)"}
+<<<<<<< HEAD
         return {"name": path.name, "type": "xlsx", "data_b64": b64}
+=======
+        return {
+            "name": path.name,
+            "type": "xlsx",
+            "data_b64": b64,
+        }
+>>>>>>> 2ecb89d (update)
     else:
         # Binary / unknown — base64 download link
         try:
@@ -202,7 +270,16 @@ def embed_file(path: Path) -> dict:
             b64 = base64.b64encode(raw).decode("ascii")
         except OSError:
             return {"name": path.name, "type": "error", "content": "(Error reading file)"}
+<<<<<<< HEAD
         return {"name": path.name, "type": "binary", "mime": mime, "data_uri": f"data:{mime};base64,{b64}"}
+=======
+        return {
+            "name": path.name,
+            "type": "binary",
+            "mime": mime,
+            "data_uri": f"data:{mime};base64,{b64}",
+        }
+>>>>>>> 2ecb89d (update)
 
 
 def load_previous_iteration(workspace: Path) -> dict[str, dict]:
@@ -219,7 +296,13 @@ def load_previous_iteration(workspace: Path) -> dict[str, dict]:
         try:
             data = json.loads(feedback_path.read_text())
             feedback_map = {
+<<<<<<< HEAD
                 r["run_id"]: r["feedback"] for r in data.get("reviews", []) if r.get("feedback", "").strip()
+=======
+                r["run_id"]: r["feedback"]
+                for r in data.get("reviews", [])
+                if r.get("feedback", "").strip()
+>>>>>>> 2ecb89d (update)
             }
         except (json.JSONDecodeError, OSError, KeyError):
             pass
@@ -227,7 +310,14 @@ def load_previous_iteration(workspace: Path) -> dict[str, dict]:
     # Load runs (to get outputs)
     prev_runs = find_runs(workspace)
     for run in prev_runs:
+<<<<<<< HEAD
         result[run["id"]] = {"feedback": feedback_map.get(run["id"], ""), "outputs": run.get("outputs", [])}
+=======
+        result[run["id"]] = {
+            "feedback": feedback_map.get(run["id"], ""),
+            "outputs": run.get("outputs", []),
+        }
+>>>>>>> 2ecb89d (update)
 
     # Also add feedback for run_ids that had feedback but no matching run
     for run_id, fb in feedback_map.items():
@@ -238,7 +328,14 @@ def load_previous_iteration(workspace: Path) -> dict[str, dict]:
 
 
 def generate_html(
+<<<<<<< HEAD
     runs: list[dict], skill_name: str, previous: dict[str, dict] | None = None, benchmark: dict | None = None
+=======
+    runs: list[dict],
+    skill_name: str,
+    previous: dict[str, dict] | None = None,
+    benchmark: dict | None = None,
+>>>>>>> 2ecb89d (update)
 ) -> str:
     """Generate the complete standalone HTML page with embedded data."""
     template_path = Path(__file__).parent / "viewer.html"
@@ -272,6 +369,7 @@ def generate_html(
 # HTTP server (stdlib only, zero dependencies)
 # ---------------------------------------------------------------------------
 
+<<<<<<< HEAD
 
 def _kill_port(port: int) -> None:
     """Kill any process listening on the given port."""
@@ -281,6 +379,21 @@ def _kill_port(port: int) -> None:
             if pid_str.strip():
                 with contextlib.suppress(ProcessLookupError, ValueError):
                     os.kill(int(pid_str.strip()), signal.SIGTERM)
+=======
+def _kill_port(port: int) -> None:
+    """Kill any process listening on the given port."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=5,
+        )
+        for pid_str in result.stdout.strip().split("\n"):
+            if pid_str.strip():
+                try:
+                    os.kill(int(pid_str.strip()), signal.SIGTERM)
+                except (ProcessLookupError, ValueError):
+                    pass
+>>>>>>> 2ecb89d (update)
         if result.stdout.strip():
             time.sleep(0.5)
     except subprocess.TimeoutExpired:
@@ -288,7 +401,10 @@ def _kill_port(port: int) -> None:
     except FileNotFoundError:
         print("Note: lsof not found, cannot check if port is in use", file=sys.stderr)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 2ecb89d (update)
 class ReviewHandler(BaseHTTPRequestHandler):
     """Serves the review HTML and handles feedback saves.
 
@@ -319,8 +435,15 @@ class ReviewHandler(BaseHTTPRequestHandler):
             runs = find_runs(self.workspace)
             benchmark = None
             if self.benchmark_path and self.benchmark_path.exists():
+<<<<<<< HEAD
                 with contextlib.suppress(json.JSONDecodeError, OSError):
                     benchmark = json.loads(self.benchmark_path.read_text())
+=======
+                try:
+                    benchmark = json.loads(self.benchmark_path.read_text())
+                except (json.JSONDecodeError, OSError):
+                    pass
+>>>>>>> 2ecb89d (update)
             html = generate_html(runs, self.skill_name, self.previous, benchmark)
             content = html.encode("utf-8")
             self.send_response(200)
@@ -372,6 +495,7 @@ def main() -> None:
     parser.add_argument("--port", "-p", type=int, default=3117, help="Server port (default: 3117)")
     parser.add_argument("--skill-name", "-n", type=str, default=None, help="Skill name for header")
     parser.add_argument(
+<<<<<<< HEAD
         "--previous-workspace",
         type=Path,
         default=None,
@@ -385,6 +509,17 @@ def main() -> None:
         "-s",
         type=Path,
         default=None,
+=======
+        "--previous-workspace", type=Path, default=None,
+        help="Path to previous iteration's workspace (shows old outputs and feedback as context)",
+    )
+    parser.add_argument(
+        "--benchmark", type=Path, default=None,
+        help="Path to benchmark.json to show in the Benchmark tab",
+    )
+    parser.add_argument(
+        "--static", "-s", type=Path, default=None,
+>>>>>>> 2ecb89d (update)
         help="Write standalone HTML to this path instead of starting a server",
     )
     args = parser.parse_args()
@@ -409,8 +544,15 @@ def main() -> None:
     benchmark_path = args.benchmark.resolve() if args.benchmark else None
     benchmark = None
     if benchmark_path and benchmark_path.exists():
+<<<<<<< HEAD
         with contextlib.suppress(json.JSONDecodeError, OSError):
             benchmark = json.loads(benchmark_path.read_text())
+=======
+        try:
+            benchmark = json.loads(benchmark_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            pass
+>>>>>>> 2ecb89d (update)
 
     if args.static:
         html = generate_html(runs, skill_name, previous, benchmark)
@@ -431,8 +573,13 @@ def main() -> None:
         port = server.server_address[1]
 
     url = f"http://localhost:{port}"
+<<<<<<< HEAD
     print("\n  Eval Viewer")
     print("  ─────────────────────────────────")
+=======
+    print(f"\n  Eval Viewer")
+    print(f"  ─────────────────────────────────")
+>>>>>>> 2ecb89d (update)
     print(f"  URL:       {url}")
     print(f"  Workspace: {workspace}")
     print(f"  Feedback:  {feedback_path}")
@@ -440,7 +587,11 @@ def main() -> None:
         print(f"  Previous:  {args.previous_workspace} ({len(previous)} runs)")
     if benchmark_path:
         print(f"  Benchmark: {benchmark_path}")
+<<<<<<< HEAD
     print("\n  Press Ctrl+C to stop.\n")
+=======
+    print(f"\n  Press Ctrl+C to stop.\n")
+>>>>>>> 2ecb89d (update)
 
     webbrowser.open(url)
 

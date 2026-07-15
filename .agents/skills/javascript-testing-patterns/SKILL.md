@@ -493,6 +493,7 @@ describe("OrderService", () => {
 
 ## Integration Testing
 
+<<<<<<< HEAD
 ### Pattern 1: API Integration Tests
 
 ```typescript
@@ -867,6 +868,22 @@ describe("useCounter", () => {
 
 ## Test Fixtures and Factories
 
+=======
+Integration tests verify real database operations and HTTP endpoints using `supertest` and a test database instance. Always truncate tables in `beforeEach` and tear down in `afterAll`.
+
+For full API integration test examples (supertest + PostgreSQL) and database repository integration tests, see [references/advanced-testing-patterns.md](references/advanced-testing-patterns.md).
+
+## Frontend Testing with Testing Library
+
+Test React components by rendering them and querying by role, placeholder, or test ID. Test hooks with `renderHook` + `act`. Prefer semantic queries (`getByRole`, `getByPlaceholderText`) over `data-testid`.
+
+For complete React component test examples (UserForm, hooks with `renderHook`/`act`), see [references/advanced-testing-patterns.md](references/advanced-testing-patterns.md).
+
+## Test Fixtures and Factories
+
+Use `@faker-js/faker` to generate realistic test data factories. Factories accept optional `overrides` so tests can set only the fields they care about:
+
+>>>>>>> 2ecb89d (update)
 ```typescript
 // tests/fixtures/user.fixture.ts
 import { faker } from "@faker-js/faker";
@@ -880,6 +897,7 @@ export function createUserFixture(overrides?: Partial<User>): User {
     ...overrides,
   };
 }
+<<<<<<< HEAD
 
 export function createUsersFixture(count: number): User[] {
   return Array.from({ length: count }, () => createUserFixture());
@@ -945,6 +963,11 @@ describe('UserCard', () => {
   }
 }
 ```
+=======
+```
+
+For snapshot testing, coverage configuration, test organization patterns, promise testing, and timer mocking, see [references/advanced-testing-patterns.md](references/advanced-testing-patterns.md).
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -963,6 +986,7 @@ describe('UserCard', () => {
 13. **Test error handling**: Not just success cases
 14. **Use data-testid sparingly**: Prefer semantic queries
 15. **Clean up after tests**: Prevent test pollution
+<<<<<<< HEAD
 
 ## Common Patterns
 
@@ -1025,3 +1049,5 @@ it("should call function after delay", () => {
 - **Vitest Documentation**: https://vitest.dev/
 - **Testing Library**: https://testing-library.com/
 - **Kent C. Dodds Testing Blog**: https://kentcdodds.com/blog/
+=======
+>>>>>>> 2ecb89d (update)

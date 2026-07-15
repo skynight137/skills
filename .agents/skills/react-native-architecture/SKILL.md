@@ -1,6 +1,14 @@
 ---
 name: react-native-architecture
+<<<<<<< HEAD
 description: Build production React Native apps with Expo, navigation, native modules, offline sync, and cross-platform patterns. Use when developing mobile apps, implementing native integrations, or architecting React Native projects.
+=======
+enabled: true
+description: >-
+  Build production React Native apps with Expo, navigation, native modules,
+  offline sync, and cross-platform patterns. Use when developing mobile apps,
+  implementing native integrations, or architecting React Native projects.
+>>>>>>> 2ecb89d (update)
 ---
 
 # React Native Architecture
@@ -79,6 +87,7 @@ export default function RootLayout() {
 }
 ```
 
+<<<<<<< HEAD
 ## Patterns
 
 ### Pattern 1: Expo Router Navigation
@@ -646,6 +655,11 @@ eas submit --platform android
 # OTA updates
 eas update --branch production --message "Bug fixes"
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -664,6 +678,7 @@ eas update --branch production --message "Bug fixes"
 - **Don't ignore platform differences** - Test on both iOS and Android
 - **Don't store secrets in code** - Use environment variables
 - **Don't skip error boundaries** - Mobile crashes are unforgiving
+<<<<<<< HEAD
 
 ## Resources
 
@@ -671,3 +686,5 @@ eas update --branch production --message "Bug fixes"
 - [Expo Router](https://docs.expo.dev/router/introduction/)
 - [React Native Performance](https://reactnative.dev/docs/performance)
 - [FlashList](https://shopify.github.io/flash-list/)
+=======
+>>>>>>> 2ecb89d (update)

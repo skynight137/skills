@@ -1,6 +1,15 @@
 ---
 name: bot-config-patterns
+<<<<<<< HEAD
 description: Use this skill when working with bot/config/ — reading or updating configs, understanding BaseConfig singleton pattern, ConfigManager, cache invalidation, or adding new config fields. Covers config hierarchy, get_instance(), update_fields(), and field metadata.
+=======
+description: >-
+  Use this skill when working with bot/config/ — reading or updating configs,
+  understanding BaseConfig singleton pattern, ConfigManager, cache invalidation,
+  or adding new config fields. Covers config hierarchy, get_instance(),
+  update_fields(), and field metadata.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Bot Config Patterns
@@ -203,6 +212,7 @@ gc.disable_gdrive         # bool
 Service configs use `json_schema_extra` to classify fields:
 
 ```python
+<<<<<<< HEAD
 class AriaConfig(DaemonConfig):
     rpc_port: int = Field(
         default=6800,
@@ -211,14 +221,36 @@ class AriaConfig(DaemonConfig):
             "is_daemon_cli": True,    # Included in daemon CLI command
             "is_path": False,
             "required": False,
+=======
+class AriaModel(DaemonModel):
+    aria_port: int = Field(
+        default=6800,
+        json_schema_extra={
+            "require_restart": True,  # Daemon needs restart when changed
+        }
+    )
+    enable_rpc: bool = Field(
+        default=True,
+        json_schema_extra={
+            "require_restart": True,  # Daemon needs restart when changed
+            "is_daemon_cli": True,    # Included in daemon CLI command
+            "required": True,         # Always included (not skipped when default)
+>>>>>>> 2ecb89d (update)
         }
     )
 
 # Check field metadata:
+<<<<<<< HEAD
 aria_config.is_restart_field("rpc_port")  # True
 aria_config.is_daemon_cli_field("rpc_port")  # True
 cmd = await aria_config.build_daemon_cmd()
 # → ["aria2c", "--rpc-listen-port=6800", ...]
+=======
+aria_config.is_restart_field("aria_port")      # True
+aria_config.is_daemon_cli_field("enable_rpc")  # True
+cmd = await aria_config.build_daemon_cmd()
+# → ["aria2c", "--enable-rpc=true", "--rpc-listen-port=6800", ...]
+>>>>>>> 2ecb89d (update)
 ```
 
 ---

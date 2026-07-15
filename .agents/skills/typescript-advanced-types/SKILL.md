@@ -1,6 +1,16 @@
 ---
 name: typescript-advanced-types
+<<<<<<< HEAD
 description: Master TypeScript's advanced type system including generics, conditional types, mapped types, template literals, and utility types for building type-safe applications. Use when implementing complex type logic, creating reusable type utilities, or ensuring compile-time type safety in TypeScript projects.
+=======
+description: >-
+  Master TypeScript's advanced type system including generics, conditional
+  types, mapped types, template literals, and utility types for building
+  type-safe applications. Use when implementing complex type logic, creating
+  reusable type utilities, or ensuring compile-time type safety in TypeScript
+  projects.
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # TypeScript Advanced Types
@@ -261,6 +271,7 @@ type T3 = NonNullable<string | null | undefined>; // string
 type PageInfo = Record<"home" | "about", { title: string }>;
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 1: Type-Safe Event Emitter
@@ -663,6 +674,11 @@ function processValue(value: unknown) {
   console.log(value.toUpperCase());
 }
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -715,6 +731,7 @@ type ShouldError = ExpectError<AssertEqual<string, number>>;
 - Cache complex type computations
 - Limit recursion depth in recursive types
 - Use build tools to skip type checking in production
+<<<<<<< HEAD
 
 ## Resources
 
@@ -722,3 +739,5 @@ type ShouldError = ExpectError<AssertEqual<string, number>>;
 - **Type Challenges**: https://github.com/type-challenges/type-challenges
 - **TypeScript Deep Dive**: https://basarat.gitbook.io/typescript/
 - **Effective TypeScript**: Book by Dan Vanderkam
+=======
+>>>>>>> 2ecb89d (update)

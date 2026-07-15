@@ -3,14 +3,26 @@
 Use this template when dispatching an implementer subagent.
 
 ```
+<<<<<<< HEAD
 Task tool (general-purpose):
   description: "Implement Task N: [task name]"
+=======
+Subagent (general-purpose):
+  description: "Implement Task N: [task name]"
+  model: [MODEL — REQUIRED: choose per SKILL.md Model Selection; an omitted
+         model silently inherits the session's most expensive one]
+>>>>>>> 2ecb89d (update)
   prompt: |
     You are implementing Task N: [task name]
 
     ## Task Description
 
+<<<<<<< HEAD
     [FULL TEXT of task from plan - paste it here, don't make subagent read file]
+=======
+    Read your task brief first: [BRIEF_FILE]
+    It contains the full task text from the plan.
+>>>>>>> 2ecb89d (update)
 
     ## Context
 
@@ -41,6 +53,12 @@ Task tool (general-purpose):
     **While you work:** If you encounter something unexpected or unclear, **ask questions**.
     It's always OK to pause and clarify. Don't guess or make assumptions.
 
+<<<<<<< HEAD
+=======
+    While iterating, run the focused test for what you're changing; run the
+    full suite once before committing, not after every edit.
+
+>>>>>>> 2ecb89d (update)
     ## Code Organization
 
     You reason best about code you can hold in context at once, and your edits are more
@@ -94,6 +112,7 @@ Task tool (general-purpose):
     - Do tests actually verify behavior (not just mock behavior)?
     - Did I follow TDD if required?
     - Are tests comprehensive?
+<<<<<<< HEAD
 
     If you find issues during self-review, fix them now before reporting.
 
@@ -103,10 +122,44 @@ Task tool (general-purpose):
     - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
     - What you implemented (or what you attempted, if blocked)
     - What you tested and test results
+=======
+    - Is the test output pristine (no stray warnings or noise)?
+
+    If you find issues during self-review, fix them now before reporting.
+
+    ## After Review Findings
+
+    If a reviewer finds issues and you fix them, re-run the tests that cover
+    the amended code and append the results to your report file. Reviewers
+    will not re-run tests for you — your report is the test evidence.
+
+    ## Report Format
+
+    Write your full report to [REPORT_FILE]:
+    - What you implemented (or what you attempted, if blocked)
+    - What you tested and test results
+    - **TDD Evidence** (if TDD was required for this task):
+      - RED: command run, relevant failing output before implementation, and why the failure was expected
+      - GREEN: command run and relevant passing output after implementation
+>>>>>>> 2ecb89d (update)
     - Files changed
     - Self-review findings (if any)
     - Any issues or concerns
 
+<<<<<<< HEAD
+=======
+    Then report back with ONLY (under 15 lines — the detail lives in the
+    report file):
+    - **Status:** DONE | DONE_WITH_CONCERNS | BLOCKED | NEEDS_CONTEXT
+    - Commits created (short SHA + subject)
+    - One-line test summary (e.g. "14/14 passing, output pristine")
+    - Your concerns, if any
+    - The report file path
+
+    If BLOCKED or NEEDS_CONTEXT, put the specifics in the final message
+    itself — the controller acts on it directly.
+
+>>>>>>> 2ecb89d (update)
     Use DONE_WITH_CONCERNS if you completed the work but have doubts about correctness.
     Use BLOCKED if you cannot complete the task. Use NEEDS_CONTEXT if you need
     information that wasn't provided. Never silently produce work you're unsure about.

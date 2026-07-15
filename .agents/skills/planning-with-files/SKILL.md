@@ -1,12 +1,24 @@
 ---
 name: planning-with-files
+<<<<<<< HEAD
 description: Implements Manus-style file-based planning to organize and track progress on complex tasks. Creates task_plan.md, findings.md, and progress.md. Use when asked to plan out, break down, or organize a multi-step project, research task, or any work requiring >5 tool calls. Supports automatic session recovery after /clear.
 user-invocable: true
 allowed-tools: "Read, Write, Edit, Bash, Glob, Grep"
+=======
+description: >-
+  Implements Manus-style file-based planning to organize and track progress on
+  complex tasks. Creates task_plan.md, findings.md, and progress.md. Use when
+  asked to plan out, break down, or organize a multi-step project, research
+  task, or any work requiring >5 tool calls. Supports automatic session recovery
+  after /clear.
+user-invocable: true
+allowed-tools: 'Read, Write, Edit, Bash, Glob, Grep'
+>>>>>>> 2ecb89d (update)
 hooks:
   UserPromptSubmit:
     - hooks:
         - type: command
+<<<<<<< HEAD
           command: "if [ -f task_plan.md ]; then echo '[planning-with-files] Active plan detected. If you have not read task_plan.md, progress.md, and findings.md in this conversation, read them now before proceeding.'; fi"
   PreToolUse:
     - matcher: "Write|Edit|Bash|Read|Glob|Grep"
@@ -24,6 +36,36 @@ hooks:
           command: "SD=\"${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/planning-with-files}/scripts\"; powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"$SD/check-complete.ps1\" 2>/dev/null || sh \"$SD/check-complete.sh\""
 metadata:
   version: "2.23.0"
+=======
+          command: >-
+            if [ -f task_plan.md ]; then echo '[planning-with-files] Active plan
+            detected. If you have not read task_plan.md, progress.md, and
+            findings.md in this conversation, read them now before proceeding.';
+            fi
+  PreToolUse:
+    - matcher: Write|Edit|Bash|Read|Glob|Grep
+      hooks:
+        - type: command
+          command: cat task_plan.md 2>/dev/null | head -30 || true
+  PostToolUse:
+    - matcher: Write|Edit
+      hooks:
+        - type: command
+          command: >-
+            if [ -f task_plan.md ]; then echo '[planning-with-files] Update
+            progress.md with what you just did. If a phase is now complete,
+            update task_plan.md status.'; fi
+  Stop:
+    - hooks:
+        - type: command
+          command: >-
+            SD="${CLAUDE_PLUGIN_ROOT:-$HOME/.claude/plugins/planning-with-files}/scripts";
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File
+            "$SD/check-complete.ps1" 2>/dev/null || sh "$SD/check-complete.sh"
+metadata:
+  version: 2.23.0
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Planning with Files

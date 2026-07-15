@@ -26,6 +26,7 @@ Master Stripe payment processing integration for robust, PCI-compliant payment f
 
 ### 1. Payment Flows
 
+<<<<<<< HEAD
 **Checkout Session (Hosted)**
 
 - Stripe-hosted payment page
@@ -39,6 +40,23 @@ Master Stripe payment processing integration for robust, PCI-compliant payment f
 - Requires Stripe.js for PCI compliance
 - More complex implementation
 - Better customization options
+=======
+**Checkout Sessions**
+
+- Recommended for most integrations
+- Supports all UI paths:
+  - Stripe-hosted checkout page
+  - Embedded checkout form
+  - Custom UI with Elements (Payment Element, Express Checkout Element) using `ui_mode='custom'`
+- Provides built-in checkout capabilities (line items, discounts, tax, shipping, address collection, saved payment methods, and checkout lifecycle events)
+- Lower integration and maintenance burden than Payment Intents
+
+**Payment Intents (Bespoke control)**
+
+- You calculate the final amount with taxes, discounts, subscriptions, and currency conversion yourself.
+- More complex implementation and long-term maintenance burden
+- Requires Stripe.js for PCI compliance
+>>>>>>> 2ecb89d (update)
 
 **Setup Intents (Save Payment Methods)**
 
@@ -82,7 +100,10 @@ stripe.api_key = "sk_test_..."
 
 # Create a checkout session
 session = stripe.checkout.Session.create(
+<<<<<<< HEAD
     payment_method_types=['card'],
+=======
+>>>>>>> 2ecb89d (update)
     line_items=[{
         'price_data': {
             'currency': 'usd',
@@ -98,13 +119,18 @@ session = stripe.checkout.Session.create(
     }],
     mode='subscription',
     success_url='https://yourdomain.com/success?session_id={CHECKOUT_SESSION_ID}',
+<<<<<<< HEAD
     cancel_url='https://yourdomain.com/cancel',
+=======
+    cancel_url='https://yourdomain.com/cancel'
+>>>>>>> 2ecb89d (update)
 )
 
 # Redirect user to session.url
 print(session.url)
 ```
 
+<<<<<<< HEAD
 ## Payment Implementation Patterns
 
 ### Pattern 1: One-Time Payment (Hosted Checkout)
@@ -392,6 +418,11 @@ def handle_dispute(charge_id, evidence):
         }
     )
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Testing
 
@@ -417,9 +448,17 @@ def test_payment_flow():
     # Create payment intent
     intent = stripe.PaymentIntent.create(
         amount=1000,
+<<<<<<< HEAD
         currency='usd',
         customer=customer.id,
         payment_method_types=['card']
+=======
+        automatic_payment_methods={
+            'enabled': True
+        },
+        currency='usd',
+        customer=customer.id
+>>>>>>> 2ecb89d (update)
     )
 
     # Confirm with test card
@@ -430,6 +469,7 @@ def test_payment_flow():
 
     assert confirmed.status == 'succeeded'
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -460,3 +500,5 @@ def test_payment_flow():
 - **Hardcoded Amounts**: Use cents/smallest currency unit
 - **No Retry Logic**: Implement retries for API calls
 - **Ignoring Test Mode**: Test all edge cases with test cards
+=======
+>>>>>>> 2ecb89d (update)

@@ -223,6 +223,7 @@ class JobRepository:
         )
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: Dead Letter Queue
@@ -349,6 +350,11 @@ def send_email(to: str, subject: str, body: str) -> None:
 - AWS SQS + Lambda
 - Google Cloud Tasks
 - Azure Functions
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

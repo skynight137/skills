@@ -127,6 +127,7 @@ def capture_paypal_order(order_id):
         }
 ```
 
+<<<<<<< HEAD
 ## Express Checkout Implementation
 
 ### Server-Side Order Creation
@@ -424,6 +425,11 @@ except PayPalError as e:
     # Handle error appropriately
     log_error(e)
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Testing
 
@@ -452,6 +458,7 @@ def test_payment_flow():
     # captured = client.capture_order(order['id'])
     # assert captured['status'] == 'COMPLETED'
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -480,3 +487,5 @@ def test_payment_flow():
 - **Wrong Environment**: Mixing sandbox and production URLs/credentials
 - **Missing Webhooks**: Not handling all payment states
 - **Hardcoded Values**: Not making configurable for different environments
+=======
+>>>>>>> 2ecb89d (update)

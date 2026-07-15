@@ -1,6 +1,15 @@
 ---
 name: backend-payment-patterns
+<<<<<<< HEAD
 description: Use this skill when working on backend payment webhooks, payment order creation, provider integrations (Trakteer, Saweria), purchase message parsing, or adding a new payment provider. Covers webhook security, replay attack prevention, PaymentService, and ProductHandleService fulfillment flow.
+=======
+description: >-
+  Use this skill when working on backend payment webhooks, payment order
+  creation, provider integrations (Trakteer, Saweria), purchase message parsing,
+  or adding a new payment provider. Covers webhook security, replay attack
+  prevention, PaymentService, and ProductHandleService fulfillment flow.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Backend Payment Patterns

@@ -5,17 +5,26 @@ Prompt Optimization Script
 Automatically test and optimize prompts using A/B testing and metrics tracking.
 """
 
+<<<<<<< HEAD
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 import json
 import time
 from typing import Any
 
+=======
+import json
+import time
+from typing import List, Dict, Any
+from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
+>>>>>>> 2ecb89d (update)
 import numpy as np
 
 
 @dataclass
 class TestCase:
+<<<<<<< HEAD
     input: dict[str, Any]
     expected_output: str
     metadata: dict[str, Any] = None
@@ -23,6 +32,15 @@ class TestCase:
 
 class PromptOptimizer:
     def __init__(self, llm_client, test_suite: list[TestCase]):
+=======
+    input: Dict[str, Any]
+    expected_output: str
+    metadata: Dict[str, Any] = None
+
+
+class PromptOptimizer:
+    def __init__(self, llm_client, test_suite: List[TestCase]):
+>>>>>>> 2ecb89d (update)
         self.client = llm_client
         self.test_suite = test_suite
         self.results_history = []
@@ -32,12 +50,25 @@ class PromptOptimizer:
         """Shutdown the thread pool executor."""
         self.executor.shutdown(wait=True)
 
+<<<<<<< HEAD
     def evaluate_prompt(self, prompt_template: str, test_cases: list[TestCase] | None = None) -> dict[str, float]:
+=======
+    def evaluate_prompt(self, prompt_template: str, test_cases: List[TestCase] = None) -> Dict[str, float]:
+>>>>>>> 2ecb89d (update)
         """Evaluate a prompt template against test cases in parallel."""
         if test_cases is None:
             test_cases = self.test_suite
 
+<<<<<<< HEAD
         metrics = {"accuracy": [], "latency": [], "token_count": [], "success_rate": []}
+=======
+        metrics = {
+            'accuracy': [],
+            'latency': [],
+            'token_count': [],
+            'success_rate': []
+        }
+>>>>>>> 2ecb89d (update)
 
         def process_test_case(test_case):
             start_time = time.time()
@@ -56,13 +87,23 @@ class PromptOptimizer:
             success = 1 if response else 0
             accuracy = self.calculate_accuracy(response, test_case.expected_output)
 
+<<<<<<< HEAD
             return {"latency": latency, "token_count": token_count, "success_rate": success, "accuracy": accuracy}
+=======
+            return {
+                'latency': latency,
+                'token_count': token_count,
+                'success_rate': success,
+                'accuracy': accuracy
+            }
+>>>>>>> 2ecb89d (update)
 
         # Run test cases in parallel
         results = list(self.executor.map(process_test_case, test_cases))
 
         # Aggregate metrics
         for result in results:
+<<<<<<< HEAD
             metrics["latency"].append(result["latency"])
             metrics["token_count"].append(result["token_count"])
             metrics["success_rate"].append(result["success_rate"])
@@ -74,6 +115,19 @@ class PromptOptimizer:
             "p95_latency": np.percentile(metrics["latency"], 95),
             "avg_tokens": np.mean(metrics["token_count"]),
             "success_rate": np.mean(metrics["success_rate"]),
+=======
+            metrics['latency'].append(result['latency'])
+            metrics['token_count'].append(result['token_count'])
+            metrics['success_rate'].append(result['success_rate'])
+            metrics['accuracy'].append(result['accuracy'])
+
+        return {
+            'avg_accuracy': np.mean(metrics['accuracy']),
+            'avg_latency': np.mean(metrics['latency']),
+            'p95_latency': np.percentile(metrics['latency'], 95),
+            'avg_tokens': np.mean(metrics['token_count']),
+            'success_rate': np.mean(metrics['success_rate'])
+>>>>>>> 2ecb89d (update)
         }
 
     def calculate_accuracy(self, response: str, expected: str) -> float:
@@ -92,7 +146,11 @@ class PromptOptimizer:
         overlap = len(response_words & expected_words)
         return overlap / len(expected_words)
 
+<<<<<<< HEAD
     def optimize(self, base_prompt: str, max_iterations: int = 5) -> dict[str, Any]:
+=======
+    def optimize(self, base_prompt: str, max_iterations: int = 5) -> Dict[str, Any]:
+>>>>>>> 2ecb89d (update)
         """Iteratively optimize a prompt."""
         current_prompt = base_prompt
         best_prompt = base_prompt
@@ -112,6 +170,7 @@ class PromptOptimizer:
             print(f"Accuracy: {metrics['avg_accuracy']:.2f}, Latency: {metrics['avg_latency']:.2f}s")
 
             # Track results
+<<<<<<< HEAD
             self.results_history.append({"iteration": iteration, "prompt": current_prompt, "metrics": metrics})
 
             # Update best if improved
@@ -121,6 +180,21 @@ class PromptOptimizer:
 
             # Stop if good enough
             if metrics["avg_accuracy"] > 0.95:
+=======
+            self.results_history.append({
+                'iteration': iteration,
+                'prompt': current_prompt,
+                'metrics': metrics
+            })
+
+            # Update best if improved
+            if metrics['avg_accuracy'] > best_score:
+                best_score = metrics['avg_accuracy']
+                best_prompt = current_prompt
+
+            # Stop if good enough
+            if metrics['avg_accuracy'] > 0.95:
+>>>>>>> 2ecb89d (update)
                 print("Achieved target accuracy!")
                 break
 
@@ -129,22 +203,41 @@ class PromptOptimizer:
 
             # Test variations and pick best
             best_variation = current_prompt
+<<<<<<< HEAD
             best_variation_score = metrics["avg_accuracy"]
+=======
+            best_variation_score = metrics['avg_accuracy']
+>>>>>>> 2ecb89d (update)
             best_variation_metrics = metrics
 
             for variation in variations:
                 var_metrics = self.evaluate_prompt(variation)
+<<<<<<< HEAD
                 if var_metrics["avg_accuracy"] > best_variation_score:
                     best_variation_score = var_metrics["avg_accuracy"]
+=======
+                if var_metrics['avg_accuracy'] > best_variation_score:
+                    best_variation_score = var_metrics['avg_accuracy']
+>>>>>>> 2ecb89d (update)
                     best_variation = variation
                     best_variation_metrics = var_metrics
 
             current_prompt = best_variation
             current_metrics = best_variation_metrics
 
+<<<<<<< HEAD
         return {"best_prompt": best_prompt, "best_score": best_score, "history": self.results_history}
 
     def generate_variations(self, prompt: str, current_metrics: dict) -> list[str]:
+=======
+        return {
+            'best_prompt': best_prompt,
+            'best_score': best_score,
+            'history': self.results_history
+        }
+
+    def generate_variations(self, prompt: str, current_metrics: Dict) -> List[str]:
+>>>>>>> 2ecb89d (update)
         """Generate prompt variations to test."""
         variations = []
 
@@ -192,7 +285,11 @@ Input: Sample input
 Output: Sample output
 """
 
+<<<<<<< HEAD
     def compare_prompts(self, prompt_a: str, prompt_b: str) -> dict[str, Any]:
+=======
+    def compare_prompts(self, prompt_a: str, prompt_b: str) -> Dict[str, Any]:
+>>>>>>> 2ecb89d (update)
         """A/B test two prompts."""
         print("Testing Prompt A...")
         metrics_a = self.evaluate_prompt(prompt_a)
@@ -201,36 +298,71 @@ Output: Sample output
         metrics_b = self.evaluate_prompt(prompt_b)
 
         return {
+<<<<<<< HEAD
             "prompt_a_metrics": metrics_a,
             "prompt_b_metrics": metrics_b,
             "winner": "A" if metrics_a["avg_accuracy"] > metrics_b["avg_accuracy"] else "B",
             "improvement": abs(metrics_a["avg_accuracy"] - metrics_b["avg_accuracy"]),
+=======
+            'prompt_a_metrics': metrics_a,
+            'prompt_b_metrics': metrics_b,
+            'winner': 'A' if metrics_a['avg_accuracy'] > metrics_b['avg_accuracy'] else 'B',
+            'improvement': abs(metrics_a['avg_accuracy'] - metrics_b['avg_accuracy'])
+>>>>>>> 2ecb89d (update)
         }
 
     def export_results(self, filename: str):
         """Export optimization results to JSON."""
+<<<<<<< HEAD
         with open(filename, "w") as f:
+=======
+        with open(filename, 'w') as f:
+>>>>>>> 2ecb89d (update)
             json.dump(self.results_history, f, indent=2)
 
 
 def main():
     # Example usage
     test_suite = [
+<<<<<<< HEAD
         TestCase(input={"text": "This movie was amazing!"}, expected_output="Positive"),
         TestCase(input={"text": "Worst purchase ever."}, expected_output="Negative"),
         TestCase(input={"text": "It was okay, nothing special."}, expected_output="Neutral"),
+=======
+        TestCase(
+            input={'text': 'This movie was amazing!'},
+            expected_output='Positive'
+        ),
+        TestCase(
+            input={'text': 'Worst purchase ever.'},
+            expected_output='Negative'
+        ),
+        TestCase(
+            input={'text': 'It was okay, nothing special.'},
+            expected_output='Neutral'
+        )
+>>>>>>> 2ecb89d (update)
     ]
 
     # Mock LLM client for demonstration
     class MockLLMClient:
         def complete(self, prompt):
             # Simulate LLM response
+<<<<<<< HEAD
             if "amazing" in prompt:
                 return "Positive"
             elif "worst" in prompt.lower():
                 return "Negative"
             else:
                 return "Neutral"
+=======
+            if 'amazing' in prompt:
+                return 'Positive'
+            elif 'worst' in prompt.lower():
+                return 'Negative'
+            else:
+                return 'Neutral'
+>>>>>>> 2ecb89d (update)
 
     optimizer = PromptOptimizer(MockLLMClient(), test_suite)
 
@@ -239,15 +371,27 @@ def main():
 
         results = optimizer.optimize(base_prompt)
 
+<<<<<<< HEAD
         print("\n" + "=" * 50)
+=======
+        print("\n" + "="*50)
+>>>>>>> 2ecb89d (update)
         print("Optimization Complete!")
         print(f"Best Accuracy: {results['best_score']:.2f}")
         print(f"Best Prompt:\n{results['best_prompt']}")
 
+<<<<<<< HEAD
         optimizer.export_results("optimization_results.json")
+=======
+        optimizer.export_results('optimization_results.json')
+>>>>>>> 2ecb89d (update)
     finally:
         optimizer.shutdown()
 
 
+<<<<<<< HEAD
 if __name__ == "__main__":
+=======
+if __name__ == '__main__':
+>>>>>>> 2ecb89d (update)
     main()

@@ -6,15 +6,25 @@ for a set of queries. Outputs results as JSON.
 """
 
 import argparse
+<<<<<<< HEAD
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import json
 import os
 from pathlib import Path
+=======
+import json
+import os
+>>>>>>> 2ecb89d (update)
 import select
 import subprocess
 import sys
 import time
 import uuid
+<<<<<<< HEAD
+=======
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+>>>>>>> 2ecb89d (update)
 
 from scripts.utils import parse_skill_md
 
@@ -33,7 +43,16 @@ def find_project_root() -> Path:
 
 
 def run_single_query(
+<<<<<<< HEAD
     query: str, skill_name: str, skill_description: str, timeout: int, project_root: str, model: str | None = None
+=======
+    query: str,
+    skill_name: str,
+    skill_description: str,
+    timeout: int,
+    project_root: str,
+    model: str | None = None,
+>>>>>>> 2ecb89d (update)
 ) -> bool:
     """Run a single query and return whether the skill was triggered.
 
@@ -62,7 +81,17 @@ def run_single_query(
         )
         command_file.write_text(command_content)
 
+<<<<<<< HEAD
         cmd = ["claude", "-p", query, "--output-format", "stream-json", "--verbose", "--include-partial-messages"]
+=======
+        cmd = [
+            "claude",
+            "-p", query,
+            "--output-format", "stream-json",
+            "--verbose",
+            "--include-partial-messages",
+        ]
+>>>>>>> 2ecb89d (update)
         if model:
             cmd.extend(["--model", model])
 
@@ -71,7 +100,17 @@ def run_single_query(
         # programmatic subprocess usage is safe.
         env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
 
+<<<<<<< HEAD
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, cwd=project_root, env=env)
+=======
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            cwd=project_root,
+            env=env,
+        )
+>>>>>>> 2ecb89d (update)
 
         triggered = False
         start_time = time.time()
@@ -144,9 +183,15 @@ def run_single_query(
                                 continue
                             tool_name = content_item.get("name", "")
                             tool_input = content_item.get("input", {})
+<<<<<<< HEAD
                             if (tool_name == "Skill" and clean_name in tool_input.get("skill", "")) or (
                                 tool_name == "Read" and clean_name in tool_input.get("file_path", "")
                             ):
+=======
+                            if tool_name == "Skill" and clean_name in tool_input.get("skill", ""):
+                                triggered = True
+                            elif tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
+>>>>>>> 2ecb89d (update)
                                 triggered = True
                             return triggered
 
@@ -183,7 +228,17 @@ def run_eval(
         for item in eval_set:
             for run_idx in range(runs_per_query):
                 future = executor.submit(
+<<<<<<< HEAD
                     run_single_query, item["query"], skill_name, description, timeout, str(project_root), model
+=======
+                    run_single_query,
+                    item["query"],
+                    skill_name,
+                    description,
+                    timeout,
+                    str(project_root),
+                    model,
+>>>>>>> 2ecb89d (update)
                 )
                 future_to_info[future] = (item, run_idx)
 
@@ -209,6 +264,7 @@ def run_eval(
             did_pass = trigger_rate >= trigger_threshold
         else:
             did_pass = trigger_rate < trigger_threshold
+<<<<<<< HEAD
         results.append(
             {
                 "query": query,
@@ -219,6 +275,16 @@ def run_eval(
                 "pass": did_pass,
             }
         )
+=======
+        results.append({
+            "query": query,
+            "should_trigger": should_trigger,
+            "trigger_rate": trigger_rate,
+            "triggers": sum(triggers),
+            "runs": len(triggers),
+            "pass": did_pass,
+        })
+>>>>>>> 2ecb89d (update)
 
     passed = sum(1 for r in results if r["pass"])
     total = len(results)
@@ -227,7 +293,15 @@ def run_eval(
         "skill_name": skill_name,
         "description": description,
         "results": results,
+<<<<<<< HEAD
         "summary": {"total": total, "passed": passed, "failed": total - passed},
+=======
+        "summary": {
+            "total": total,
+            "passed": passed,
+            "failed": total - passed,
+        },
+>>>>>>> 2ecb89d (update)
     }
 
 

@@ -1,6 +1,15 @@
 ---
 name: e2e-testing-patterns
+<<<<<<< HEAD
 description: Master end-to-end testing with Playwright and Cypress to build reliable test suites that catch bugs, improve confidence, and enable fast deployment. Use when implementing E2E tests, debugging flaky tests, or establishing testing standards.
+=======
+description: >-
+  Master end-to-end testing with Playwright and Cypress to build reliable test
+  suites that catch bugs, improve confidence, and enable fast deployment. Use
+  when implementing E2E tests, debugging flaky tests, or establishing testing
+  standards.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # E2E Testing Patterns
@@ -59,6 +68,7 @@ Build reliable, fast, and maintainable end-to-end test suites that provide confi
 - Optimize for speed
 - Use data-testid, not CSS selectors
 
+<<<<<<< HEAD
 ## Playwright Patterns
 
 ### Setup and Configuration
@@ -470,6 +480,11 @@ test("form is accessible", async ({ page }) => {
   expect(results.violations).toEqual([]);
 });
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -533,6 +548,7 @@ test('checkout flow', async ({ page }) => {
 // 5. Inspect page state
 await page.pause();  // Pauses execution, opens inspector
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -542,3 +558,5 @@ await page.pause();  // Pauses execution, opens inspector
 - **assets/e2e-testing-checklist.md**: What to test with E2E
 - **assets/selector-strategies.md**: Finding reliable selectors
 - **scripts/test-analyzer.ts**: Analyze test flakiness and duration
+=======
+>>>>>>> 2ecb89d (update)

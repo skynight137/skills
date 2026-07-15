@@ -1,6 +1,15 @@
 ---
 name: bot-task-patterns
+<<<<<<< HEAD
 description: Use this skill when working on the task system — TaskConfig, TaskListener, TaskManager, ConcurrentManager, TaskPolicy, TaskProcessor, or adding a new task-based command. Covers task phases, argument parsing, policy checks, cancellation, and multi-destination workflows.
+=======
+description: >-
+  Use this skill when working on the task system — TaskConfig, TaskListener,
+  TaskManager, ConcurrentManager, TaskPolicy, TaskProcessor, or adding a new
+  task-based command. Covers task phases, argument parsing, policy checks,
+  cancellation, and multi-destination workflows.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Bot Task Patterns

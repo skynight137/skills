@@ -225,6 +225,7 @@ class FileProcessor:
         # Return None/False to propagate any exception
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: Selective Exception Suppression
@@ -406,6 +407,11 @@ async def process_connections(hosts: list[str]) -> list[dict]:
 
     return results
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

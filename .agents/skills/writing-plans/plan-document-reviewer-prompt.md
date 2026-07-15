@@ -7,7 +7,11 @@ Use this template when dispatching a plan document reviewer subagent.
 **Dispatch after:** The complete plan is written.
 
 ```
+<<<<<<< HEAD
 Task tool (general-purpose):
+=======
+Subagent (general-purpose):
+>>>>>>> 2ecb89d (update)
   description: "Review plan document"
   prompt: |
     You are a plan document reviewer. Verify this plan is complete and ready for implementation.

@@ -1,6 +1,16 @@
 ---
 name: database-model-patterns
+<<<<<<< HEAD
 description: Use this skill when working on database/models/ — creating or modifying Pydantic models for MongoDB, understanding CollectionModel (id/_id alias), DaemonModel/UtilityModel mixins, field metadata patterns, model utility methods, DbManager singleton, startup order, or ExpirationManager. Covers model conventions, db_manager usage, and startup lifecycle.
+=======
+description: >-
+  Use this skill when working on database/models/ — creating or modifying
+  Pydantic models for MongoDB, understanding CollectionModel (id/_id alias),
+  DaemonModel/UtilityModel mixins, field metadata patterns, model utility
+  methods, DbManager singleton, startup order, or ExpirationManager. Covers
+  model conventions, db_manager usage, and startup lifecycle.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Database Model Patterns
@@ -90,13 +100,28 @@ class RcloneModel(UtilityModel):
 
 ```python
 # Field metadata introspection:
+<<<<<<< HEAD
 MyModel.get_all_keys()                          # ['id', 'name', 'status', ...]
 MyModel.get_all_keys(by_alias=True)             # ['_id', 'name', 'status', ...]
+=======
+MyModel.get_all_keys()                          # ['id', 'name', 'status', ...]  (real field names)
+>>>>>>> 2ecb89d (update)
 MyModel.get_all_keys(exclude={"id", "status"})
 
 MyModel.get_default_value("status")             # "active"
 MyModel.is_boolean("enabled")                   # True / False
 
+<<<<<<< HEAD
+=======
+# Index-based field lookup (used by settings callbacks to stay under 64-byte limit):
+MyModel.get_field_index("max_limit", exclude={"id"})   # → int position in sorted key list
+MyModel.get_field_by_index(3, exclude={"id"})          # → field name at that index, or None
+
+# Alias resolution (explicit Field(alias=...) only — no alias_generator):
+MyModel.resolve_alias("_id")          # → "id"   (explicit alias → real name)
+MyModel.get_alias("id")               # → "_id"  (real name → explicit alias)
+
+>>>>>>> 2ecb89d (update)
 # Instance methods:
 model.get_value("name")        # getattr with validation
 model.get_info("max_limit")    # {"description": ..., "default": ..., "current": ..., "type": ...}
@@ -110,6 +135,24 @@ parsed = MyModel.parse_input_value("max_limit", "42")   # → int(42)
 parsed = MyModel.parse_input_value("allowed_ips", '["1.2.3.4"]')  # → list
 ```
 
+<<<<<<< HEAD
+=======
+### Index-Based Callbacks — Key Rule
+
+Settings callbacks encode field identity as a **positional integer index** (position in the sorted `get_all_keys()` list), not as the field name or any hash. This keeps callback data under 64 bytes without alias hashing.
+
+```python
+# Building buttons (sender side):
+for idx, key in enumerate(model.get_all_keys(exclude={"id"})):
+    cb = f"botset {user_id} crud {idx}"   # stores int index
+
+# Decoding on callback (receiver side):
+field_name = model.get_field_by_index(int(d3), exclude={"id"})
+```
+
+**Rule:** `_to_dict` (in `BaseCollection`) always uses `by_alias=False` — real Python field names are always stored in MongoDB, never short hashes or aliases. See `database-collection-patterns` skill for details.
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## json_schema_extra — Field Tagging
@@ -165,7 +208,12 @@ db_manager.wallets        # WalletsCollection
 db_manager.products       # ProductsCollection
 db_manager.inventory      # InventoryCollection
 db_manager.transactions   # TransactionsCollection
+<<<<<<< HEAD
 db_manager.sessions       # SessionsCollection
+=======
+db_manager.web_sessions   # WebSessionsCollection  (web app auth sessions, public DB)
+db_manager.pyrogram       # PyrogramCollection (Pyrogram MTProto, pyrogram DB)
+>>>>>>> 2ecb89d (update)
 db_manager.users          # UsersCollection
 db_manager.bots           # BotsCollection
 db_manager.rss            # RssCollection
@@ -188,7 +236,11 @@ DbManager.get_instance(mongodb_uri)   # returns cached singleton for that URI
 
 `await db_manager.startup()` is called once on app boot. Order matters:
 
+<<<<<<< HEAD
 1. `globals` loaded first (`ensure_exists=True`) — controls `OVERIDE_CONFIG` flag
+=======
+1. `globals` loaded first (`ensure_exists=True`) — controls `OVERRIDE_CONFIG` flag
+>>>>>>> 2ecb89d (update)
 2. Service collections loaded (`ensure_exists=True`) — init from ENV if empty
 3. Data collections loaded (`ensure_exists=False`) — load as-is
 4. `ensure_indexes()` called for collections needing MongoDB indexes

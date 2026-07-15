@@ -1,6 +1,14 @@
 ---
 name: react-native-design
+<<<<<<< HEAD
 description: Master React Native styling, navigation, and Reanimated animations for cross-platform mobile development. Use when building React Native apps, implementing navigation patterns, or creating performant animations.
+=======
+enabled: true
+description: >-
+  Master React Native styling, navigation, and Reanimated animations for
+  cross-platform mobile development. Use when building React Native apps,
+  implementing navigation patterns, or creating performant animations.
+>>>>>>> 2ecb89d (update)
 ---
 
 # React Native Design
@@ -18,6 +26,7 @@ Master React Native styling patterns, React Navigation, and Reanimated 3 to buil
 - Creating gesture-driven interactions with Gesture Handler
 - Optimizing React Native performance
 
+<<<<<<< HEAD
 ## Core Concepts
 
 ### 1. StyleSheet and Styling
@@ -324,6 +333,11 @@ const styles = StyleSheet.create({
 import { Platform } from "react-native";
 const StatusBarHeight = Platform.OS === "ios" ? 44 : 0;
 ```
+=======
+## Detailed section: Core Concepts
+
+Originally a 6471-byte section in this SKILL.md. Moved to `references/details.md` to fit Codex's 8 KB skill body cap.
+>>>>>>> 2ecb89d (update)
 
 ## Quick Start Component
 
@@ -430,6 +444,7 @@ const styles = StyleSheet.create({
 - **Memory Leaks**: Cancel animations and cleanup in useEffect
 - **Font Loading**: Use `expo-font` or `react-native-asset` for custom fonts
 - **Safe Area Issues**: Test on notched devices (iPhone, Android with cutouts)
+<<<<<<< HEAD
 
 ## Resources
 
@@ -438,3 +453,5 @@ const styles = StyleSheet.create({
 - [Reanimated Documentation](https://docs.swmansion.com/react-native-reanimated/)
 - [Gesture Handler](https://docs.swmansion.com/react-native-gesture-handler/)
 - [Expo Documentation](https://docs.expo.dev/)
+=======
+>>>>>>> 2ecb89d (update)

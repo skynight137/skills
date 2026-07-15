@@ -1,6 +1,15 @@
 ---
 name: bot-buttons-patterns
+<<<<<<< HEAD
 description: Use this skill when creating or updating any bot/modules/* file that uses ButtonMaker, inline keyboards, callback routing, or help pagination. Use proactively when building menus, adding callback handlers, or designing navigation flow in the Telegram bot.
+=======
+description: >-
+  Use this skill when creating or updating any bot/modules/* file that uses
+  ButtonMaker, inline keyboards, callback routing, or help pagination. Use
+  proactively when building menus, adding callback handlers, or designing
+  navigation flow in the Telegram bot.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Telegram Bot UI Patterns
@@ -84,17 +93,38 @@ f"chatmgmt {user_id} {target_id} close"             # close menu
 ```python
 buttons = ButtonMaker()
 
+<<<<<<< HEAD
 # Add a callback button (default body, or "header"/"footer")
+=======
+# Add a callback button (default body, or ButtonPositions.HEADER / ButtonPositions.FOOTER)
+>>>>>>> 2ecb89d (update)
 buttons.callback_button(text, callback_data, position=None)
 
 # Add a URL button
 buttons.url_button(text, url, position=None)
 
+<<<<<<< HEAD
 # Standard Back + Close navigation row
 buttons.add_navigation_buttons(cb_key, identity, params="", position="footer")
 
 # Pagination row (footer) — only rendered if total_items > max_items_display
 buttons.add_pagination_buttons(cb_key, identity, params="", total_items=0, max_items_display=10, position="footer")
+=======
+# Add an inline Web App button (hides the URL in Telegram)
+buttons.webapp_button(text, url, position=None)
+
+# Add a copy-to-clipboard inline button
+# copy_text and copy_button are identical aliases — always pass a plain str
+buttons.copy_text(text, copy_text_str, position=None)
+buttons.copy_button(text, copy_text_str, position=None)   # alias for copy_text
+# Internally wraps copy_text_str in CopyTextButton — do NOT pass CopyTextButton yourself.
+
+# Standard Back + Close navigation row
+buttons.add_navigation_buttons(cb_key, identity, params="", position=ButtonPositions.FOOTER)
+
+# Pagination row (footer) — only rendered if total_items > max_items_display
+buttons.add_pagination_buttons(cb_key, identity, params="", total_items=0, max_items_display=10, position=ButtonPositions.FOOTER)
+>>>>>>> 2ecb89d (update)
 
 # Edit / View toggle
 buttons.add_edit_view_toggle(cb_key, identity, current_state=MenuStates.VIEW, params="", position=None)
@@ -107,6 +137,118 @@ markup = buttons.build_menu(b_cols=2, h_cols=8, f_cols=8)
 buttons.reset()  # clear all lists for reuse
 ```
 
+<<<<<<< HEAD
+=======
+### Reply Keyboard Buttons
+
+All methods below append to `_keyboard_button`; build with `buttons.build_keyboard(cols=2)`.
+
+```python
+# Plain text button
+buttons.add_keyboard_button(text, style=ButtonStyle.DEFAULT)
+
+# Request the user's phone number (private chats only)
+buttons.request_contact_button(text, style=ButtonStyle.DEFAULT)
+
+# Request the user's GPS location (private chats only)
+buttons.request_location_button(text, style=ButtonStyle.DEFAULT)
+
+# Ask user to create and send a poll (private chats only)
+from pyrogram.enums import PollType
+buttons.request_poll_button(text, poll_type=PollType.REGULAR)  # or PollType.QUIZ
+
+# Launch a Web App, sends web_app_data on close (private chats only)
+buttons.keyboard_webapp_button(text, url)
+
+# Open a user-selection list; identifiers sent back via users_shared service message
+buttons.request_users_button(
+    text, request_id,
+    user_is_bot=None,      # True=bots only, False=humans only, None=any
+    user_is_premium=None,  # True=Premium only, False=non-Premium, None=any
+    max_quantity=1,        # 1–10
+    request_name=None, request_username=None, request_photo=None,
+)
+
+# Open a chat-selection list; identifier sent back via chat_shared service message
+buttons.request_chat_button(
+    text, request_id,
+    chat_is_channel=False,  # False=group/supergroup, True=channel
+    chat_is_forum=None, chat_has_username=None, chat_is_created=None,
+    bot_is_member=None,
+    request_title=None, request_username=None, request_photo=None,
+)
+
+# Ask user to create a managed bot (requires BotFather managed-bot permission)
+# Created bot info arrives via managed_bot_created service message
+buttons.request_managed_bot_button(
+    text, request_id,
+    suggested_name=None,      # pre-filled display name suggestion
+    suggested_username=None,  # pre-filled username suggestion
+)
+```
+
+### Button position constants — ALWAYS use `ButtonPositions`
+
+```python
+from bot.utils.constants import ButtonPositions
+
+# ✅ correct
+buttons.callback_button(label, callback, position=ButtonPositions.HEADER)
+buttons.callback_button(label, callback, position=ButtonPositions.FOOTER)
+buttons.add_navigation_buttons(cb_key, identity, position=ButtonPositions.FOOTER)
+
+# ❌ never hardcode strings
+buttons.callback_button(label, callback, position="header")   # forbidden
+buttons.callback_button(label, callback, position="footer")   # forbidden
+```
+
+| Constant | Value | Use for |
+|----------|-------|---------|
+| `ButtonPositions.HEADER` | `"header"` | Filter rows, action buttons above body |
+| `ButtonPositions.FOOTER` | `"footer"` | Navigation, Back/Close rows below body |
+| `ButtonPositions.BODY` | `None` | Default (body grid) — omit the kwarg entirely |
+
+> **Import**: `from bot.utils.constants import ButtonPositions` — already re-exported from `bot/utils/constants/__init__.py`.
+
+### Button label constants — ALWAYS use `ButtonText`
+
+```python
+from bot.utils.constants import ButtonText
+
+# ✅ correct — use defined constants
+buttons.callback_button(ButtonText.BACK, callback)
+buttons.callback_button(ButtonText.CLOSE, callback, style=ButtonStyle.DANGER)
+buttons.callback_button(ButtonText.ADD_MISSION, callback, position=ButtonPositions.HEADER)
+
+# ❌ never hardcode label strings
+buttons.callback_button("⬅️ Back", callback)      # forbidden
+buttons.callback_button("❌ Close", callback)     # forbidden
+buttons.callback_button("➕ Add", callback)       # forbidden
+```
+
+> If a label you need does not exist in `ButtonText`, **add it there** (`utils/constants/display.py`) rather than hardcoding a string in the module.
+
+### Standardized inline button styles
+
+Always pass `style=` explicitly when adding Cancel or Close inline buttons:
+
+```python
+# Cancel inline button — SUCCESS style
+buttons.callback_button(ButtonText.CANCEL, callback_data, style=ButtonStyle.SUCCESS)
+
+# Close inline button — DANGER style
+buttons.callback_button(ButtonText.CLOSE, callback_data, style=ButtonStyle.DANGER)
+```
+
+| Button | Style | Notes |
+|--------|-------|-------|
+| `ButtonText.CANCEL` (inline) | `ButtonStyle.SUCCESS` | Used in callback menus (search, file-select, ytdlp, etc.) |
+| `ButtonText.CLOSE` (inline) | `ButtonStyle.DANGER` | Used to dismiss/delete inline menus |
+| `ButtonText.CANCEL` (keyboard) | n/a | `add_keyboard_button(ButtonText.CANCEL)` — reply-keyboard wizard flows, no style |
+
+> `add_navigation_buttons` already applies `DANGER` to its Close button internally — no extra `style=` needed there.
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## 3. Menu Flow Pattern
@@ -121,6 +263,7 @@ Each level has a **Back** button pointing at the level above:
 
 ```python
 # Main → close only
+<<<<<<< HEAD
 buttons.add_navigation_buttons(cb_key, user_id, close_only=True, position="footer")
 
 # Category → back to main
@@ -128,6 +271,15 @@ buttons.add_navigation_buttons(cb_key, user_id, position="footer")   # back_to="
 
 # Field → back to category
 buttons.add_navigation_buttons(cb_key, user_id, back_to=category, position="footer")
+=======
+buttons.add_navigation_buttons(cb_key, user_id, close_only=True, position=ButtonPositions.FOOTER)
+
+# Category → back to main
+buttons.add_navigation_buttons(cb_key, user_id, position=ButtonPositions.FOOTER)   # back_to="" → "back"
+
+# Field → back to category
+buttons.add_navigation_buttons(cb_key, user_id, back_to=category, position=ButtonPositions.FOOTER)
+>>>>>>> 2ecb89d (update)
 # generates: f"{cb_key} {user_id} back {category}"
 ```
 

@@ -1,6 +1,15 @@
 ---
 name: backend-wallet-service-patterns
+<<<<<<< HEAD
 description: Use this skill when working on WalletService, wallet endpoints, transaction history, balance operations, or wallet config updates. Covers atomic balance ops, cursor-based history pagination, TransactionType, WalletDetailResponse, and schema patterns.
+=======
+description: >-
+  Use this skill when working on WalletService, wallet endpoints, transaction
+  history, balance operations, or wallet config updates. Covers atomic balance
+  ops, cursor-based history pagination, TransactionType, WalletDetailResponse,
+  and schema patterns.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Backend Wallet Service Patterns
@@ -152,6 +161,11 @@ class WalletTopupRequest(BaseModel):
 
 ## Endpoint Patterns
 
+<<<<<<< HEAD
+=======
+Every handler requires an outer guard — `except HTTPException: raise` then `except Exception → LOGGER.exception + 500`.
+
+>>>>>>> 2ecb89d (update)
 ```python
 # v2: POST /wallet/topup  (dev-only router)
 @router.post("/topup")
@@ -159,6 +173,7 @@ async def topup_wallet(
     payload: WalletTopupRequest,
     auth: AuthRequest = Depends(require_auth_cookies_login),
 ) -> JSONResponse:
+<<<<<<< HEAD
     await WalletService.add_credits(
         wallet_id=payload.wallet_id,
         amount=payload.amount,
@@ -168,6 +183,25 @@ async def topup_wallet(
         tx_id=payload.tx_id,
     )
     return JSONResponse(content={"message": "Credits added"})
+=======
+    try:
+        await WalletService.add_credits(
+            wallet_id=payload.wallet_id,
+            amount=payload.amount,
+            product_id=payload.product_id,
+            product_name=payload.product_name,
+            product_desc=payload.product_desc,
+            tx_id=payload.tx_id,
+        )
+        return JSONResponse(content={"message": "Credits added"})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        LOGGER.exception("topup_wallet failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
+>>>>>>> 2ecb89d (update)
 
 # v2: POST /wallet/history
 @router.post("/history")
@@ -175,11 +209,25 @@ async def wallet_history(
     payload: WalletHistoryRequest,
     auth: AuthRequest = Depends(require_auth_cookies_login),
 ) -> JSONResponse:
+<<<<<<< HEAD
     history, total = await WalletService.get_wallet_history(
         wallet_id=auth.wallet_id, **payload.model_dump()
     )
     items = [tx.model_dump(mode="json") for tx in history]
     return JSONResponse(content={"items": items, "total": total})
+=======
+    try:
+        history, total = await WalletService.get_wallet_history(
+            wallet_id=auth.wallet_id, **payload.model_dump()
+        )
+        items = [tx.model_dump(mode="json") for tx in history]
+        return JSONResponse(content={"items": items, "total": total})
+    except HTTPException:
+        raise
+    except Exception:
+        LOGGER.exception("wallet_history failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
+>>>>>>> 2ecb89d (update)
 ```
 
 ---

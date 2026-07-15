@@ -68,7 +68,11 @@ def self_consistency_cot(query, n=5, temperature=0.7):
     responses = []
     for _ in range(n):
         response = openai.ChatCompletion.create(
+<<<<<<< HEAD
             model="gpt-5",
+=======
+            model="gpt-5.4",
+>>>>>>> 2ecb89d (update)
             messages=[{"role": "user", "content": prompt}],
             temperature=temperature
         )

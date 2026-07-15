@@ -1,6 +1,16 @@
 ---
 name: database-collection-patterns
+<<<<<<< HEAD
 description: Use this skill when working on database/collections/ — creating a new collection, adding query methods, working with BaseCollection or IndexedCollection, understanding cache/lock patterns, node_specific multi-VPS behavior, change stream sync, or secondary in-memory indexes. Covers CRUD, load, ensure_indexes, and how collections relate to DbManager.
+=======
+description: >-
+  Use this skill when working on database/collections/ — creating a new
+  collection, adding query methods, working with BaseCollection or
+  IndexedCollection, understanding cache/lock patterns, node_specific multi-VPS
+  behavior, change stream sync, or secondary in-memory indexes. Covers CRUD,
+  load, ensure_indexes, and how collections relate to DbManager.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Database Collection Patterns
@@ -10,6 +20,7 @@ description: Use this skill when working on database/collections/ — creating a
 ## Collection Class Hierarchy
 
 ```
+<<<<<<< HEAD
 BaseCollection[T]
 └── IndexedCollection[T]      # adds secondary in-memory indexes (O(1) lookups)
     ├── ProductsCollection     # indexes: owner_id, owner_category
@@ -17,6 +28,28 @@ BaseCollection[T]
     └── ...
 ```
 
+=======
+BaseCollection[T]                          # full-load cache + optional LRU mode
+├── UsersCollection                        # LRU (max_size=1024, ≈1 MB)
+├── WalletsCollection                      # LRU (max_size=1024, ≈1 MB)
+├── WebSessionsCollection                  # no cache — all reads go to MongoDB directly
+└── IndexedCollection[T]                   # full-load + secondary in-memory indexes (O(1) lookups)
+    ├── ProductsCollection                 # indexes: owner_id, owner_category
+    ├── InventoryCollection                # index: wallet_id
+    ├── RssCollection                      # indexes: bot_id, user_id, bot_user_name
+    └── TasksCollection                    # index: bot_id
+```
+
+### Cache mode decision guide
+
+| Scenario | Pattern | Reason |
+|---|---|---|
+| Singleton / small bounded set | `BaseCollection`, default | Full-load; always fits in RAM |
+| Unbounded, by-ID access only | `BaseCollection(max_size=N)` | LRU eviction; MongoDB fallback on miss |
+| Bounded, secondary index needed | `IndexedCollection` | Full-load required for index completeness |
+| Always DB-direct reads | `BaseCollection`, no LRU | Bypasses cache in all methods |
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## Creating a New Collection
@@ -77,6 +110,7 @@ n = await db_manager.my_feature.count_documents({"status": "active"})
 ## Cache Read Methods
 
 ```python
+<<<<<<< HEAD
 # Get by ID (from cache — no DB call):
 model: MyFeatureModel | None = await db_manager.my_feature.get(doc_id)
 
@@ -90,6 +124,23 @@ ids: list = await db_manager.my_feature.get_ids()
 snap: dict = db_manager.my_feature.snapshots
 ```
 
+=======
+# Get by ID — cache hit returns deep copy; LRU miss falls back to MongoDB:
+model: MyFeatureModel | None = await db_manager.my_feature.get(doc_id)
+
+# All documents in cache (deep copy snapshot — may be partial under LRU):
+all_items: dict = await db_manager.my_feature.get_all()
+
+# All IDs currently in cache:
+ids: list = await db_manager.my_feature.get_ids()
+
+# Snapshot property (same as get_all — no lock):
+snap: dict = db_manager.my_feature.snapshots
+```
+
+**LRU mode note:** When `max_size > 0`, `get()` adds a MongoDB fallback on cache miss. `get_all()` / `get_ids()` / `snapshots` return only what is currently in the LRU — not all documents in MongoDB. Use `count_documents()` for the authoritative total count.
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## Model ↔ Dict Conversion
@@ -98,11 +149,21 @@ snap: dict = db_manager.my_feature.snapshots
 # dict → model (via model_class.model_validate):
 model = collection._to_model(doc_dict)
 
+<<<<<<< HEAD
 # model → dict (by_alias=True maps 'id' → '_id' for MongoDB):
 doc_dict = collection._to_dict(model)
 doc_dict = collection._to_dict(model, exclude={"id"})   # for update_one / replace_one
 ```
 
+=======
+# model → dict (real field names; 'id' remapped to '_id' for MongoDB):
+doc_dict = collection._to_dict(model)
+doc_dict = collection._to_dict(model, exclude={"id"})   # for replace_one (id excluded)
+```
+
+**Critical:** `_to_dict` uses `model_dump(by_alias=False)` — real Python field names are always stored in MongoDB. The only alias remapping that happens is `id → _id`. Do NOT change this to `by_alias=True`.
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## update_one — Model vs Dict
@@ -141,6 +202,11 @@ class MyCollection(IndexedCollection[MyModel]):
 
 **Important:** `register_index` must be called in `__init__` before any data is loaded. Indexes are maintained automatically on all CRUD operations.
 
+<<<<<<< HEAD
+=======
+**`IndexedCollection.update_one` lock contract:** The implementation acquires `self.lock` briefly to snapshot `old_model` before the `await`, then re-acquires after the `await` to perform the add-new/remove-old index swap atomically. Never call `_add_to_indexes` / `_remove_from_indexes` outside a lock — concurrent readers see a half-swapped state otherwise. When subclassing, override `_apply_remote_change` to invalidate any derived secondary indexes (like `_telegram_feeds_by_chat` in RssCollection) after calling `super()`.
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## ensure_indexes — MongoDB Index Creation
@@ -182,7 +248,11 @@ await collection.load(ensure_exists=True)    # load; if empty, initialize with d
 
 `ensure_exists=True` triggers the config hierarchy: **DB → config.py → ENV → Model defaults**.
 
+<<<<<<< HEAD
 `OVERIDE_CONFIG` (from `db_manager.globals.overide_config`) forces a re-initialization from ENV even if data exists in DB.
+=======
+`OVERRIDE_CONFIG` (from `db_manager.globals.override_config`) forces a re-initialization from ENV even if data exists in DB.
+>>>>>>> 2ecb89d (update)
 
 ---
 
@@ -207,6 +277,15 @@ async def _apply_remote_change(self, change: dict) -> None:
 
 Standard behaviour: `insert/update/replace` → `cache[model.id] = model`, `delete` → `cache.pop(doc_id)`.
 
+<<<<<<< HEAD
+=======
+**Monotonic guard:** `_apply_remote_change` compares the incoming document's `created_at`
+against the currently cached model before applying an `insert/update/replace`. Older Change
+Stream events are dropped instead of overwriting a fresher local write — needed because in
+multi-VPS mode a local `update_one` updates the cache immediately, and the corresponding CS
+event can arrive later carrying stale data if another node wrote in between.
+
+>>>>>>> 2ecb89d (update)
 ---
 
 ## node_specific — Multi-VPS Document Namespacing
@@ -222,6 +301,7 @@ db_id = collection._get_doc_id(config_id)   # e.g. "services:5432836963"
 
 ---
 
+<<<<<<< HEAD
 ## Composite Document IDs
 
 ```python
@@ -231,6 +311,8 @@ bot_id, user_id = BaseCollection.parse_document_id(doc_id)  # (123, 456)
 ```
 
 ---
+=======
+>>>>>>> 2ecb89d (update)
 
 ## Registering in DbManager
 

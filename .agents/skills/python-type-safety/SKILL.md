@@ -182,6 +182,7 @@ if result.is_success:
     config = result.unwrap()  # Type: Config
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: Generic Repository
@@ -413,6 +414,11 @@ Incremental adoption goals:
 - Generic collections use type parameters (`list[str]` not `list`)
 
 For existing codebases, enable strict mode per-module using `# mypy: strict` or configure per-module overrides in `pyproject.toml`.
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

@@ -1,6 +1,14 @@
 ---
 name: bot-wallet-patterns
+<<<<<<< HEAD
 description: Use this skill when working on wallet or market features that use WalletConfig. Covers WalletConfig API, balance operations, inventory management, product access checks, and wallet access control.
+=======
+description: >-
+  Use this skill when working on wallet or market features that use
+  WalletConfig. Covers WalletConfig API, balance operations, inventory
+  management, product access checks, and wallet access control.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Bot — Wallet Patterns

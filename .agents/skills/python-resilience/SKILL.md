@@ -177,6 +177,7 @@ def robust_http_call(
     return httpx.request(method, url, timeout=30, **kwargs)
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: Logging Retry Attempts
@@ -361,6 +362,11 @@ async def get_recommendations(user_id: str) -> list[str]:
     """Get recommendations, return empty list on failure."""
     ...
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

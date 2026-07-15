@@ -1,6 +1,13 @@
 ---
 name: systematic-debugging
+<<<<<<< HEAD
 description: Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes
+=======
+description: >-
+  Use when encountering any bug, test failure, or unexpected behavior, before
+  proposing fixes
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Systematic Debugging
@@ -237,7 +244,11 @@ If you catch yourself thinking:
 - "Is that not happening?" - You assumed without verifying
 - "Will it show us...?" - You should have added evidence gathering
 - "Stop guessing" - You're proposing fixes without understanding
+<<<<<<< HEAD
 - "Ultrathink this" - Question fundamentals, not just symptoms
+=======
+- "Ultra-think this" - Question fundamentals, not just symptoms
+>>>>>>> 2ecb89d (update)
 - "We're stuck?" (frustrated) - Your approach isn't working
 
 **When you see these:** STOP. Return to Phase 1.

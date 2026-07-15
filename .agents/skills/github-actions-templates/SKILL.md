@@ -1,11 +1,18 @@
 ---
 name: github-actions-templates
+<<<<<<< HEAD
+=======
+enabled: true
+>>>>>>> 2ecb89d (update)
 description: >-
   Create production-ready GitHub Actions workflows for automated testing,
   building, and deploying applications. Use when setting up CI/CD with GitHub
   Actions, automating development workflows, or creating reusable workflow
   templates.
+<<<<<<< HEAD
 enabled: false
+=======
+>>>>>>> 2ecb89d (update)
 ---
 
 # GitHub Actions Templates
@@ -30,6 +37,10 @@ Create efficient, secure GitHub Actions workflows for continuous integration and
 
 ```yaml
 name: Test
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on:
   push:
@@ -64,7 +75,11 @@ jobs:
         run: npm test
 
       - name: Upload coverage
+<<<<<<< HEAD
         uses: codecov/codecov-action@v3
+=======
+        uses: codecov/codecov-action@v4
+>>>>>>> 2ecb89d (update)
         with:
           files: ./coverage/lcov.info
 ```
@@ -75,6 +90,10 @@ jobs:
 
 ```yaml
 name: Build and Push
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on:
   push:
@@ -130,6 +149,10 @@ jobs:
 
 ```yaml
 name: Deploy to Kubernetes
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on:
   push:
@@ -169,6 +192,10 @@ jobs:
 
 ```yaml
 name: Matrix Build
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on: [push, pull_request]
 
@@ -218,6 +245,10 @@ jobs:
 ```yaml
 # .github/workflows/reusable-test.yml
 name: Reusable Test Workflow
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on:
   workflow_call:
@@ -257,6 +288,10 @@ jobs:
 
 ```yaml
 name: Security Scan
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on:
   push:
@@ -272,7 +307,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner
+<<<<<<< HEAD
         uses: aquasecurity/trivy-action@master
+=======
+        uses: aquasecurity/trivy-action@0.28.0
+>>>>>>> 2ecb89d (update)
         with:
           scan-type: "fs"
           scan-ref: "."
@@ -280,12 +319,20 @@ jobs:
           output: "trivy-results.sarif"
 
       - name: Upload Trivy results to GitHub Security
+<<<<<<< HEAD
         uses: github/codeql-action/upload-sarif@v2
+=======
+        uses: github/codeql-action/upload-sarif@v3
+>>>>>>> 2ecb89d (update)
         with:
           sarif_file: "trivy-results.sarif"
 
       - name: Run Snyk Security Scan
+<<<<<<< HEAD
         uses: snyk/actions/node@master
+=======
+        uses: snyk/actions/node@0.4.0
+>>>>>>> 2ecb89d (update)
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 ```
@@ -294,6 +341,10 @@ jobs:
 
 ```yaml
 name: Deploy to Production
+<<<<<<< HEAD
+=======
+enabled: false
+>>>>>>> 2ecb89d (update)
 
 on:
   push:
@@ -325,12 +376,15 @@ jobs:
             }
 ```
 
+<<<<<<< HEAD
 ## Reference Files
 
 - `assets/test-workflow.yml` - Testing workflow template
 - `assets/deploy-workflow.yml` - Deployment workflow template
 - `assets/matrix-build.yml` - Matrix build template
 - `references/common-workflows.md` - Common workflow patterns
+=======
+>>>>>>> 2ecb89d (update)
 
 ## Related Skills
 

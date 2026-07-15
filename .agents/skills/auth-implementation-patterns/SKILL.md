@@ -55,6 +55,7 @@ Build secure, scalable authentication and authorization systems using industry-s
 - Social login (Google, GitHub)
 - Enterprise SSO
 
+<<<<<<< HEAD
 ## JWT Authentication
 
 ### Pattern 1: JWT Implementation
@@ -613,6 +614,11 @@ app.post("/api/auth/login", loginLimiter, async (req, res) => {
 
 app.use("/api/", apiLimiter);
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -636,6 +642,7 @@ app.use("/api/", apiLimiter);
 - **Insecure Password Reset**: Use secure tokens with expiration
 - **No Rate Limiting**: Vulnerable to brute force
 - **Trusting Client Data**: Always validate on server
+<<<<<<< HEAD
 
 ## Resources
 
@@ -645,3 +652,5 @@ app.use("/api/", apiLimiter);
 - **assets/auth-security-checklist.md**: Security review checklist
 - **assets/password-policy-template.md**: Password requirements template
 - **scripts/token-validator.ts**: JWT validation utility
+=======
+>>>>>>> 2ecb89d (update)

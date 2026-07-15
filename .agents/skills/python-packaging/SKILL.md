@@ -160,6 +160,7 @@ project/
 └── tests/
 ```
 
+<<<<<<< HEAD
 ## Complete pyproject.toml Examples
 
 ### Pattern 4: Full-Featured pyproject.toml
@@ -886,3 +887,9 @@ recursive-exclude * *.py[co]
 8. **Document thoroughly** with README and docstrings
 9. **Include LICENSE** file
 10. **Automate publishing** with CI/CD
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+
+>>>>>>> 2ecb89d (update)

@@ -50,6 +50,7 @@ Build resilient applications with robust error handling strategies that graceful
 - Stack overflow
 - Programming bugs (null pointer, etc.)
 
+<<<<<<< HEAD
 ## Language-Specific Patterns
 
 ### Python Error Handling
@@ -564,6 +565,11 @@ def try_function(func: Callable[[], Optional[T]]) -> Optional[T]:
     except Exception:
         return None
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -630,6 +636,7 @@ def process_order(order_id: str) -> Order:
 - **Poor Error Messages**: "Error occurred" is not helpful
 - **Returning Error Codes**: Use exceptions or Result types
 - **Ignoring Async Errors**: Unhandled promise rejections
+<<<<<<< HEAD
 
 ## Resources
 
@@ -639,3 +646,5 @@ def process_order(order_id: str) -> Order:
 - **assets/error-handling-checklist.md**: Review checklist for error handling
 - **assets/error-message-guide.md**: Writing helpful error messages
 - **scripts/error-analyzer.py**: Analyze error patterns in logs
+=======
+>>>>>>> 2ecb89d (update)

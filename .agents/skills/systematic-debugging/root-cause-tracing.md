@@ -33,7 +33,11 @@ digraph when_to_use {
 
 ### 1. Observe the Symptom
 ```
+<<<<<<< HEAD
 Error: git init failed in /Users/jesse/project/packages/core
+=======
+Error: git init failed in ~/project/packages/core
+>>>>>>> 2ecb89d (update)
 ```
 
 ### 2. Find Immediate Cause

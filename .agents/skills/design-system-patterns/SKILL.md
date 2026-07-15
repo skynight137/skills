@@ -1,6 +1,15 @@
 ---
 name: design-system-patterns
+<<<<<<< HEAD
 description: Build scalable design systems with design tokens, theming infrastructure, and component architecture patterns. Use when creating design tokens, implementing theme switching, building component libraries, or establishing design system foundations.
+=======
+description: >-
+  Build scalable design systems with design tokens, theming infrastructure, and
+  component architecture patterns. Use when creating design tokens, implementing
+  theme switching, building component libraries, or establishing design system
+  foundations.
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Design System Patterns
@@ -91,6 +100,7 @@ const tokens = {
 };
 ```
 
+<<<<<<< HEAD
 ## Key Patterns
 
 ### Pattern 1: Token Hierarchy
@@ -308,6 +318,11 @@ module.exports = {
   },
 };
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -327,6 +342,7 @@ module.exports = {
 - **Hardcoded Values**: Using raw values instead of tokens
 - **Circular References**: Tokens referencing each other in loops
 - **Platform Gaps**: Tokens missing for some platforms (web but not mobile)
+<<<<<<< HEAD
 
 ## Resources
 
@@ -335,3 +351,5 @@ module.exports = {
 - [Design Tokens W3C Spec](https://design-tokens.github.io/community-group/format/)
 - [Radix UI Themes](https://www.radix-ui.com/themes)
 - [shadcn/ui Theming](https://ui.shadcn.com/docs/theming)
+=======
+>>>>>>> 2ecb89d (update)

@@ -1,6 +1,16 @@
 ---
 name: modern-javascript-patterns
+<<<<<<< HEAD
 description: Master ES6+ features including async/await, destructuring, spread operators, arrow functions, promises, modules, iterators, generators, and functional programming patterns for writing clean, efficient JavaScript code. Use when refactoring legacy code, implementing modern patterns, or optimizing JavaScript applications.
+=======
+description: >-
+  Master ES6+ features including async/await, destructuring, spread operators,
+  arrow functions, promises, modules, iterators, generators, and functional
+  programming patterns for writing clean, efficient JavaScript code. Use when
+  refactoring legacy code, implementing modern patterns, or optimizing
+  JavaScript applications.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Modern JavaScript Patterns
@@ -18,6 +28,7 @@ Comprehensive guide for mastering modern JavaScript (ES6+) features, functional 
 - Migrating from callbacks to Promises/async-await
 - Implementing data transformation pipelines
 
+<<<<<<< HEAD
 ## ES6+ Core Features
 
 ### 1. Arrow Functions
@@ -888,6 +899,11 @@ const numbers = [1, 2, 3, 4, 5];
 const doubled = lazyMap(numbers, (x) => x * 2);
 const first = doubled.next().value; // Only computes first value
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -907,6 +923,7 @@ const first = doubled.next().value; // Only computes first value
 14. **Handle errors properly**: Use try/catch with async/await
 15. **Use strict mode**: `'use strict'` for better error catching
 
+<<<<<<< HEAD
 ## Common Pitfalls
 
 1. **this binding confusion**: Use arrow functions or bind()
@@ -925,3 +942,6 @@ const first = doubled.next().value; // Only computes first value
 - **You Don't Know JS**: https://github.com/getify/You-Dont-Know-JS
 - **Eloquent JavaScript**: https://eloquentjavascript.net/
 - **ES6 Features**: http://es6-features.org/
+=======
+For common pitfalls (this binding, promise anti-patterns, memory leaks), see [references/advanced-patterns.md](references/advanced-patterns.md).
+>>>>>>> 2ecb89d (update)

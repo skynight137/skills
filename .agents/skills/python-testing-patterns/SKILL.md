@@ -66,6 +66,7 @@ def test_add_negative():
 # Run with: pytest test_example.py
 ```
 
+<<<<<<< HEAD
 ## Fundamental Patterns
 
 ### Pattern 1: Basic pytest Tests
@@ -663,6 +664,11 @@ def test_create_user_rejects_invalid_email():
     with pytest.raises(ValueError, match="Invalid email format"):
         service.create_user({"email": "not-an-email"})
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Testing Best Practices
 
@@ -869,6 +875,7 @@ pytest --cov=myapp --cov-fail-under=80 tests/
 pytest --cov=myapp --cov-report=term-missing tests/
 ```
 
+<<<<<<< HEAD
 ## Testing Database Code
 
 ```python
@@ -1048,3 +1055,6 @@ exclude_lines = [
 8. **Test edge cases** and error conditions
 9. **Measure coverage** but focus on quality
 10. **Run tests in CI/CD** on every commit
+=======
+For advanced patterns (async testing, monkeypatching, property-based testing, database testing, CI/CD integration, and configuration), see [references/advanced-patterns.md](references/advanced-patterns.md)
+>>>>>>> 2ecb89d (update)

@@ -175,6 +175,7 @@ raise ValueError(f"'page_size' must be 1-100, got {page_size}")
 raise Exception("Invalid parameter")
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: Custom Exceptions with Context
@@ -344,6 +345,11 @@ def process_large_batch(
 
     return BatchResult(succeeded=succeeded, failed=failed)
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

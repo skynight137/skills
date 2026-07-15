@@ -1,6 +1,15 @@
 ---
 name: debugging-strategies
+<<<<<<< HEAD
 description: Master systematic debugging techniques, profiling tools, and root cause analysis to efficiently track down bugs across any codebase or technology stack. Use when investigating bugs, performance issues, or unexpected behavior.
+=======
+description: >-
+  Master systematic debugging techniques, profiling tools, and root cause
+  analysis to efficiently track down bugs across any codebase or technology
+  stack. Use when investigating bugs, performance issues, or unexpected
+  behavior.
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Debugging Strategies
@@ -525,6 +534,7 @@ afterEach(() => {
 - [ ] Cache issues (clear cache)
 - [ ] Stale data (refresh database)
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -534,3 +544,5 @@ afterEach(() => {
 - **assets/debugging-checklist.md**: Quick reference checklist
 - **assets/common-bugs.md**: Common bug patterns
 - **scripts/debug-helper.ts**: Debugging utility functions
+=======
+>>>>>>> 2ecb89d (update)

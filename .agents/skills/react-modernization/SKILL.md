@@ -1,6 +1,14 @@
 ---
 name: react-modernization
+<<<<<<< HEAD
 description: Upgrade React applications to latest versions, migrate from class components to hooks, and adopt concurrent features. Use when modernizing React codebases, migrating to React Hooks, or upgrading to latest React versions.
+=======
+enabled: true
+description: >-
+  Upgrade React applications to latest versions, migrate from class components
+  to hooks, and adopt concurrent features. Use when modernizing React codebases,
+  migrating to React Hooks, or upgrading to latest React versions.
+>>>>>>> 2ecb89d (update)
 ---
 
 # React Modernization
@@ -322,6 +330,7 @@ function ProfileTimeline() {
 }
 ```
 
+<<<<<<< HEAD
 ## Codemods for Automation
 
 ### Run React Codemods
@@ -524,3 +533,9 @@ function List<T>({ items, renderItem }: ListProps<T>) {
 - Mixing class and functional patterns
 - Ignoring StrictMode warnings
 - Breaking change assumptions
+=======
+## Additional patterns and templates
+
+More detailed templates and worked examples live in `references/details.md`. Read that file for the full pattern library.
+
+>>>>>>> 2ecb89d (update)

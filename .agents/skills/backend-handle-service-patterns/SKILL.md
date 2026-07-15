@@ -1,6 +1,16 @@
 ---
 name: backend-handle-service-patterns
+<<<<<<< HEAD
 description: Use this skill when working on ProductHandleService — the unified purchase processor and product verifier. Covers process_purchase routing by category, VerificationResult, PurchaseResult, _handle_tax_and_inventory, test_mode handling, auto-removal on verify failure, and handler methods for each product category.
+=======
+description: >-
+  Use this skill when working on ProductHandleService — the unified purchase
+  processor and product verifier. Covers process_purchase routing by category,
+  VerificationResult, PurchaseResult, _handle_tax_and_inventory, test_mode
+  handling, auto-removal on verify failure, and handler methods for each product
+  category.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Backend Handle Service Patterns
@@ -152,7 +162,11 @@ result: VerificationResult = await ProductHandleService.verify_product(
 if not result.ok:
     raise HTTPException(status_code=400, detail=result.reason)
 if result.has_warnings:
+<<<<<<< HEAD
     LOGGER.warning(f"Verification warnings: {result.issues}")
+=======
+    LOGGER.warning("Verification warnings", issues=result.issues)
+>>>>>>> 2ecb89d (update)
 ```
 
 **Category routing:**

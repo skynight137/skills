@@ -1,6 +1,14 @@
 ---
 name: nextjs-app-router-patterns
+<<<<<<< HEAD
 description: Master Next.js 14+ App Router with Server Components, streaming, parallel routes, and advanced data fetching. Use when building Next.js applications, implementing SSR/SSG, or optimizing React Server Components.
+=======
+description: >-
+  Master Next.js 14+ App Router with Server Components, streaming, parallel
+  routes, and advanced data fetching. Use when building Next.js applications,
+  implementing SSR/SSG, or optimizing React Server Components.
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Next.js App Router Patterns
@@ -91,6 +99,7 @@ export default async function HomePage() {
 }
 ```
 
+<<<<<<< HEAD
 ## Patterns
 
 ### Pattern 1: Server Components with Data Fetching
@@ -517,6 +526,11 @@ export async function updateProduct(id: string, data: ProductData) {
   revalidatePath("/products");
 }
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -535,9 +549,12 @@ export async function updateProduct(id: string, data: ProductData) {
 - **Don't fetch in Client Components** - Use Server Components or React Query
 - **Don't over-nest layouts** - Each layout adds to the component tree
 - **Don't ignore loading states** - Always provide loading.tsx or Suspense
+<<<<<<< HEAD
 
 ## Resources
 
 - [Next.js App Router Documentation](https://nextjs.org/docs/app)
 - [Server Components RFC](https://github.com/reactjs/rfcs/blob/main/text/0188-server-components.md)
 - [Vercel Templates](https://vercel.com/templates/next.js)
+=======
+>>>>>>> 2ecb89d (update)

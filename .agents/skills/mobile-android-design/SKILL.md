@@ -22,6 +22,7 @@ Master Material Design 3 (Material You) and Jetpack Compose to build modern, ada
 - Implementing Android-specific gestures and interactions
 - Designing for different screen configurations
 
+<<<<<<< HEAD
 ## Core Concepts
 
 ### 1. Material Design 3 Principles
@@ -357,6 +358,11 @@ FloatingActionButton(
     Icon(Icons.Default.Add, contentDescription = "Add")
 }
 ```
+=======
+## Detailed section: Core Concepts
+
+Originally a 9201-byte section in this SKILL.md. Moved to `references/details.md` to fit Codex's 8 KB skill body cap.
+>>>>>>> 2ecb89d (update)
 
 ## Quick Start Component
 
@@ -435,6 +441,7 @@ fun ItemListCard(
 - **Theme Leaks**: Ensure `MaterialTheme` wraps all composables
 - **Navigation Crashes**: Handle back press and deep links properly
 - **Memory Leaks**: Cancel coroutines in `DisposableEffect`
+<<<<<<< HEAD
 
 ## Resources
 
@@ -442,3 +449,5 @@ fun ItemListCard(
 - [Jetpack Compose Documentation](https://developer.android.com/jetpack/compose)
 - [Compose Samples](https://github.com/android/compose-samples)
 - [Material 3 Compose](https://developer.android.com/jetpack/compose/designsystems/material3)
+=======
+>>>>>>> 2ecb89d (update)

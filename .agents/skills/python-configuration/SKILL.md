@@ -193,6 +193,7 @@ FEATURE_BETA_UI=false
 
 Makes `env | grep DB_` useful for debugging.
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 5: Type Coercion
@@ -353,6 +354,11 @@ class Settings(BaseSettings):
                 )
         return self
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices Summary
 

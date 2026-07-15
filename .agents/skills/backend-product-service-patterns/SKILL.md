@@ -1,6 +1,15 @@
 ---
 name: backend-product-service-patterns
+<<<<<<< HEAD
 description: Use this skill when working on ProductService, product endpoints, product categories, polymorphic product models, cursor-based product listing, or product CRUD operations. Covers add/update/remove/list, ProductListResult, owner-scoped cache vs global DB listing, and schema patterns.
+=======
+description: >-
+  Use this skill when working on ProductService, product endpoints, product
+  categories, polymorphic product models, cursor-based product listing, or
+  product CRUD operations. Covers add/update/remove/list, ProductListResult,
+  owner-scoped cache vs global DB listing, and schema patterns.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Backend Product Service Patterns
@@ -179,6 +188,11 @@ class ProductAddRequest(BaseModel):
 
 ## Endpoint Pattern (v2)
 
+<<<<<<< HEAD
+=======
+Every handler requires an outer guard — `except HTTPException: raise` then `except Exception → LOGGER.exception + 500`.
+
+>>>>>>> 2ecb89d (update)
 ```python
 @router.post("/add")
 async def add_product(
@@ -190,21 +204,46 @@ async def add_product(
             wallet_id=auth.wallet_id,
             **payload.model_dump(exclude_none=True),
         )
+<<<<<<< HEAD
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return JSONResponse(content={"message": "Product added", "product_id": model.id})
+=======
+        return JSONResponse(content={"message": "Product added", "product_id": model.id})
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        LOGGER.exception("add_product failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
+>>>>>>> 2ecb89d (update)
 
 @router.post("/remove")
 async def remove_product(
     payload: ProductDetailRequest,
     auth: AuthRequest = Depends(require_auth_cookies_login),
 ) -> JSONResponse:
+<<<<<<< HEAD
     is_dev = bool(web_config.dev_id and web_config.dev_id == auth.wallet_id)
     try:
         await ProductService.remove_product(auth.wallet_id, payload.product_id, is_dev=is_dev)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     return JSONResponse(content={"message": "Product removed"})
+=======
+    try:
+        is_dev = bool(web_config.dev_id and web_config.dev_id == auth.wallet_id)
+        await ProductService.remove_product(auth.wallet_id, payload.product_id, is_dev=is_dev)
+        return JSONResponse(content={"message": "Product removed"})
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        LOGGER.exception("remove_product failed")
+        raise HTTPException(status_code=500, detail="Internal server error")
+>>>>>>> 2ecb89d (update)
 ```
 
 ---

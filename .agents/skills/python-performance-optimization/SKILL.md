@@ -71,6 +71,7 @@ execution_time = timeit.timeit(
 print(f"Average time: {execution_time/100:.6f} seconds")
 ```
 
+<<<<<<< HEAD
 ## Profiling Tools
 
 ### Pattern 1: cProfile - CPU Profiling
@@ -825,6 +826,11 @@ def test_map_function(benchmark):
 
 # Run with: pytest test_performance.py --benchmark-compare
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -849,6 +855,7 @@ def test_map_function(benchmark):
 - Ignoring algorithmic complexity
 - Over-optimizing rare code paths
 - Not considering memory usage
+<<<<<<< HEAD
 
 ## Resources
 
@@ -872,3 +879,5 @@ def test_map_function(benchmark):
 - [ ] Minimized function call overhead in hot loops
 - [ ] Checked for memory leaks
 - [ ] Benchmarked before and after optimization
+=======
+>>>>>>> 2ecb89d (update)

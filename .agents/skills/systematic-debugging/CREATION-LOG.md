@@ -4,7 +4,11 @@ Reference example of extracting, structuring, and bulletproofing a critical skil
 
 ## Source Material
 
+<<<<<<< HEAD
 Extracted debugging framework from `/Users/jesse/.claude/CLAUDE.md`:
+=======
+Extracted debugging framework from `~/.claude/CLAUDE.md`:
+>>>>>>> 2ecb89d (update)
 - 4-phase systematic process (Investigation → Pattern Analysis → Hypothesis → Implementation)
 - Core mandate: ALWAYS find root cause, NEVER fix symptoms
 - Rules designed to resist time pressure and rationalization

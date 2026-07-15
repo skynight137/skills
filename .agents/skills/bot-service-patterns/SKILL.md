@@ -1,6 +1,15 @@
 ---
 name: bot-service-patterns
+<<<<<<< HEAD
 description: Use this skill when working on bot/service/ — adding a new service, modifying ServiceController, understanding service types/lifecycle, state classes, or the bot startup sequence. Covers BaseService, ServiceController, ServiceType, config integration, and state management.
+=======
+description: >-
+  Use this skill when working on bot/service/ — adding a new service, modifying
+  ServiceController, understanding service types/lifecycle, state classes, or
+  the bot startup sequence. Covers BaseService, ServiceController, ServiceType,
+  config integration, and state management.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Bot Service Patterns
@@ -350,6 +359,34 @@ Helper subclasses:
 
 ---
 
+<<<<<<< HEAD
+=======
+## Force-Kill Safety — Never Target the Current Process
+
+`_force_kill_service()` (in `base.py`) runs three concurrent strategies to clear a
+service's daemon before (re)starting it: `kill_by_pid`, `kill_by_pkg` (`pgrep`/`kill -f
+binary_path`), and `kill_by_port` (`lsof -ti :port`). All three exclude `os.getpid()`
+(the bot's own PID) before sending any signal.
+
+This guard exists because **`WebServerService` runs uvicorn in-process** — the
+listening socket and any matching `binary_path`/port belong to the bot's own PID, not
+an external subprocess. Without the exclusion, restarting WEBS (e.g. via "Start All
+Enabled" while it's already running) could pattern-match or port-match the bot's own
+PID and SIGTERM the entire process instead of a stray daemon. `WebServerService`
+additionally closes its uvicorn listening sockets explicitly in `_force_kill_service`
+Phase 1 (cancelling the task alone doesn't run uvicorn's own socket-closing shutdown
+logic), so the port is actually free before Phase 2's `kill_by_port` / `_wait_for_port_free`
+runs.
+
+When adding a new service, if it ever runs in-process (shares the bot's PID) rather
+than as an external subprocess, treat this the same way: never assume `kill_by_pid` /
+`kill_by_pkg` / `kill_by_port` are safe by default — verify the self-PID exclusion
+still covers it, or override `_force_kill_service` to skip generic kill-by-pattern
+logic entirely.
+
+---
+
+>>>>>>> 2ecb89d (update)
 ## Parallel vs Sequential Startup
 
 Controlled by `GlobalConfig.service_action_mode_parallel` (default: parallel):

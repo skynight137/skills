@@ -274,6 +274,7 @@ const isActive = computed(() => tabs?.activeTab.value === props.id);
 - **Re-render Cascades**: Profile with React DevTools, memo appropriately
 - **Accessibility Gaps**: Test with screen readers and keyboard navigation
 - **Bundle Size**: Tree-shake unused component variants
+<<<<<<< HEAD
 
 ## Resources
 
@@ -282,3 +283,5 @@ const isActive = computed(() => tabs?.activeTab.value === props.id);
 - [Svelte Component Documentation](https://svelte.dev/docs/svelte-components)
 - [Radix UI Primitives](https://www.radix-ui.com/primitives)
 - [shadcn/ui Components](https://ui.shadcn.com/)
+=======
+>>>>>>> 2ecb89d (update)

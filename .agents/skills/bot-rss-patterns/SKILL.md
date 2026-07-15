@@ -1,6 +1,14 @@
 ---
 name: bot-rss-patterns
+<<<<<<< HEAD
 description: Use this skill when working on the RSS module (bot/modules/rss/, bot/service/rss.py). Covers permission model, data structure, callback schema, security patterns, and supported feed types.
+=======
+description: >-
+  Use this skill when working on the RSS module (bot/modules/rss/,
+  bot/service/rss.py). Covers permission model, data structure, callback schema,
+  security patterns, and supported feed types.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Bot — RSS Patterns
@@ -108,6 +116,7 @@ disable_rss: bool  # default False — toggles via RssConfig.update_fields()
 - `start_monitor()` (raw public method) still starts unconditionally — **dev override only**
 - All auto-start paths check `not rss_service.is_disabled and not rss_service.is_running`
 
+<<<<<<< HEAD
 ### `on_message_listener_rss` guard
 
 The Telegram-chat RSS listener (`bot/modules/message_listener.py`) returns immediately when the service is not running:
@@ -120,6 +129,53 @@ if not rss_service.is_running:
 ```
 
 This ensures no Telegram messages are processed for RSS when the service is stopped or disabled.
+=======
+### `on_message_listener_rss` guard + filter pipeline
+
+The Telegram-chat RSS listener (`telegram_listener.py`) returns immediately when the service is not running:
+
+```python
+if not client.service_controller.rss.is_running:
+    return
+```
+
+**Filter pipeline in the listener** (applied in order):
+
+1. **Topic filter** — skip messages not in the subscribed thread (`message.message_thread_id != topic_id`)
+2. **filter_types** — skip message if its media type is not in the allowed set (only when `filter_types != "all"`)
+3. *(build `text_to_check` and `media` objects)*
+4. **size_range** — skip if file_size is outside the configured min/max range (only when media has a known `file_size > 0`)
+5. **contain_excluded** — skip if `text_to_check` contains any entry in the tuple (respects `case_sensitive` flag)
+6. **Regex filter** — skip when title/caption/filename doesn't match `regex`
+7. **Scrape mode** — extract matched text; skip if no match
+
+**text_replacement** — three-value semantics:
+```python
+tr = feed_model.text_replacement
+if tr is None:
+    effective_caption = text_to_check = ""  # strip all source text and captions
+elif tr != {}:
+    for old, new in tr.items():             # apply substitution map
+        text_to_check = text_to_check.replace(old, str(new))
+    # also applied to scraped_text and effective_caption
+# {} (empty dict) = keep original caption unchanged (default when skipped)
+```
+Collected in subscribe Step 14 **only for Telegram feeds** (`feed_type == "tg"`). Stored as `None` for non-TG feeds. Applied only in `telegram_listener.py`.
+
+**Media group copy** — uses `_MEDIA_GROUP_CACHE` (module-level dict) to dedup `(media_group_id, dest_chat_id)`:
+```python
+if message.media_group_id:
+    group_key = (message.media_group_id, dest_chat_id)
+    if group_key not in _MEDIA_GROUP_CACHE:
+        _MEDIA_GROUP_CACHE[group_key] = _time()
+        try:
+            sent_msgs = await client.copy_media_group(dest_chat_id, message.chat.id, message.id, ...)
+        except Exception:
+            sent_msg = await message.copy(...)  # fallback
+    # else: skip — already copied this group
+```
+Cache TTL: 60 seconds. Cleaned on each group-key access.
+>>>>>>> 2ecb89d (update)
 
 ---
 
@@ -147,8 +203,19 @@ Key fields:
 | `command` | `str\|None` | Bot command to run on new items |
 | `auto_poster` | `bool` | Post MsgStore link instead of forwarding (Telegram feeds only) |
 | `auto_poster_thumb` | `str\|None` | Thumbnail URL for auto-poster (None = plain text) |
+<<<<<<< HEAD
 
 **Removed fields** (do not reference or add back):
+=======
+| `chain` | `str\|None` | **Telegram feeds only.** Space-separated bot IDs — MsgStore chain links posted to `destination_chat` after each item lands there. Requires `destination_chat`. Has no effect when `auto_poster=True`. Example: `"1234567890 9876543210"` |
+| `filter_types` | `str` | Default `"all"`. Space-separated Telegram media types to include: `animation audio document photo video video_note voice`. `"all"` = no filter. Example: `"video photo"`. Applied in `telegram_listener.py` before forwarding. |
+| `size_range` | `str\|None` | Human-readable file size range for Telegram media. Format: `"min-max"` or `"min"`. Example: `"10mb-1gb"` or `"5mb"`. Parsed with `size_string_to_bytes()`. Skipped when file_size is 0 or unknown. |
+| `text_replacement` | `dict\|None` | Substitution map applied to captions and `feed_msg` before forwarding. Keys and values are strings. Example: `{"[ad]": "", "old": "new"}`. Applied in listener to: caption (media copy), `feed_msg` (text/command/scrape), auto-poster caption. |
+| `contain_excluded` | `tuple[str, ...]` | Default `()`. Tuple of substrings — **skip message** if `text_to_check` contains any of them (case-insensitive). User input: newline-separated entries (each may contain spaces or symbols). Cleared with `none`. Applied in `telegram_listener.py` after `text_to_check` is built, before regex. Edit code: `"ce"`. |
+
+**Removed fields** (do not reference or add back):
+- `tag` — removed; was the user's `@mention` or display name, no longer stored
+>>>>>>> 2ecb89d (update)
 - `source_chat` — removed; resolved numeric ID now stored directly in `feed_link`
 - `source_chat_id` — merged into `source_chat` (historical)
 - `source_topic_id` — merged into `source_chat` (historical)
@@ -205,7 +272,11 @@ MongoDB collection names:
 
 **Telegram chat formats**: `-1001234567890`, `-1002928045313:1234` (chat:topic), `@channelname`
 
+<<<<<<< HEAD
 **Telegram and Nekopoi type access**: both buttons are shown **only when `is_dev` is True**. Owners and normal users cannot subscribe to either type.
+=======
+**Telegram and Nekopoi type access**: both buttons are shown to **all users** (no `is_dev` guard). The 4-button layout (YouTube / RSS/Atom / Telegram / Nekopoi) is visible to everyone on the subscribe type-selection screen.
+>>>>>>> 2ecb89d (update)
 
 ---
 
@@ -277,7 +348,11 @@ Always store the **resolved numeric ID** directly in `feed_link` (never the raw 
 ```
 rssset sub {user_id} [{target_client_id}]
 ```
+<<<<<<< HEAD
 - Shows inline buttons for feed type: YouTube / RSS/Atom always; Telegram and Nekopoi shown **only for `is_dev`**.
+=======
+- Shows inline buttons for feed type: YouTube / RSS/Atom / Telegram / Nekopoi — **shown to all users** (no `is_dev` guard).
+>>>>>>> 2ecb89d (update)
 
 ```
 rssset sub_type {user_id} {target_client_id} {feed_type}
@@ -296,13 +371,25 @@ rssset sub_type {user_id} {target_client_id} {feed_type}
 | 2 | `feed_link` | ✅ | Cancel only | |
 | 3 | `destination_chat` | optional | Skip + Cancel | |
 | 4 | `regex` | optional | Skip + Cancel | |
+<<<<<<< HEAD
 | 5 | `hashtag` | optional | Skip + Cancel | |
+=======
+| 5 | `signature` | optional | Skip + Cancel | |
+>>>>>>> 2ecb89d (update)
 | 6 | `include_thumb` | optional | Yes + No + Cancel | **Skipped entirely for `feed_type == "tg"`** |
 | 7 | `command` | optional | Skip + Cancel | |
 | 8 | `case_sensitive` | optional (only if regex set) | Yes + No + Cancel | |
 | 9 | `scrape_mode` | optional (only if regex set) | Yes + No + Cancel | |
 | 10 | `auto_poster` | optional (tg only) | Yes + No + Cancel | |
 | 10b | `auto_poster_thumb` | optional (tg+ap) | Skip + Cancel | |
+<<<<<<< HEAD
+=======
+| 11 | `chain` | optional | Skip + Cancel | **Telegram feeds only** (`feed_type == "tg"`). Shown only when both `feed_type == "tg"` and `destination_chat` are set. Has no effect when `auto_poster=True`. |
+| 12 | `filter_types` | optional | Skip + Cancel | **Telegram feeds only.** Space-separated types or `"all"`. Validated against `MEDIA_ATTRS`. Skip = `"all"`. |
+| 13 | `size_range` | optional | Skip + Cancel | **Telegram feeds only.** Free text e.g. `10mb-1gb`. Skip = `None`. |
+| 14 | `text_replacement` | optional | Skip + Cancel | **Telegram feeds only.** JSON: `{"old": "new"}`, `{}` (keep original), `none` (strip all). Parsed via `parse_text_replacement_input()`. Skip = `None`. |
+| 15 | `contain_excluded` | optional | Skip + Cancel | **All feed types.** Newline-separated substrings — messages containing any entry are skipped. Spaces/symbols allowed within each entry. Skip = `()`. |
+>>>>>>> 2ecb89d (update)
 
 Session state stored in `manager` (`RssSessionManager`). Cancel sets `sub_data["_cancelled"] = True`. Skip stops session without setting the field.
 
@@ -357,13 +444,97 @@ async def _resolve_feed_by_idx(client_id, user_id, page, idx):
 | Source URL | ✅ | ✅ |
 | Destination Chat | ✅ | ✅ |
 | Regex | ✅ | ✅ |
+<<<<<<< HEAD
 | Hashtag | ✅ | ✅ |
+=======
+| Signature | ✅ | ✅ |
+>>>>>>> 2ecb89d (update)
 | Command | ✅ | ✅ |
 | Thumb (toggle) | ✅ | ❌ hidden |
 | AP Thumb (text) | ❌ hidden (unless auto_poster on) | ✅ (if auto_poster on) |
 | Case Sensitive | ✅ | ✅ |
 | Scrape Mode | ✅ | ✅ |
 | Auto Poster (toggle) | ❌ hidden | ✅ |
+<<<<<<< HEAD
+=======
+| Chain (text) | ✅ | ✅ |
+| Size Range (text) | ✅ | ✅ |
+| Text Replace (text) | ✅ | ✅ |
+| 🚫 Excl. Contain (text) | ✅ | ✅ |
+| 🎯 Filter Types (sub-menu) | ✅ | ✅ |
+
+### filter_types — Sub-menu Callback Schema
+
+```
+rssset fedt_ft     {user_id} {fedt_client_id} {page} {idx}            → open sub-menu
+rssset fedt_ft_t   {user_id} {fedt_client_id} {page} {idx} {type}     → toggle one type
+rssset fedt_ft_all {user_id} {fedt_client_id} {page} {idx}            → reset to "all"
+```
+
+Valid `{type}` values (from `_MEDIA_TYPE_ORDER` in helpers.py, alphabetical):
+`animation`, `audio`, `document`, `photo`, `video`, `video_note`, `voice`
+
+**Toggle logic** in `fedt_ft_t`:
+```python
+active = set(MEDIA_ATTRS) if ft_val == "all" else set(ft_val.split())
+active.discard(media_type) if media_type in active else active.add(media_type)
+new_val = "all" if (not active or active >= set(MEDIA_ATTRS)) else " ".join(sorted(active))
+```
+Empty set or full set → stored as `"all"`.
+
+### parse_text_replacement_input
+
+Exported from `helpers.py`, used in both `crud.py` and `subscribe.py`:
+
+```python
+def parse_text_replacement_input(text: str) -> dict | None | str:
+    # "none"          → None  (strip all captions)
+    # valid JSON dict → dict  (replacement map; {} = keep original)
+    # invalid         → str   (error message — caller should reply and return without storing)
+```
+
+**`chain` field constraints**:
+- **Telegram feeds only** — triggered from `telegram_listener.py`, not the generic RSS polling loop.
+- **Not triggered when `auto_poster=True`** — the auto_poster branch does `continue` before reaching the send block where chain fires.
+- Only collected in subscribe Step 11 when `feed_type == "tg"` **and** `destination_chat` is set.
+- Always shown in edit menu (user can set/clear regardless; validation is runtime guard `if feed_model.chain and feed_chat`).
+
+### Chain link generation (`_handle_rss_chain`)
+
+`RssService._handle_rss_chain` is called from **`telegram_listener.py`** (not from the polling service) inside each destination's `_send_to_dest` coroutine after a successful send. All destinations are dispatched concurrently via `asyncio.gather` with a module-level `Semaphore(3)` cap. The call site uses `with suppress(Exception)` so a chain failure never interrupts delivery to other destinations.
+
+```python
+# telegram_listener.py — after each send to dest_chat_id
+if feed_model.chain and feed_chat:
+    with suppress(Exception):
+        from bot.service.rss import rss_service  # lazy import — avoids circular
+        chain_text = text_to_check or feed_msg   # first line used as chain title
+        await rss_service._handle_rss_chain(
+            client, feed_model.chain,
+            sent_msg.chat.id, dest_thread_id, sent_msg.id, chain_text,
+        )
+
+# _handle_rss_chain flow (in RssService)
+bot_ids = [int(x) for x in chain_str.split() if x.strip().isdigit()]
+clients = await client.bot_manager.get_clients_by(bot_ids=bot_ids)
+
+src_chat_id = dest_chat_id   # starts at the destination chat
+src_msg_id  = sent_msg.id    # the just-posted item message
+
+for c in ordered_clients:
+    token = Encryption.encrypt(c.bot_id, ints=(src_chat_id, src_msg_id, src_msg_id))
+    msgstore_url = f"https://t.me/{c.bot_username}?start={token}"
+    chain_title  = feed_msg.split("\n")[0]
+    caption      = f"{TextStyle.BOLD.format(chain_title)}\n\n{TextStyle.SPOILER.format(msgstore_url)}"
+    new_msg      = await client.send_message(chat_id=dest_chat_id, text=caption, ...)
+    src_chat_id  = new_msg.chat.id   # each reply becomes the next source
+    src_msg_id   = new_msg.id
+```
+
+**Both send branches capture `sent_msg`:**
+- `message.copy(...)` — media messages forwarded with caption
+- `client.send_message(...)` — text / command / scraped content
+>>>>>>> 2ecb89d (update)
 
 The `_build_edit_menu_text(name, feed, feed_type)` function accepts `feed_type` to conditionally omit the Thumb row. The `_rss_edit_menu` function skips the Thumb toggle button when `is_tg_feed`.
 
@@ -394,7 +565,13 @@ The `_build_edit_menu_text(name, feed, feed_type)` function accepts `feed_type` 
 | `rss_feed_detail()` | Render individual feed info + action buttons |
 | `_resolve_feed_by_idx()` | Resolve (page, idx) → (name, feed_data) |
 | `_build_feed_detail_text()` | Format feed detail message string |
+<<<<<<< HEAD
 | `_build_edit_menu_text(name, feed, feed_type)` | Format edit menu summary string; hides Thumb row for `feed_type="tg"` |
+=======
+| `_build_edit_menu_text(name, feed, feed_type)` | Format edit menu summary string; hides Thumb row for `feed_type="tg"`; shows filter_types, size_range, text_replacement |
+| `_rss_filter_types_menu()` | Render the per-media-type toggle sub-menu for `fedt_ft` |
+| `parse_text_replacement_input(text)` | Parse `old:new,old2:new2` or JSON into dict; returns `None` on empty/invalid |
+>>>>>>> 2ecb89d (update)
 | `rss_text_list()` | Owner/dev all-subscriptions text view |
 | `rss_menu()` | Build main RSS menu |
 | `rss_edit()` | Edit business logic (args-flags format, name+flags) |

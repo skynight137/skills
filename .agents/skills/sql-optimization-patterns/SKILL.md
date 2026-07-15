@@ -144,6 +144,7 @@ FROM (SELECT * FROM users WHERE created_at > '2024-01-01') u
 JOIN orders o ON u.id = o.user_id;
 ```
 
+<<<<<<< HEAD
 ## Optimization Patterns
 
 ### Pattern 1: Eliminate N+1 Queries
@@ -432,6 +433,11 @@ SELECT * FROM large_table WHERE condition;
 -- Join hints (PostgreSQL)
 SET enable_nestloop = OFF;  -- Force hash or merge join
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -502,6 +508,7 @@ FROM pg_stat_user_indexes
 WHERE idx_scan = 0
 ORDER BY pg_relation_size(indexrelid) DESC;
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -512,3 +519,5 @@ ORDER BY pg_relation_size(indexrelid) DESC;
 - **assets/query-optimization-checklist.md**: Step-by-step optimization guide
 - **scripts/analyze-slow-queries.sql**: Identify slow queries in your database
 - **scripts/index-recommendations.sql**: Generate index recommendations
+=======
+>>>>>>> 2ecb89d (update)

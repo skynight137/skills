@@ -1,6 +1,14 @@
 ---
 name: react-state-management
+<<<<<<< HEAD
 description: Master modern React state management with Redux Toolkit, Zustand, Jotai, and React Query. Use when setting up global state, managing server state, or choosing between state management solutions.
+=======
+enabled: true
+description: >-
+  Master modern React state management with Redux Toolkit, Zustand, Jotai, and
+  React Query. Use when setting up global state, managing server state, or
+  choosing between state management solutions.
+>>>>>>> 2ecb89d (update)
 ---
 
 # React State Management
@@ -81,6 +89,7 @@ function Header() {
 }
 ```
 
+<<<<<<< HEAD
 ## Patterns
 
 ### Pattern 1: Redux Toolkit with TypeScript
@@ -380,6 +389,11 @@ function Dashboard() {
   )
 }
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -428,6 +442,7 @@ const todosSlice = createSlice({
   },
 });
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -435,3 +450,5 @@ const todosSlice = createSlice({
 - [Zustand GitHub](https://github.com/pmndrs/zustand)
 - [Jotai Documentation](https://jotai.org/)
 - [TanStack Query](https://tanstack.com/query)
+=======
+>>>>>>> 2ecb89d (update)

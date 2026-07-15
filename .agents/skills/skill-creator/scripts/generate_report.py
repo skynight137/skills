@@ -9,14 +9,23 @@ Distinguishes between train and test queries.
 import argparse
 import html
 import json
+<<<<<<< HEAD
 from pathlib import Path
 import sys
+=======
+import sys
+from pathlib import Path
+>>>>>>> 2ecb89d (update)
 
 
 def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") -> str:
     """Generate HTML report from loop output data. If auto_refresh is True, adds a meta refresh tag."""
     history = data.get("history", [])
+<<<<<<< HEAD
     data.get("holdout", 0)
+=======
+    holdout = data.get("holdout", 0)
+>>>>>>> 2ecb89d (update)
     title_prefix = html.escape(skill_name + " \u2014 ") if skill_name else ""
 
     # Get all unique queries from train and test sets, with should_trigger info
@@ -31,6 +40,7 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
 
     refresh_tag = '    <meta http-equiv="refresh" content="5">\n' if auto_refresh else ""
 
+<<<<<<< HEAD
     html_parts = [
         """<!DOCTYPE html>
 <html>
@@ -41,6 +51,13 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         + """    <title>"""
         + title_prefix
         + """Skill Description Optimization</title>
+=======
+    html_parts = ["""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+""" + refresh_tag + """    <title>""" + title_prefix + """Skill Description Optimization</title>
+>>>>>>> 2ecb89d (update)
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
@@ -151,6 +168,7 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
     </style>
 </head>
 <body>
+<<<<<<< HEAD
     <h1>"""
         + title_prefix
         + """Skill Description Optimization</h1>
@@ -169,6 +187,23 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
         <p class="best"><strong>Best:</strong> {html.escape(data.get("best_description", "N/A"))}</p>
         <p><strong>Best Score:</strong> {data.get("best_score", "N/A")} {"(test)" if best_test_score else "(train)"}</p>
         <p><strong>Iterations:</strong> {data.get("iterations_run", 0)} | <strong>Train:</strong> {data.get("train_size", "?")} | <strong>Test:</strong> {data.get("test_size", "?")}</p>
+=======
+    <h1>""" + title_prefix + """Skill Description Optimization</h1>
+    <div class="explainer">
+        <strong>Optimizing your skill's description.</strong> This page updates automatically as Claude tests different versions of your skill's description. Each row is an iteration — a new description attempt. The columns show test queries: green checkmarks mean the skill triggered correctly (or correctly didn't trigger), red crosses mean it got it wrong. The "Train" score shows performance on queries used to improve the description; the "Test" score shows performance on held-out queries the optimizer hasn't seen. When it's done, Claude will apply the best-performing description to your skill.
+    </div>
+"""]
+
+    # Summary section
+    best_test_score = data.get('best_test_score')
+    best_train_score = data.get('best_train_score')
+    html_parts.append(f"""
+    <div class="summary">
+        <p><strong>Original:</strong> {html.escape(data.get('original_description', 'N/A'))}</p>
+        <p class="best"><strong>Best:</strong> {html.escape(data.get('best_description', 'N/A'))}</p>
+        <p><strong>Best Score:</strong> {data.get('best_score', 'N/A')} {'(test)' if best_test_score else '(train)'}</p>
+        <p><strong>Iterations:</strong> {data.get('iterations_run', 0)} | <strong>Train:</strong> {data.get('train_size', '?')} | <strong>Test:</strong> {data.get('test_size', '?')}</p>
+>>>>>>> 2ecb89d (update)
     </div>
 """)
 
@@ -219,10 +254,17 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
     # Add rows for each iteration
     for h in history:
         iteration = h.get("iteration", "?")
+<<<<<<< HEAD
         h.get("train_passed", h.get("passed", 0))
         h.get("train_total", h.get("total", 0))
         h.get("test_passed")
         h.get("test_total")
+=======
+        train_passed = h.get("train_passed", h.get("passed", 0))
+        train_total = h.get("train_total", h.get("total", 0))
+        test_passed = h.get("test_passed")
+        test_total = h.get("test_total")
+>>>>>>> 2ecb89d (update)
         description = h.get("description", "")
         train_results = h.get("train_results", h.get("results", []))
         test_results = h.get("test_results", [])
@@ -280,9 +322,13 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
             icon = "✓" if did_pass else "✗"
             css_class = "pass" if did_pass else "fail"
 
+<<<<<<< HEAD
             html_parts.append(
                 f'                <td class="result {css_class}">{icon}<span class="rate">{triggers}/{runs}</span></td>\n'
             )
+=======
+            html_parts.append(f'                <td class="result {css_class}">{icon}<span class="rate">{triggers}/{runs}</span></td>\n')
+>>>>>>> 2ecb89d (update)
 
         # Add result for each test query (with different background)
         for qinfo in test_queries:
@@ -294,9 +340,13 @@ def generate_html(data: dict, auto_refresh: bool = False, skill_name: str = "") 
             icon = "✓" if did_pass else "✗"
             css_class = "pass" if did_pass else "fail"
 
+<<<<<<< HEAD
             html_parts.append(
                 f'                <td class="result test-result {css_class}">{icon}<span class="rate">{triggers}/{runs}</span></td>\n'
             )
+=======
+            html_parts.append(f'                <td class="result test-result {css_class}">{icon}<span class="rate">{triggers}/{runs}</span></td>\n')
+>>>>>>> 2ecb89d (update)
 
         html_parts.append("            </tr>\n")
 

@@ -2,7 +2,11 @@
 
 Use this skill whenever working with the `database/` module — reading/writing collections, adding models, creating collections, fixing bugs related to cache, expiration, multi-VPS sync, or MongoDB indexes.
 
+<<<<<<< HEAD
 **Full reference:** `database/Readme.md`
+=======
+**Full reference:** `database/README.md`
+>>>>>>> 2ecb89d (update)
 
 ---
 
@@ -244,7 +248,11 @@ async def ensure_indexes(self) -> None:
 
 ```
 db_manager.startup()
+<<<<<<< HEAD
   1. globals.load(ensure_exists=True)         ← must be first (overide_config flag)
+=======
+  1. globals.load(ensure_exists=True)         ← must be first (override_config flag)
+>>>>>>> 2ecb89d (update)
   2. records, bin, users, bots, rss, wallets, products, inventory, tasks  ← .load()
   3. Service collections (aria, qbit, …)      ← .load(ensure_exists=True)
   4. inventory.ensure_indexes()               ← migration + index creation
@@ -278,6 +286,10 @@ decoded = DictStore.decode({"-1001234": None}) # {-1001234: None}   — restore 
 | Bundle limits not updated after purchase | Missing `BotConfig.invalidate()` | Call invalidate after inventory change |
 | `RuntimeError: dictionary changed size` | Iterating `cache.values()` directly | Use `collection.snapshots` or `list(cache.values())` |
 | `IndexKeySpecsConflict` on startup | Index name exists with different options | Drop old index first in `ensure_indexes()` |
+<<<<<<< HEAD
 | Service collection overrides ENV not applied | `overide_config` is False | Set `GlobalModel.overide_config = True` or check ENV precedence |
+=======
+| Service collection overrides ENV not applied | `override_config` is False | Set `GlobalModel.override_config = True` or check ENV precedence |
+>>>>>>> 2ecb89d (update)
 | Cache stale after remote write on another node | `sync_across_nodes` not set | Enable change stream sync for the collection |
 | Node-specific doc not found | Missing `node_specific = True` | Add flag and run migration |

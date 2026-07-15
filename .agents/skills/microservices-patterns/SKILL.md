@@ -84,6 +84,7 @@ Master microservices architecture patterns including service boundaries, inter-s
 - Isolate resources
 - Limit impact of failures
 
+<<<<<<< HEAD
 ## Service Decomposition Patterns
 
 ### Pattern 1: By Business Capability
@@ -593,3 +594,9 @@ async def call_payment_service(payment_data: dict):
 - **Premature Microservices**: Starting with microservices
 - **Ignoring Network Failures**: Assuming reliable network
 - **No Compensation Logic**: Can't undo failed transactions
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+
+>>>>>>> 2ecb89d (update)

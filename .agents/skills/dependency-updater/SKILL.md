@@ -1,9 +1,20 @@
 ---
 name: dependency-updater
+<<<<<<< HEAD
 description: Smart dependency management for any language. Auto-detects project type, applies safe updates automatically, prompts for major versions, diagnoses and fixes dependency issues.
 license: MIT
 metadata:
   version: 1.0.0
+=======
+description: >-
+  Smart dependency management for any language. Auto-detects project type,
+  applies safe updates automatically, prompts for major versions, diagnoses and
+  fixes dependency issues.
+license: MIT
+metadata:
+  version: 1.0.0
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Dependency Updater

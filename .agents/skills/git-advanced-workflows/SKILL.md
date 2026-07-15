@@ -1,11 +1,18 @@
 ---
 name: git-advanced-workflows
+<<<<<<< HEAD
+=======
+enabled: true
+>>>>>>> 2ecb89d (update)
 description: >-
   Master advanced Git workflows including rebasing, cherry-picking, bisect,
   worktrees, and reflog to maintain clean history and recover from any
   situation. Use when managing complex Git histories, collaborating on feature
   branches, or troubleshooting repository issues.
+<<<<<<< HEAD
 enabled: false
+=======
+>>>>>>> 2ecb89d (update)
 ---
 
 # Git Advanced Workflows
@@ -145,6 +152,7 @@ git reflog
 git branch deleted-branch abc123
 ```
 
+<<<<<<< HEAD
 ## Practical Workflows
 
 ### Workflow 1: Clean Up Feature Branch Before PR
@@ -346,6 +354,11 @@ git checkout abc123 -- path/to/file1.py path/to/file2.py
 # Stage and commit
 git commit -m "cherry-pick: apply specific changes from abc123"
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -399,6 +412,7 @@ git reset --hard HEAD^
 git reflog
 git branch recovered-branch abc123
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -408,3 +422,5 @@ git branch recovered-branch abc123
 - **assets/git-workflow-checklist.md**: Pre-PR cleanup checklist
 - **assets/git-aliases.md**: Useful Git aliases for advanced workflows
 - **scripts/git-clean-branches.sh**: Clean up merged and stale branches
+=======
+>>>>>>> 2ecb89d (update)

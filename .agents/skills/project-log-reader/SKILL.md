@@ -1,3 +1,16 @@
+<<<<<<< HEAD
+=======
+---
+name: project-log-reader
+description: >-
+  Reading logs/bot.log.json — NDJSON schema, tail/grep recipes, health checks,
+  confirming fix outcomes without relying on workflow console. Use when
+  debugging bot behavior, verifying a fix landed, or checking service startup
+  after a workflow restart.
+enabled: true
+---
+
+>>>>>>> 2ecb89d (update)
 # Project Log Reader
 
 ## Overview

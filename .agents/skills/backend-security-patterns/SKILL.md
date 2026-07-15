@@ -1,6 +1,15 @@
 ---
 name: backend-security-patterns
+<<<<<<< HEAD
 description: Use this skill when working on backend auth, guards, session management, rate limiting, Telegram WebApp validation, replay attack prevention, or IP handling. Covers JWT vs Cookie auth, dependency selection, session lifecycle, rate limiters, and security configuration.
+=======
+description: >-
+  Use this skill when working on backend auth, guards, session management, rate
+  limiting, Telegram WebApp validation, replay attack prevention, or IP
+  handling. Covers JWT vs Cookie auth, dependency selection, session lifecycle,
+  rate limiters, and security configuration.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Backend Security Patterns
@@ -62,7 +71,11 @@ session_id = str(uuid.uuid4())
 ip_address  = get_client_ip(request)   # TCP layer only — never X-Forwarded-For
 user_agent  = request.headers.get("User-Agent", "")
 
+<<<<<<< HEAD
 await db_manager.sessions.store_session(
+=======
+await db_manager.web_sessions.store_session(
+>>>>>>> 2ecb89d (update)
     wallet_id, session_id,
     user_id=user_id,
     ip_address=ip_address,
@@ -78,13 +91,21 @@ await db_manager.sessions.store_session(
 ### Logout
 
 ```python
+<<<<<<< HEAD
 await db_manager.sessions.revoke_session(auth.wallet_id)
+=======
+await db_manager.web_sessions.revoke_session(auth.wallet_id)
+>>>>>>> 2ecb89d (update)
 # v2 also clears the access_token cookie from browser
 ```
 
 ### Session Validation (ongoing requests)
 
+<<<<<<< HEAD
 `require_auth_session` validates the session via DB `sessions` collection. Telegram re-validation is **intentionally omitted** on subsequent requests (validated once at login, cached session used thereafter for performance).
+=======
+`require_auth_session` validates the session via DB `web_sessions` collection. Telegram re-validation is **intentionally omitted** on subsequent requests (validated once at login, cached session used thereafter for performance).
+>>>>>>> 2ecb89d (update)
 
 ---
 

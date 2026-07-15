@@ -68,6 +68,7 @@ Proper async/await usage:
 - Async background tasks
 - Async middleware
 
+<<<<<<< HEAD
 ## Implementation Patterns
 
 ### Pattern 1: Complete FastAPI Application
@@ -475,6 +476,11 @@ async def get_current_user(
 
     return user
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Implementation Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Testing
 
@@ -538,6 +544,7 @@ async def test_create_user(client):
     assert data["email"] == "test@example.com"
     assert "id" in data
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -565,3 +572,5 @@ async def test_create_user(client):
 - **Ignoring Sessions**: Not properly managing database sessions
 - **No Testing**: Skipping integration tests
 - **Tight Coupling**: Direct database access in routes
+=======
+>>>>>>> 2ecb89d (update)

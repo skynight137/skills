@@ -18,6 +18,7 @@ Comprehensive guidance for building scalable, maintainable, and production-ready
 - Building real-time applications with WebSockets
 - Implementing background job processing
 
+<<<<<<< HEAD
 ## Core Frameworks
 
 ### Express.js - Minimalist Framework
@@ -1017,6 +1018,11 @@ export class ApiResponse {
   }
 }
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -1039,6 +1045,7 @@ export class ApiResponse {
 ## Testing Patterns
 
 See `javascript-testing-patterns` skill for comprehensive testing guidance.
+<<<<<<< HEAD
 
 ## Resources
 
@@ -1046,3 +1053,5 @@ See `javascript-testing-patterns` skill for comprehensive testing guidance.
 - **Express.js Guide**: https://expressjs.com/en/guide/
 - **Fastify Documentation**: https://www.fastify.io/docs/
 - **TypeScript Node Starter**: https://github.com/microsoft/TypeScript-Node-Starter
+=======
+>>>>>>> 2ecb89d (update)

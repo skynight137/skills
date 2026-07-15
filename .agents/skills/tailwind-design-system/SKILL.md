@@ -1,6 +1,14 @@
 ---
 name: tailwind-design-system
+<<<<<<< HEAD
 description: Build scalable design systems with Tailwind CSS v4, design tokens, component libraries, and responsive patterns. Use when creating component libraries, implementing design systems, or standardizing UI patterns.
+=======
+description: >-
+  Build scalable design systems with Tailwind CSS v4, design tokens, component
+  libraries, and responsive patterns. Use when creating component libraries,
+  implementing design systems, or standardizing UI patterns.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Tailwind Design System (v4)
@@ -180,6 +188,7 @@ Example:
 Base styles → Variants → Sizes → States → Overrides
 ```
 
+<<<<<<< HEAD
 ## Patterns
 
 ### Pattern 1: CVA (Class Variance Authority) Components
@@ -872,3 +881,9 @@ Define reusable custom utilities:
 - [CVA Documentation](https://cva.style/docs)
 - [shadcn/ui](https://ui.shadcn.com/)
 - [Radix Primitives](https://www.radix-ui.com/primitives)
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+
+>>>>>>> 2ecb89d (update)

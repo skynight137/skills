@@ -1,6 +1,16 @@
 ---
 name: prompt-engineering-patterns
+<<<<<<< HEAD
 description: Master advanced prompt engineering techniques to maximize LLM performance, reliability, and controllability in production. Use when optimizing prompts, improving LLM outputs, or designing production prompt templates.
+=======
+description: >-
+  This skill should be used when the user asks to "optimize a prompt", "improve
+  prompt performance", "design a prompt template", "write better prompts",
+  "debug prompt issues", "use chain-of-thought", "structured prompting",
+  "few-shot prompting", or wants to apply advanced prompt engineering patterns
+  for production LLM applications.
+enabled: false
+>>>>>>> 2ecb89d (update)
 ---
 
 # Prompt Engineering Patterns
@@ -81,7 +91,11 @@ class SQLQuery(BaseModel):
     tables_used: list[str] = Field(description="List of tables referenced")
 
 # Initialize model with structured output
+<<<<<<< HEAD
 llm = ChatAnthropic(model="claude-sonnet-4-5")
+=======
+llm = ChatAnthropic(model="claude-sonnet-4-6")
+>>>>>>> 2ecb89d (update)
 structured_llm = llm.with_structured_output(SQLQuery)
 
 # Create prompt template
@@ -103,6 +117,7 @@ print(result.query)
 print(result.explanation)
 ```
 
+<<<<<<< HEAD
 ## Key Patterns
 
 ### Pattern 1: Structured Output with Pydantic
@@ -439,6 +454,11 @@ response = client.messages.create(
     messages=[{"role": "user", "content": user_query}]
 )
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -471,6 +491,7 @@ Track these KPIs for your prompts:
 - **Token Usage**: Average tokens per request
 - **Success Rate**: Percentage of valid, parseable outputs
 - **User Satisfaction**: Ratings and feedback
+<<<<<<< HEAD
 
 ## Resources
 
@@ -478,3 +499,5 @@ Track these KPIs for your prompts:
 - [Claude Prompt Caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching)
 - [OpenAI Prompt Engineering](https://platform.openai.com/docs/guides/prompt-engineering)
 - [LangChain Prompts](https://python.langchain.com/docs/concepts/prompts/)
+=======
+>>>>>>> 2ecb89d (update)

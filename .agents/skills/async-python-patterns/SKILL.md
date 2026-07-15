@@ -1,6 +1,14 @@
 ---
 name: async-python-patterns
+<<<<<<< HEAD
 description: Master Python asyncio, concurrent programming, and async/await patterns for high-performance applications. Use when building async APIs, concurrent systems, or I/O-bound applications requiring non-blocking operations.
+=======
+description: >-
+  Master Python asyncio, concurrent programming, and async/await patterns for
+  high-performance applications. Use when building async APIs, concurrent
+  systems, or I/O-bound applications requiring non-blocking operations.
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Async Python Patterns
@@ -218,6 +226,7 @@ async def with_timeout():
 asyncio.run(with_timeout())
 ```
 
+<<<<<<< HEAD
 ## Advanced Patterns
 
 ### Pattern 6: Async Context Managers
@@ -661,6 +670,11 @@ async def main():
 
 asyncio.run(main())
 ```
+=======
+## Detailed worked examples and patterns
+
+Detailed sections (starting with `## Advanced Patterns`) live in `references/details.md`. Read that file when the navigation summary above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Common Pitfalls
 
@@ -733,6 +747,7 @@ async def test_with_timeout():
     with pytest.raises(asyncio.TimeoutError):
         await asyncio.wait_for(slow_operation(5), timeout=1.0)
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -755,3 +770,5 @@ async def test_with_timeout():
 9. **Handle task cancellation** properly - always re-raise `CancelledError`
 10. **Test async code** with pytest-asyncio
 11. **Stay consistent** - fully sync or fully async, avoid mixing
+=======
+>>>>>>> 2ecb89d (update)

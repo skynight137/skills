@@ -169,6 +169,7 @@ cd my-monorepo
 }
 ```
 
+<<<<<<< HEAD
 ## pnpm Workspaces
 
 ### Setup
@@ -569,6 +570,11 @@ jobs:
       pnpm --filter web deploy
     fi
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -617,6 +623,7 @@ pnpm changeset publish
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
+<<<<<<< HEAD
 
 ## Resources
 
@@ -626,3 +633,5 @@ pnpm changeset publish
 - **assets/monorepo-checklist.md**: Setup checklist
 - **assets/migration-guide.md**: Multi-repo to monorepo migration
 - **scripts/dependency-graph.ts**: Visualize package dependencies
+=======
+>>>>>>> 2ecb89d (update)

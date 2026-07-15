@@ -1,4 +1,5 @@
 ---
+<<<<<<< HEAD
 name: react:components
 description: Converts Stitch designs into modular Vite and React components using system-level networking and AST-based validation.
 allowed-tools:
@@ -7,6 +8,19 @@ allowed-tools:
   - "Read"
   - "Write"
   - "web_fetch"
+=======
+name: 'react:components'
+description: >-
+  Converts Stitch designs into modular Vite and React components using
+  system-level networking and AST-based validation.
+allowed-tools:
+  - 'stitch*:*'
+  - Bash
+  - Read
+  - Write
+  - web_fetch
+enabled: true
+>>>>>>> 2ecb89d (update)
 ---
 
 # Stitch to React Components
@@ -44,4 +58,8 @@ You are a frontend engineer focused on transforming designs into clean React cod
 
 ## Troubleshooting
 * **Fetch errors**: Ensure the URL is quoted in the bash command to prevent shell errors.
+<<<<<<< HEAD
 * **Validation errors**: Review the AST report and fix any missing interfaces or hardcoded styles.
+=======
+* **Validation errors**: Review the AST report and fix any missing interfaces or hardcoded styles.
+>>>>>>> 2ecb89d (update)

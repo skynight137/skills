@@ -23,6 +23,7 @@ Master accessibility implementation to create inclusive experiences that work fo
 - Building mobile accessibility features (iOS VoiceOver, Android TalkBack)
 - Conducting accessibility audits and fixing violations
 
+<<<<<<< HEAD
 ## Core Capabilities
 
 ### 1. WCAG 2.2 Guidelines
@@ -387,6 +388,11 @@ const CONTRAST_REQUIREMENTS = {
   },
 };
 ```
+=======
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+>>>>>>> 2ecb89d (update)
 
 ## Best Practices
 
@@ -415,6 +421,7 @@ const CONTRAST_REQUIREMENTS = {
 - **Automated**: axe DevTools, WAVE, Lighthouse
 - **Manual**: VoiceOver (macOS/iOS), NVDA/JAWS (Windows), TalkBack (Android)
 - **Simulators**: NoCoffee (vision), Silktide (various disabilities)
+<<<<<<< HEAD
 
 ## Resources
 
@@ -423,3 +430,5 @@ const CONTRAST_REQUIREMENTS = {
 - [A11y Project Checklist](https://www.a11yproject.com/checklist/)
 - [Inclusive Components](https://inclusive-components.design/)
 - [Deque University](https://dequeuniversity.com/)
+=======
+>>>>>>> 2ecb89d (update)
