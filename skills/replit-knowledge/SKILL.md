@@ -229,6 +229,18 @@ on this workspace (works as-is); if you hit a firewall pip mirror, set
   nothing restarts them.
 - `[[ports]]` in `.replit` maps local→external for HTTP publishing; plain
   `curl 127.0.0.1:<port>` works for local verification.
+- **`curl`, not `ss`/`netstat`, is the authority for "is it listening".**
+  `ss -ltn` on this box prints nothing even while a server answers on that
+  port — a `grep` against its output reads as "nothing listening" and sends
+  you hunting a bug that does not exist. Probe the port:
+  `curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:<port>/health`
+  (000 = down, 200 = up). Confirm a *process* with `ps`, never with `ss`.
+- **Kill by exact PID from `ps`, not `pkill -f <pattern>`.** `pkill -f`
+  matches the invoking shell's own command line (the pattern sits in it), so
+  it SIGTERMs your shell — the tool call dies mid-script and the target may
+  survive. `ps -eo pid,cmd | grep <name> | grep -v grep`, then
+  `kill -9 <pid>`. A `server.js`-style generic name needs the full path
+  (`grep 'camofox-browser/server.js'`) so unrelated `node` procs are spared.
 
 ## 7. Git identity on Replit (corrected 2026-09-17)
 
