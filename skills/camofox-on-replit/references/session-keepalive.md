@@ -71,12 +71,17 @@ Only a request that *touches the session*:
 
 ## Correct configuration
 
-`start-camofox.sh` exports (override via env):
+`start-camofox.sh` applies these **as overrides of Camofox's own defaults**
+(shown after each), so the script works out of the box:
 
 ```bash
-export TAB_INACTIVITY_MS="${TAB_INACTIVITY_MS:-900000}"    # 15min
-export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}" # 30min
+export TAB_INACTIVITY_MS="${TAB_INACTIVITY_MS:-900000}"     # Camofox default: 300000
+export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"  # Camofox default: 600000
 ```
+
+To take the Camofox default instead, comment the line out or set it yourself —
+in the shell (`export SESSION_TIMEOUT_MS=600000`) or in an env file
+(`camofox.env.example` lists them all with their defaults).
 
 Then the loop period only has to stay under 900s. `--interval 240` gives ~2min
 margin under the session threshold's 900s worst case.
@@ -84,16 +89,15 @@ margin under the session threshold's 900s worst case.
 **Do not** just raise `--interval` under the 5min tab reaper and call it done —
 that leaves the session reaper live, which is the one that drops the login.
 
-## Pitfall: the env file re-source can clobber your exports
+## Pitfall: the env file load can clobber your exports
 
 `start-camofox.sh` loads an env file with `set -a` **after** setting
 the defaults. Any `TAB_INACTIVITY_MS` / `SESSION_TIMEOUT_MS` in that file wins.
-Candidate order (first existing): `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`,
-`$HERMES_HOME/.env`. Check the file it actually picked:
+Candidate order (first existing): `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`.
+Check the file it actually picked:
 
 ```bash
-for f in "${CAMOFOX_ENV_FILE:-}" "${CAMOFOX_ROOT:-$XDG_DATA_HOME/camofox}/.env" \
-         "${HERMES_HOME:-$HOME/.hermes}/.env"; do
+for f in "${CAMOFOX_ENV_FILE:-}" "${CAMOFOX_ROOT:-$XDG_DATA_HOME/camofox}/.env"; do
     [[ -f "$f" ]] && { echo "using $f"; grep -nE 'TAB_INACTIVITY|SESSION_TIMEOUT' "$f"; break; }
 done
 ```

@@ -1,7 +1,7 @@
 ---
 name: camofox-on-replit
 description: "One-command anti-detection Firefox scraping server (Camoufox) on a Replit/Nix sandbox. Use when you need to open/verify bot-hardened sites (Cloudflare/Turnstile/WAF-protected, DuckDuckGo, etc.) that plain Chromium can't pass, or when the user wants a persistent headed-Firefox session with CDP. Provisions libs and launches everything in a single script."
-version: 3.1.1
+version: 3.2.0
 license: MIT
 platforms: [linux]
 compatibility: "Node >= 18 + nix on a Replit sandbox. GTK3/ALSA/X11 libs must EXIST in /nix/store — via replit.nix (recommended), nix-env, or a warm store from a prior build. Gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm  (~10s; never glob /nix/store/*/lib/* on this box)"
@@ -213,13 +213,19 @@ skill. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
 9377), `CAMOFOX_ACCESS_KEY` (optional auth), `CAMOFOX_ENV_FILE`
 (optional env file — see below).
 
-**No agent framework required.** The skill never hard-requires Hermes. An
-env file is only *optional* convenience for `CAMOFOX_API_KEY`: both
-`start-camofox.sh` and `camofox.py` load the first existing of
-`$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env` → `$HERMES_HOME/.env`, and with
-none present they fall back to the `CAMOFOX_API_KEY` process env var. No
-key at all is fine — it just means unauthenticated mode (only an issue when
-the server runs `NODE_ENV=production`, where cookie import then 403s).
+**No agent framework required.** The skill never hard-requires Hermes or any
+other tool. An env file is only *optional* convenience for `CAMOFOX_API_KEY`:
+both `start-camofox.sh` and `camofox.py` load the first existing of
+`$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env`, then fall back to the
+`CAMOFOX_API_KEY` process env var. No implicit home dirs are searched. No key
+at all is fine — it just means unauthenticated mode (only an issue when the
+server runs `NODE_ENV=production`, where cookie import then 403s).
+
+Every tunable, with the Camofox default it overrides, is listed in
+[`camofox.env.example`](camofox.env.example). Copy it to `$CAMOFOX_ROOT/.env`
+(or point `$CAMOFOX_ENV_FILE` at it) and uncomment only what you want to
+change — the script's own values are the same recommendations, and commenting
+one out there accepts the Camofox default instead.
 
 ## Cold store (brand-new container, GTK never installed there)
 
@@ -356,13 +362,13 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   gates the *provision* task, not parallel consumers, so command-too-early
   → `Errno 111 Connection refused`. Run it even on first shell entry.
 - `--env FILE` (optional): read `CAMOFOX_API_KEY` from here. When omitted, the
-  CLI picks the **first existing** of: `$CAMOFOX_ENV_FILE`,
-  `$CAMOFOX_ROOT/.env` (tool-native), `$HERMES_HOME/.env`; with no file at all
-  it falls back to the `CAMOFOX_API_KEY` process env var. Hermes is a
-  convenience, never a dependency — no file and no key just means
-  unauthenticated mode (fine unless `NODE_ENV=production`).
+  CLI picks the first **existing** of `$CAMOFOX_ENV_FILE` then
+  `$CAMOFOX_ROOT/.env`; with neither it falls back to the `CAMOFOX_API_KEY`
+  process env var. No implicit home dirs, no agent framework. No file and no
+  key just means unauthenticated mode (fine unless `NODE_ENV=production`,
+  which then 403s). See `camofox.env.example` for a template.
   Python does not expand `$VAR` in strings — resolve with
-  `os.environ.get("HERMES_HOME", "~/.hermes")`, never a literal `$HERMES_HOME`.
+  `os.environ.get("CAMOFOX_ENV_FILE")`, never a literal `$CAMOFOX_ENV_FILE`.
 - `--state DIR` default `$XDG_DATA_HOME/camofox/state`: on-disk data dir
   (cookies/profiles/traces); only list modes read it. Default is already
   right — leave it alone unless you moved the server's state manually.
@@ -379,8 +385,8 @@ restarts, so one import per account is enough.
 - **`NODE_ENV=production` disables loopback import without a key** — set
   `CAMOFOX_API_KEY` in the env; the CLI sends `Authorization: Bearer <key>`.
   403 means the *server* started without the key (`start-camofox.sh` loads an
-  env file on boot — `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`, then
-  `$HERMES_HOME/.env`, first existing wins — to prevent this).
+  env file on boot — `$CAMOFOX_ENV_FILE`, then `$CAMOFOX_ROOT/.env`, first
+  existing wins — to prevent this).
 - `__Host-` cookies are host-only (no domain in the export) but the
   validator hard-requires `domain`; pass the site domain anyway (e.g.
   `replit.com`) — the browser accepts them.
@@ -433,10 +439,11 @@ it is the 60s active probe (`server.js:6978`) failing and calling
 `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, which kills
 in-flight requests. A restart under a live loop is always the probe.
 
-`start-camofox.sh` exports `TAB_INACTIVITY_MS=900000` and
-`SESSION_TIMEOUT_MS=1800000` (override via env; re-checked after the
-env-file load — `$CAMOFOX_ENV_FILE` / `$CAMOFOX_ROOT/.env` / `$HERMES_HOME/.env`,
-first existing wins — which can clobber them). With those set, the
+`start-camofox.sh` applies `TAB_INACTIVITY_MS=900000` and
+`SESSION_TIMEOUT_MS=1800000` as **overrides of Camofox's own defaults** (300000
+and 600000). Re-checked after the env-file load — `$CAMOFOX_ENV_FILE` then
+`$CAMOFOX_ROOT/.env`, first existing wins — which can clobber them. With those
+set, the
 loop period just needs to stay comfortably under 900s. Use `--tools refresh-page`
 with **`--interval 240`**. Cron is the wrong tool (1/min floor + fresh process
 each tick); a long-running loop is right.

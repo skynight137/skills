@@ -41,20 +41,19 @@ def default_state():
 
 
 def default_env():
-    """First EXISTING candidate wins. The env file is OPTIONAL: no file and no
-    CAMOFOX_API_KEY simply means unauthenticated mode, which is fine unless the
-    server runs NODE_ENV=production. Hermes is a convenience, not a dependency.
+    """First EXISTING candidate wins, else None. The env file is OPTIONAL and
+    no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop it
+    at $CAMOFOX_ROOT/.env. With neither, the CAMOFOX_API_KEY process env var is
+    used, and no key at all just means unauthenticated mode.
     """
     candidates = [
         os.environ.get("CAMOFOX_ENV_FILE"),
         os.path.join(default_root(), ".env"),
-        os.path.join(os.environ.get("HERMES_HOME") or
-                     os.path.expanduser("~/.hermes"), ".env"),
     ]
     for p in candidates:
         if p and os.path.exists(p):
             return p
-    return candidates[1]  # tool-native default, even when absent
+    return None
 
 
 # --- HTTP --------------------------------------------------------------------
@@ -295,10 +294,13 @@ def main():
         list_sessions(a.state, key)
         return
 
-    # action path: need key
-    if not key and (a.cookies or a.tools or a.screenshot):
-        print(f"no CAMOFOX_API_KEY in {a.env}", file=sys.stderr)
-        sys.exit(1)
+    # action path: no key is allowed (unauthenticated mode) unless the server
+    # requires one, in which case the request itself returns 403.
+    if not key:
+        where = a.env or "no env file found ($CAMOFOX_ENV_FILE / $CAMOFOX_ROOT/.env)"
+        print(f"[camofox] no CAMOFOX_API_KEY ({where}) — "
+              f"continuing unauthenticated; 403 means the server needs a key",
+              file=sys.stderr)
 
     # block until server is actually up (fixes Errno 111 Connection refused
     # when this runs before start-camofox.sh finishes, e.g. parallel .replit)

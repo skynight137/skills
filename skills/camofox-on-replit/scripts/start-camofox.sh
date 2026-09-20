@@ -52,40 +52,46 @@ CAMOFOX_ROOT="${CAMOFOX_ROOT:-$XDG_DATA_HOME/camofox}"
 REPO="${CAMOFOX_REPO_DIR:-$CAMOFOX_ROOT/camofox-browser}"
 ENGINE="${CAMOUFOX_INSTALL_DIR:-$CAMOFOX_ROOT/camoufox}"
 STATE="${CAMOFOX_STATE_DIR:-$CAMOFOX_ROOT/state}"
-export CAMOFOX_PORT="${CAMOFOX_PORT:-9377}"
+# --- Tuned overrides -----------------------------------------------------------
+# Every variable below is OPTIONAL: Camofox sets its own default for each. These
+# are the values this skill recommends, and each is an explicit override of a
+# Camofox default — not a redundant restatement of one. Comment a line out to
+# accept Camofox's default instead. Full list: camofox.env.example.
+# Port: Camofox already defaults to 9377 (lib/config.js:129 tries CAMOFOX_PORT,
+# then PORT, then '9377'), so this export is a no-op in a clean environment.
+export CAMOFOX_PORT="${CAMOFOX_PORT:-9377}"        # Camofox default: 9377
 # Per-tab inactivity reaper threshold (server.js:6040, lib/config.js:149).
-# Default 300000ms sits exactly on a 300s client loop period -> the reaper
+# Camofox default 300000 sits exactly on a 300s client loop period -> the reaper
 # wins the race and closes the tab (refresh 404 -> client reopens). Keep this
 # well above any client --interval: 900000 = 3x a 300s loop.
 # NOTE: 0 does NOT disable this one -- lib/config.js:149 is `parseInt(...) || 300000`,
 # so 0 is falsy and silently becomes the 300000 default (the MOST aggressive).
 # To effectively turn the reaper off, pass a large number (e.g. 86400000 = 24h).
-export TAB_INACTIVITY_MS="${TAB_INACTIVITY_MS:-900000}"
+export TAB_INACTIVITY_MS="${TAB_INACTIVITY_MS:-900000}"   # Camofox default: 300000
 
-# Session reaper (server.js:5978, lib/config.js:116). Default 600000ms is the
-# REAL binding constraint: a tab reap empties the session, and once its
+# Session reaper (server.js:5978, lib/config.js:116). Camofox default 600000 is
+# the REAL binding constraint: a tab reap empties the session, and once its
 # lastAccess goes stale the session is closed -> context.close() -> cookies
 # gone -> the client's tab reopen lands logged OUT. Only a request touching
 # the session (refresh, screenshot, navigate) bumps lastAccess, so this must
 # stay comfortably above the client --interval too.
 # Unlike TAB_INACTIVITY_MS, 0 here genuinely disables expiry (guarded by
 # `SESSION_TIMEOUT_MS > 0` at server.js:5978) -- set 0 to never expire.
-export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"
+export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"  # Camofox default: 600000
 
-# Idle browser shutdown (server.js:697-705, lib/config.js:119). Only runs when
-# sessions.size === 0, and costs a full cold start (~90s: xvfb + camoufox
-# launch) the next time a run needs the browser. 0 = never shut it down.
-export BROWSER_IDLE_TIMEOUT_MS="${BROWSER_IDLE_TIMEOUT_MS:-0}"
+# Idle browser shutdown (server.js:697-705, lib/config.js:119). Camofox default
+# 300000 costs a full cold start (~90s: xvfb + camoufox launch) the next time a
+# run needs the browser. Only runs when sessions.size === 0. 0 = never shut it
+# down.
+export BROWSER_IDLE_TIMEOUT_MS="${BROWSER_IDLE_TIMEOUT_MS:-0}"  # Camofox default: 300000
 
-# Load secrets/config from an env file IF one exists. OPTIONAL — the skill must
-# work without any agent framework installed. Search order (first existing wins):
-#   1. $CAMOFOX_ENV_FILE              explicit override
-#   2. $CAMOFOX_ROOT/.env             tool-native home (uv-style)
-#   3. $HERMES_HOME/.env              Hermes convenience, if Hermes happens to be here
-# Without a key the server still runs; only cookie import needs one
-# (NODE_ENV=production rejects loopback import when no key is configured).
-for _cand in "${CAMOFOX_ENV_FILE:-}" "$CAMOFOX_ROOT/.env" \
-             "${HERMES_HOME:-$HOME/.hermes}/.env"; do
+# Load secrets/config from an env file IF one exists. OPTIONAL — no agent
+# framework is involved. Resolution order, first existing wins:
+#   1. $CAMOFOX_ENV_FILE     explicit path
+#   2. $CAMOFOX_ROOT/.env    tool-native home (copy camofox.env.example here)
+#   3. nothing — falls through to the CAMOFOX_API_KEY process env var
+# See camofox.env.example for every tunable with its Camofox default.
+for _cand in "${CAMOFOX_ENV_FILE:-}" "$CAMOFOX_ROOT/.env"; do
     if [[ -n "$_cand" && -f "$_cand" ]]; then
         # shellcheck disable=SC1090
         set -a; . "$_cand"; set +a
