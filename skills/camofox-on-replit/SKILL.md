@@ -1,7 +1,7 @@
 ---
 name: camofox-on-replit
 description: "One-command anti-detection Firefox scraping server (Camoufox) on a Replit/Nix sandbox. Use when you need to open/verify bot-hardened sites (Cloudflare/Turnstile/WAF-protected, DuckDuckGo, etc.) that plain Chromium can't pass, or when the user wants a persistent headed-Firefox session with CDP. Provisions libs and launches everything in a single script."
-version: 3.2.0
+version: 3.2.1
 license: MIT
 platforms: [linux]
 compatibility: "Node >= 18 + nix on a Replit sandbox. GTK3/ALSA/X11 libs must EXIST in /nix/store — via replit.nix (recommended), nix-env, or a warm store from a prior build. Gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm  (~10s; never glob /nix/store/*/lib/* on this box)"
