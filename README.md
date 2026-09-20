@@ -10,7 +10,6 @@ Agent skills ([agentskills.io](https://agentskills.io) / [skills.sh](https://ski
 | [`replit-knowledge`](skills/replit-knowledge/) | Replit platform facts: `$HOME` wiped on recreate, `$REPL_HOME` is the workspace, XDG pre-set, `REPL_*` env vars, `.replit`/`.bashrc`, npm package firewall, `replit shutdown`. Load this before persisting data or choosing paths on Replit. |
 | [`camofox-on-replit`](skills/camofox-on-replit/) | Anti-detection Firefox scraping server — bypasses bot-hardened sites (Cloudflare/Turnstile/WAF, DuckDuckGo) that plain Chromium can't handle. One script provisions everything. |
 | [`replit-playwright-chromium`](skills/replit-playwright-chromium/) | Playwright against a pre-installed Chromium — skip `playwright install` entirely; launch via `executable_path`, with an on-demand CDP daemon helper. |
-| [`karpathy`](skills/karpathy/) | Behavioral guidelines to reduce common LLM coding mistakes: surface assumptions, simplicity first, surgical changes, goal-driven execution with verifiable success criteria. Load this for any coding task, review, or PR. |
 
 ## Install
 
@@ -19,7 +18,6 @@ npx -y skills add skynight137/skills -s replit-nix
 npx -y skills add skynight137/skills -s replit-knowledge
 npx -y skills add skynight137/skills -s camofox-on-replit
 npx -y skills add skynight137/skills -s replit-playwright-chromium
-npx -y skills add skynight137/skills -s karpathy
 
 # or all:
 npx -y skills add skynight137/skills
