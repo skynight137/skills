@@ -214,12 +214,16 @@ skill. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
 (optional env file — see below).
 
 **No agent framework required.** The skill never hard-requires Hermes or any
-other tool. An env file is only *optional* convenience for `CAMOFOX_API_KEY`:
-both `start-camofox.sh` and `camofox.py` load the first existing of
-`$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env`, then fall back to the
-`CAMOFOX_API_KEY` process env var. No implicit home dirs are searched. No key
+other tool. An env file is only *optional* convenience: both
+`start-camofox.sh` and `camofox.py` load the first existing of
+`$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env`, then fall back to plain
+environment variables. No implicit home dirs are searched. No key
 at all is fine — it just means unauthenticated mode (only an issue when the
 server runs `NODE_ENV=production`, where cookie import then 403s).
+
+The file is not key-only: it is loaded *before* any setting is read, so it can
+carry every variable below (`CAMOFOX_URL`, `CAMOFOX_ROOT`, `CAMOFOX_STATE_DIR`,
+…). Explicit environment variables win over the file.
 
 Every tunable, with the Camofox default it overrides, is listed in
 [`camofox.env.example`](camofox.env.example). Copy it to `$CAMOFOX_ROOT/.env`
@@ -361,12 +365,17 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   install + engine fetch + browser boot), and Replit `waitForPort` only
   gates the *provision* task, not parallel consumers, so command-too-early
   → `Errno 111 Connection refused`. Run it even on first shell entry.
-- `--env FILE` (optional): read `CAMOFOX_API_KEY` from here. When omitted, the
-  CLI picks the first **existing** of `$CAMOFOX_ENV_FILE` then
-  `$CAMOFOX_ROOT/.env`; with neither it falls back to the `CAMOFOX_API_KEY`
-  process env var. No implicit home dirs, no agent framework. No file and no
-  key just means unauthenticated mode (fine unless `NODE_ENV=production`,
-  which then 403s). See `camofox.env.example` for a template.
+- `--env FILE` (optional): the env file to load. When omitted, the CLI picks
+  the first **existing** of `$CAMOFOX_ENV_FILE` then `$CAMOFOX_ROOT/.env`;
+  with neither it uses plain environment variables. No implicit home dirs, no
+  agent framework. No file and no key just means unauthenticated mode (fine
+  unless `NODE_ENV=production`, which then 403s).
+- **The env file is loaded at import, before any setting is read**, so it can
+  carry *any* Camofox variable — `CAMOFOX_URL`, `CAMOFOX_ROOT`,
+  `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key. Real environment
+  variables win over the file (`setdefault` semantics), matching
+  `start-camofox.sh`, which sources the file with `set -a` after exporting its
+  own defaults. See `camofox.env.example` for a template.
   Python does not expand `$VAR` in strings — resolve with
   `os.environ.get("CAMOFOX_ENV_FILE")`, never a literal `$CAMOFOX_ENV_FILE`.
 - `--state DIR` default `$XDG_DATA_HOME/camofox/state`: on-disk data dir

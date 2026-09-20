@@ -14,12 +14,65 @@ Modes (sentinel values):
 --cookies <json>: if present, (re)import into --user BEFORE any tool runs.
 Cookies otherwise persist per --user on disk and auto-reload — omit to reuse.
 
-Auth: reads CAMOFOX_API_KEY from --env, else from the CAMOFOX_API_KEY
-environment variable. No agent framework required — Hermes' .env is only one
-of the candidate paths (see default_env).
+Auth/config: the env file is loaded into the environment at import, BEFORE any
+setting is read, so EVERY Camofox variable can live in it — CAMOFOX_URL,
+CAMOFOX_ROOT, CAMOFOX_STATE_DIR, CAMOFOX_API_KEY, … not just the key. No agent
+framework required: only $CAMOFOX_ENV_FILE and $CAMOFOX_ROOT/.env are consulted
+(see default_env).
 """
 import argparse, glob, json, os, sys, time, urllib.error, urllib.request
 from typing import cast
+
+
+# --- config, resolved at import in dependency order ---------------------------
+# Order matters: the env file path can only be found from the AMBIENT env, so
+# that happens first; then the file is applied to os.environ; only then is the
+# server URL read. Otherwise a CAMOFOX_URL / CAMOFOX_ROOT set in the env file
+# would be ignored (the module constant would already hold the fallback).
+def _read_env_file(path):
+    """Parse KEY=VALUE lines. Blank lines, comments, `export ` prefixes, and
+    surrounding quotes are tolerated. Later duplicates win, matching shell."""
+    out = {}
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):].lstrip()
+            if "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            out[k.strip()] = v.strip().strip("'\"")
+    return out
+
+
+def default_env():
+    """First EXISTING candidate wins, else None. The env file is OPTIONAL and
+    no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop it
+    at $CAMOFOX_ROOT/.env. With neither, plain environment variables are used,
+    and no key at all just means unauthenticated mode.
+
+    Reads CAMOFOX_ROOT / XDG_DATA_HOME from the AMBIENT env only — it runs
+    before the env file is applied, and the file cannot point at itself.
+    """
+    root = os.environ.get("CAMOFOX_ROOT") or os.path.join(
+        os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
+        "camofox")
+    for p in (os.environ.get("CAMOFOX_ENV_FILE"), os.path.join(root, ".env")):
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
+ENV_FILE = default_env()
+# setdefault semantics: the real environment WINS, the file only fills gaps.
+# This mirrors start-camofox.sh, which sources the file with `set -a` but after
+# exporting its own defaults, so an explicit shell export still overrides.
+if ENV_FILE:
+    for _k, _v in _read_env_file(ENV_FILE).items():
+        os.environ.setdefault(_k, _v)
+    del _k, _v
 
 CAMOFOX = os.environ.get("CAMOFOX_URL", "http://127.0.0.1:9377").rstrip("/")
 SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
@@ -40,28 +93,13 @@ def default_state():
     return os.path.join(default_root(), "state")
 
 
-def default_env():
-    """First EXISTING candidate wins, else None. The env file is OPTIONAL and
-    no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop it
-    at $CAMOFOX_ROOT/.env. With neither, the CAMOFOX_API_KEY process env var is
-    used, and no key at all just means unauthenticated mode.
-    """
-    candidates = [
-        os.environ.get("CAMOFOX_ENV_FILE"),
-        os.path.join(default_root(), ".env"),
-    ]
-    for p in candidates:
-        if p and os.path.exists(p):
-            return p
-    return None
-
-
 # --- HTTP --------------------------------------------------------------------
 def load_key(env_path):
+    """Prefer the explicit/--env file, then the (already merged) environment."""
     if env_path and os.path.exists(env_path):
-        for line in open(env_path):
-            if line.strip().startswith("CAMOFOX_API_KEY="):
-                return line.split("=", 1)[1].strip()
+        v = _read_env_file(env_path).get("CAMOFOX_API_KEY")
+        if v:
+            return v
     return os.environ.get("CAMOFOX_API_KEY") or None
 
 
