@@ -97,7 +97,7 @@ Candidate order (first existing): `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`.
 Check the file it actually picked:
 
 ```bash
-for f in "${CAMOFOX_ENV_FILE:-}" "${CAMOFOX_ROOT:-$XDG_DATA_HOME/camofox}/.env"; do
+for f in "${CAMOFOX_ENV_FILE:-}" "${CAMOFOX_ROOT:-${REPL_HOME:-$HOME}/camofox}/.env"; do
     [[ -f "$f" ]] && { echo "using $f"; grep -nE 'TAB_INACTIVITY|SESSION_TIMEOUT' "$f"; break; }
 done
 ```

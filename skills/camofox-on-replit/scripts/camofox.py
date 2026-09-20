@@ -38,8 +38,6 @@ def _read_env_file(path):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            if line.startswith("export "):
-                line = line[len("export "):].lstrip()
             if "=" not in line:
                 continue
             k, v = line.split("=", 1)
@@ -53,44 +51,55 @@ def default_env():
     at $CAMOFOX_ROOT/.env. With neither, plain environment variables are used,
     and no key at all just means unauthenticated mode.
 
-    Reads CAMOFOX_ROOT / XDG_DATA_HOME from the AMBIENT env only — it runs
-    before the env file is applied, and the file cannot point at itself.
+    Reads CAMOFOX_ROOT from the AMBIENT env only — it runs before the env file
+    is applied, and the file cannot point at itself. Guarded: with
+    CAMOFOX_ROOT unset, os.path.join('', '.env') is the RELATIVE path '.env',
+    which would silently load any .env in the current working directory.
     """
-    root = os.environ.get("CAMOFOX_ROOT") or os.path.join(
-        os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"),
-        "camofox")
-    for p in (os.environ.get("CAMOFOX_ENV_FILE"), os.path.join(root, ".env")):
+    root = os.environ.get("CAMOFOX_ROOT")
+    candidates = [os.environ.get("CAMOFOX_ENV_FILE")]
+    if root:
+        candidates.append(os.path.join(root, ".env"))
+    for p in candidates:
         if p and os.path.exists(p):
             return p
     return None
 
 
 ENV_FILE = default_env()
-# setdefault semantics: the real environment WINS, the file only fills gaps.
-# This mirrors start-camofox.sh, which sources the file with `set -a` but after
-# exporting its own defaults, so an explicit shell export still overrides.
+# setdefault semantics: the ambient environment WINS, the file only fills gaps.
+# NOTE this is the OPPOSITE of start-camofox.sh, which sources the file with
+# `set -a` AFTER exporting its own defaults, so there the FILE wins. Verified
+# both ways. Harmless in practice (the file is the config, and the script only
+# exports the same names), but do not "unify" them by assumption.
 if ENV_FILE:
     for _k, _v in _read_env_file(ENV_FILE).items():
         os.environ.setdefault(_k, _v)
     del _k, _v
 
-CAMOFOX = os.environ.get("CAMOFOX_URL", "http://127.0.0.1:9377").rstrip("/")
+CAMOFOX_URL = os.environ.get("CAMOFOX_URL", "http://127.0.0.1:9377").rstrip("/")
 SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
             "unspecified": "Lax", "none": "None"}
 
 
 # --- path discovery (mirror start-camofox.sh) --------------------------------
 def default_root():
-    if os.environ.get("CAMOFOX_ROOT"):
-        return os.environ["CAMOFOX_ROOT"]
-    xdg = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return os.path.join(xdg, "camofox")
+    """$CAMOFOX_ROOT, or None when unset — no guessing. start-camofox.sh
+    computes it from $REPL_HOME (persistent) and exports it, so on Replit it is
+    always present; the None case is a real misconfiguration, and callers turn
+    it into an actionable error rather than inventing a path."""
+    return os.environ.get("CAMOFOX_ROOT") or None
 
 
 def default_state():
     if os.environ.get("CAMOFOX_STATE_DIR"):
         return os.environ["CAMOFOX_STATE_DIR"]
-    return os.path.join(default_root(), "state")
+    root = default_root()
+    if not root:
+        sys.exit("[camofox] CAMOFOX_ROOT is not set. Export it (e.g. "
+                 "CAMOFOX_ROOT=$REPL_HOME/camofox) or run start-camofox.sh, "
+                 "which sets it for you.")
+    return os.path.join(root, "state")
 
 
 # --- HTTP --------------------------------------------------------------------
@@ -106,7 +115,7 @@ def load_key(env_path):
 def req(key, method, path, body=None, timeout=300):
     data = json.dumps(body).encode() if body is not None else None
     r = urllib.request.Request(
-        CAMOFOX + path, data=data,
+        CAMOFOX_URL + path, data=data,
         headers={"Content-Type": "application/json",
                  "Authorization": f"Bearer {key or ''}"}, method=method)
     try:
@@ -121,7 +130,7 @@ def req(key, method, path, body=None, timeout=300):
 def req_bytes(key, path, timeout=120):
     """Fetch a binary response (e.g. screenshot PNG). Returns (bytes, err)."""
     r = urllib.request.Request(
-        CAMOFOX + path,
+        CAMOFOX_URL + path,
         headers={"Authorization": f"Bearer {key or ''}"})
     try:
         with urllib.request.urlopen(r, timeout=timeout) as resp:

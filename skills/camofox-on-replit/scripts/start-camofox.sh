@@ -11,13 +11,13 @@
 #                                up-to-date = no re-download, broken = repairs)
 #   6. exec node server.js     (port 8008)
 #
-# ONE directory holds everything (uv-style, under XDG_DATA_HOME):
-#   $XDG_DATA_HOME/camofox/
+# ONE directory holds everything (uv-style, under $REPL_HOME on Replit):
+#   ${REPL_HOME:-$HOME}/camofox/
 #   ├── camofox-browser/   repo clone (node_modules, LD_LIBRARY_PATH.txt)
 #   ├── venv/              python (uv, no pinned version; self-provisioned)
 #   ├── camoufox/          engine = CAMOUFOX_INSTALL_DIR (re-fetchable)
 #   └── state/             server state: cookies/ profiles/ uploads/ traces/
-# Reset = rm -rf "$XDG_DATA_HOME/camofox"  (re-run this script to re-provision)
+# Reset = rm -rf "${REPL_HOME:-$HOME}/camofox"  (re-run to re-provision)
 #
 # Naming: camofox = the SERVER (jo-inc/camofox-browser); camoufox = the ENGINE
 # (daijro/camoufox Firefox build). State lives in state/, NOT inside camoufox/:
@@ -37,18 +37,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
-# XDG: Replit PRE-SETS XDG_*_HOME to workspace (persistent) paths — check
-# with `printenv | grep XDG_`. The fallbacks below are the XDG SPEC
-# defaults, used only on other machines / non-login contexts where the vars
-# are unset — so the layout stays uv-style (~/.local/share/<tool>) and any
-# user-set XDG_*_HOME is honored everywhere.
+# nix-wrapped tools (npx) run `set -o nounset` and dereference ${XDG_CONFIG_HOME}
+# unconditionally, so an unset var kills them mid-install. Replit always sets the
+# XDG_* vars itself; these fallbacks cover other machines. Independent of
+# CAMOFOX_ROOT — the root no longer lives under XDG.
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+
+# Replit: REPL_HOME is the persistent workspace dir (/home/runner/workspace).
+# $HOME (/home/runner) is NOT persistent — it is wiped on restart, so anything
+# under it (including $HOME/.local/share) is lost. Prefer REPL_HOME; the $HOME
+# fallback only covers non-Replit machines where REPL_HOME is unset.
+CAMOFOX_HOME="${REPL_HOME:-$HOME}"
 
 # --- the single root — all absolute, independent of where the skill lives ----
-# Default under XDG_DATA_HOME; every target overridable independently.
+# Default under CAMOFOX_HOME; every target overridable independently.
 # Everything the script reads AND writes lives under $CAMOFOX_ROOT — it never
 # touches any other location.
-CAMOFOX_ROOT="${CAMOFOX_ROOT:-$XDG_DATA_HOME/camofox}"
+CAMOFOX_ROOT="${CAMOFOX_ROOT:-$CAMOFOX_HOME/camofox}"
 REPO="${CAMOFOX_REPO_DIR:-$CAMOFOX_ROOT/camofox-browser}"
 ENGINE="${CAMOUFOX_INSTALL_DIR:-$CAMOFOX_ROOT/camoufox}"
 STATE="${CAMOFOX_STATE_DIR:-$CAMOFOX_ROOT/state}"
@@ -147,12 +153,11 @@ fi
 #    partial/corrupt node_modules dir is repaired — `[[ -d node_modules ]]`
 #    would have let a broken tree pass and leak into the server start.
 #    Replit's package-firewall pins the npm registry and 404s tarballs, so
-#    pin npmjs.org explicitly (matches the verified fast path). XDG vars are
-#    exported above (the repo's postinstall shells out to npx, whose nix
-#    wrapper dies on unset XDG_*), loglevel=error hides harmless peer
-#    warnings, and CAMOFOX_SKIP_DOWNLOAD=1 stops the repo's postinstall from
-#    silently fetching a SECOND engine copy into its default cache — step 4
-#    owns the engine, in $ENGINE.
+#    pin npmjs.org explicitly (matches the verified fast path). loglevel=error
+#    hides harmless peer warnings, and CAMOFOX_SKIP_DOWNLOAD=1 stops the
+#    repo's postinstall from silently fetching a SECOND engine copy into its
+#    default cache — step 4 owns the engine, in $ENGINE.
+export CAMOFOX_ROOT
 export CAMOFOX_SKIP_DOWNLOAD=1
 (cd "$REPO" && npm_config_loglevel=error npm install --no-audit --no-fund --registry="https://registry.npmjs.org/")
 

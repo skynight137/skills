@@ -1,7 +1,7 @@
 ---
 name: camofox-on-replit
 description: "One-command anti-detection Firefox scraping server (Camoufox) on a Replit/Nix sandbox. Use when you need to open/verify bot-hardened sites (Cloudflare/Turnstile/WAF-protected, DuckDuckGo, etc.) that plain Chromium can't pass, or when the user wants a persistent headed-Firefox session with CDP. Provisions libs and launches everything in a single script."
-version: 3.2.1
+version: 3.3.0
 license: MIT
 platforms: [linux]
 compatibility: "Node >= 18 + nix on a Replit sandbox. GTK3/ALSA/X11 libs must EXIST in /nix/store — via replit.nix (recommended), nix-env, or a warm store from a prior build. Gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm  (~10s; never glob /nix/store/*/lib/* on this box)"
@@ -133,21 +133,20 @@ self-heals instead of leaking into the server start.
 
 ## Layout — ONE directory, one reset
 
-Everything lives under `$XDG_DATA_HOME/camofox/` — no configuration needed:
-on Replit the platform pre-sets `XDG_DATA_HOME` to a **workspace** path
-(persistent; verify with `printenv | grep XDG_`), and on any other machine
-the XDG spec default applies (`~/.local/share/camofox`, uv-style). A
-user-set `XDG_DATA_HOME` is always honored.
+Everything lives under `$REPL_HOME/camofox/` — no configuration needed.
+`REPL_HOME` is the persistent workspace dir on Replit (`/home/runner/workspace`),
+which is the whole point: `$HOME` (`/home/runner`) is **wiped on restart**, so
+anything under it is lost. Off Replit the script falls back to `$HOME/camofox`.
 
 ```
-$XDG_DATA_HOME/camofox/
+${REPL_HOME:-$HOME}/camofox/
 ├── camofox-browser/   repo (node_modules, LD_LIBRARY_PATH.txt)
 ├── venv/              python (uv picks the interpreter; self-provisioned)
 ├── camoufox/          engine = CAMOUFOX_INSTALL_DIR (re-fetchable)
 └── state/             server state: cookies/ profiles/ uploads/ traces/
 ```
 
-- **Reset everything:** `rm -rf "$XDG_DATA_HOME/camofox"` then re-run
+- **Reset everything:** `rm -rf "${REPL_HOME:-$HOME}/camofox"` then re-run
   `start-camofox.sh`. That's the whole cleanup story.
 - **Python:** a bare workspace PATH has no guaranteed `python3` (it only
   appears once some venv is activated). The script self-provisions a
@@ -182,10 +181,10 @@ $XDG_DATA_HOME/camofox/
    loading fine and then dying on `libX11-xcb.so.1: cannot open shared
    object file` is the exact signature of using only those top-level dirs.
 3. **`$HOME` is wiped on container recreate; the workspace is not.**
-   On Replit the platform pre-sets `XDG_*_HOME` to workspace paths
-   (verify: `printenv | grep XDG_`), so everything the script writes under
-   `$XDG_DATA_HOME/camofox/` survives restarts; elsewhere the script falls
-   back to the XDG spec defaults.
+   So the root is anchored to `$REPL_HOME` (`/home/runner/workspace`), not
+   `$HOME`: everything the script writes under `$REPL_HOME/camofox/`
+   survives restarts. `$HOME/.local/share` would *look* fine and then
+   vanish on the next restart. Off Replit, `$HOME` is the fallback.
 
 Full depth (the verified T0/T1/T2/T3 matrix, `replit.nix` vs `nix-env`,
 npm package-firewall, `/nix/store` warm/cold mechanics, the `LD_AUDIT`
@@ -199,7 +198,7 @@ fixed steps — see its header). To inspect or run individual steps by
 hand, each script works standalone with explicit arguments:
 
 ```bash
-CAMOFOX_ROOT="$XDG_DATA_HOME/camofox"
+CAMOFOX_ROOT="${REPL_HOME:-$HOME}/camofox"
 git clone https://github.com/jo-inc/camofox-browser "$CAMOFOX_ROOT/camofox-browser"
 uv venv "$CAMOFOX_ROOT/venv"
 (cd "$CAMOFOX_ROOT/camofox-browser" && CAMOFOX_SKIP_DOWNLOAD=1 npm i --registry=https://registry.npmjs.org/ && npm run fetch-bin)
@@ -210,8 +209,9 @@ bash scripts/start-camofox.sh   # fast self-verification pass, then launches :93
 The closure/loader mechanics *why* each step exists: the `replit-nix`
 skill. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
 `CAMOUFOX_INSTALL_DIR`, `CAMOFOX_STATE_DIR`, `CAMOFOX_PORT` (default
-9377), `CAMOFOX_ACCESS_KEY` (optional auth), `CAMOFOX_ENV_FILE`
-(optional env file — see below).
+9377), `CAMOFOX_API_KEY` (optional auth — this is the real name, there is
+no `CAMOFOX_ACCESS_KEY`), `CAMOFOX_ENV_FILE` (optional env file — see
+below).
 
 **No agent framework required.** The skill never hard-requires Hermes or any
 other tool. An env file is only *optional* convenience: both
@@ -223,7 +223,8 @@ server runs `NODE_ENV=production`, where cookie import then 403s).
 
 The file is not key-only: it is loaded *before* any setting is read, so it can
 carry every variable below (`CAMOFOX_URL`, `CAMOFOX_ROOT`, `CAMOFOX_STATE_DIR`,
-…). Explicit environment variables win over the file.
+…). Note the two tools resolve precedence differently — see the config block
+further down before relying on an exported override.
 
 Every tunable, with the Camofox default it overrides, is listed in
 [`camofox.env.example`](camofox.env.example). Copy it to `$CAMOFOX_ROOT/.env`
@@ -370,17 +371,34 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   with neither it uses plain environment variables. No implicit home dirs, no
   agent framework. No file and no key just means unauthenticated mode (fine
   unless `NODE_ENV=production`, which then 403s).
+- ⚠️ **`camofox.py` has NO fallback for `CAMOFOX_ROOT`** — if it is unset the
+  CLI exits with an actionable message instead of guessing a path.
+  `start-camofox.sh` exports it, so the normal path always has it; a bare
+  standalone invocation needs `CAMOFOX_ROOT` exported first.
+- ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_URL` (client dials) must
+  agree** — both default to `9377`, but setting only one silently splits them
+  and every request fails with a connection error. If you move the port, set
+  both (the env file is the right place — see `camofox.env.example`).
 - **The env file is loaded at import, before any setting is read**, so it can
   carry *any* Camofox variable — `CAMOFOX_URL`, `CAMOFOX_ROOT`,
-  `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key. Real environment
-  variables win over the file (`setdefault` semantics), matching
-  `start-camofox.sh`, which sources the file with `set -a` after exporting its
-  own defaults. See `camofox.env.example` for a template.
+  `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key. See
+  `camofox.env.example` for a template.
   Python does not expand `$VAR` in strings — resolve with
   `os.environ.get("CAMOFOX_ENV_FILE")`, never a literal `$CAMOFOX_ENV_FILE`.
-- `--state DIR` default `$XDG_DATA_HOME/camofox/state`: on-disk data dir
-  (cookies/profiles/traces); only list modes read it. Default is already
-  right — leave it alone unless you moved the server's state manually.
+- ⚠️ **Precedence differs between the two tools — verified, don't assume:**
+  - `camofox.py` — **ambient env wins** over the file (`setdefault` merge), so
+    an exported `CAMOFOX_URL` overrides the file's value.
+  - `start-camofox.sh` — **the file wins** over the ambient env: the script
+    exports its own defaults *first* (`CAMOFOX_ROOT=…`, `CAMOFOX_PORT=…`,
+    lines ~45-86), then sources the file with `set -a` (line ~97), which
+    overwrites them.
+  So the same `KEY=value` in the same file resolves differently depending on
+  which tool reads it. Keep the file as the single source of truth and export
+  overrides in the shell only when you intend them for `camofox.py` alone.
+- `--state DIR` default `$CAMOFOX_ROOT/state`: on-disk data dir
+  (cookies/profiles/traces); only list modes read it. `$CAMOFOX_ROOT` comes
+  from the environment (`start-camofox.sh` exports it); there is no built-in
+  fallback — if it is unset the CLI exits with a message rather than guessing.
 - Full flag set: `--cookies --user --session --tools --url --interval` +
   `--screenshot --full-page --wait --env --state`. `--user list` /
   `--session list` are listing sentinels; a bare invocation prints both.
@@ -527,6 +545,26 @@ the usual cause of the columns running together.
 - `scripts/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
   (called by start-camofox.sh; usable standalone with an output path).
 - `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
+- `camofox.env.example` — every tunable with its Camofox default.
+- `references/session-keepalive.md`, `references/web-content-lanes.md`.
+
+**Editing this skill: it exists in TWO live copies, and they are separate
+files, not symlinks.** Edit one and the other silently keeps serving the old
+behaviour:
+
+```
+$HOME/workspace/skynight137-skills/skills/camofox-on-replit   <- git repo, source of truth
+$HOME/workspace/.hermes/skills/replit/camofox-on-replit       <- what Hermes actually loads
+```
+
+Edit the repo copy, `cp` the changed files into the deployed copy, then verify
+with `diff -q` per file — a copy that silently no-ops looks identical to a
+successful one. Commit in the repo, and bump the `version:` in the frontmatter
+when behaviour changes.
+
+Running any script in this skill writes `scripts/__pycache__/`; the repo has no
+`.gitignore`, so `git status` shows it as untracked noise. It is not tracked —
+never `git add` it.
 
 Nix/closure depth (cold store, T-matrix, loader mechanics): the
 `replit-nix` skill.
