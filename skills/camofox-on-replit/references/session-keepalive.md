@@ -86,12 +86,16 @@ that leaves the session reaper live, which is the one that drops the login.
 
 ## Pitfall: the env file re-source can clobber your exports
 
-`start-camofox.sh` sources `$HERMES_HOME/.env` with `set -a` **after** setting
+`start-camofox.sh` loads an env file with `set -a` **after** setting
 the defaults. Any `TAB_INACTIVITY_MS` / `SESSION_TIMEOUT_MS` in that file wins.
-Check it after editing:
+Candidate order (first existing): `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`,
+`$HERMES_HOME/.env`. Check the file it actually picked:
 
 ```bash
-grep -nE 'TAB_INACTIVITY|SESSION_TIMEOUT' "${HERMES_HOME:-$XDG_DATA_HOME/.hermes}/.env"
+for f in "${CAMOFOX_ENV_FILE:-}" "${CAMOFOX_ROOT:-$XDG_DATA_HOME/camofox}/.env" \
+         "${HERMES_HOME:-$HOME/.hermes}/.env"; do
+    [[ -f "$f" ]] && { echo "using $f"; grep -nE 'TAB_INACTIVITY|SESSION_TIMEOUT' "$f"; break; }
+done
 ```
 
 ## How to verify it actually works

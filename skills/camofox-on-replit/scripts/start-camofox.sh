@@ -77,16 +77,23 @@ export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"
 # launch) the next time a run needs the browser. 0 = never shut it down.
 export BROWSER_IDLE_TIMEOUT_MS="${BROWSER_IDLE_TIMEOUT_MS:-0}"
 
-# Load shared secrets/config from the Hermes env file ($HERMES_HOME/.env),
-# if present. Without this, a server started fresh (no caller pre-source) has
-# NO CAMOFOX_API_KEY -> cookie import is 403 in NODE_ENV=production even with
-# a Bearer token (server ignores the token when it has no key configured).
-_ENV_SOURCE="${HERMES_HOME:-$XDG_DATA_HOME/.hermes}/.env"
-if [[ -f "$_ENV_SOURCE" ]]; then
-    # shellcheck disable=SC1090
-    set -a; . "$_ENV_SOURCE"; set +a
-    echo "[start-camofox] loaded env file $_ENV_SOURCE"
-fi
+# Load secrets/config from an env file IF one exists. OPTIONAL — the skill must
+# work without any agent framework installed. Search order (first existing wins):
+#   1. $CAMOFOX_ENV_FILE              explicit override
+#   2. $CAMOFOX_ROOT/.env             tool-native home (uv-style)
+#   3. $HERMES_HOME/.env              Hermes convenience, if Hermes happens to be here
+# Without a key the server still runs; only cookie import needs one
+# (NODE_ENV=production rejects loopback import when no key is configured).
+for _cand in "${CAMOFOX_ENV_FILE:-}" "$CAMOFOX_ROOT/.env" \
+             "${HERMES_HOME:-$HOME/.hermes}/.env"; do
+    if [[ -n "$_cand" && -f "$_cand" ]]; then
+        # shellcheck disable=SC1090
+        set -a; . "$_cand"; set +a
+        echo "[start-camofox] loaded env file $_cand"
+        break
+    fi
+done
+unset _cand
 
 # 1) repo ------------------------------------------------------------------------
 if [[ ! -f "$REPO/server.js" ]]; then

@@ -14,8 +14,9 @@ Modes (sentinel values):
 --cookies <json>: if present, (re)import into --user BEFORE any tool runs.
 Cookies otherwise persist per --user on disk and auto-reload — omit to reuse.
 
-Auth: reads CAMOFOX_API_KEY from $HERMES_HOME/.env (or --env). Required in
-production (loopback cookie import is 403 without a key).
+Auth: reads CAMOFOX_API_KEY from --env, else from the CAMOFOX_API_KEY
+environment variable. No agent framework required — Hermes' .env is only one
+of the candidate paths (see default_env).
 """
 import argparse, glob, json, os, sys, time, urllib.error, urllib.request
 from typing import cast
@@ -26,26 +27,43 @@ SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
 
 
 # --- path discovery (mirror start-camofox.sh) --------------------------------
+def default_root():
+    if os.environ.get("CAMOFOX_ROOT"):
+        return os.environ["CAMOFOX_ROOT"]
+    xdg = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return os.path.join(xdg, "camofox")
+
+
 def default_state():
     if os.environ.get("CAMOFOX_STATE_DIR"):
         return os.environ["CAMOFOX_STATE_DIR"]
-    xdg = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
-    return os.path.join(xdg, "camofox", "state")
+    return os.path.join(default_root(), "state")
 
 
 def default_env():
-    return os.path.join(
-        os.environ.get("HERMES_HOME", os.path.expanduser("~/.hermes")), ".env")
+    """First EXISTING candidate wins. The env file is OPTIONAL: no file and no
+    CAMOFOX_API_KEY simply means unauthenticated mode, which is fine unless the
+    server runs NODE_ENV=production. Hermes is a convenience, not a dependency.
+    """
+    candidates = [
+        os.environ.get("CAMOFOX_ENV_FILE"),
+        os.path.join(default_root(), ".env"),
+        os.path.join(os.environ.get("HERMES_HOME") or
+                     os.path.expanduser("~/.hermes"), ".env"),
+    ]
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return candidates[1]  # tool-native default, even when absent
 
 
 # --- HTTP --------------------------------------------------------------------
 def load_key(env_path):
-    if not env_path or not os.path.exists(env_path):
-        return None
-    for line in open(env_path):
-        if line.strip().startswith("CAMOFOX_API_KEY="):
-            return line.split("=", 1)[1].strip()
-    return None
+    if env_path and os.path.exists(env_path):
+        for line in open(env_path):
+            if line.strip().startswith("CAMOFOX_API_KEY="):
+                return line.split("=", 1)[1].strip()
+    return os.environ.get("CAMOFOX_API_KEY") or None
 
 
 def req(key, method, path, body=None, timeout=300):
