@@ -31,10 +31,11 @@ exactly three layers. Missing any layer = failure:
 **L1 is the part people skip** — "the sandbox must have the libs" is the
 assumption that fails. **L2 is the part everyone gets wrong** — see §3.
 
-L1 2-second gate before doing anything:
+Gate before doing anything — resolve the store path; never glob
+`/nix/store/*/lib/*` (it never finishes on a warm 700k-entry store):
 
 ```bash
-ls /nix/store/*/lib/libgtk-3.so.0   # or the soname you need
+R="$(nix eval --raw nixpkgs#gtk3 2>/dev/null)"; [ -e "$R/lib/libgtk-3.so.0" ] && echo warm
 ```
 
 Empty = cold store → §2.
@@ -69,8 +70,8 @@ a fresh shell. The channel it builds against: `[nix] channel` in `.replit`
 Replit's dynamic loader (`replit_rtld_loader`, active via `LD_AUDIT` —
 `$REPLIT_LD_AUDIT`) searches ONLY the dirs in `LD_LIBRARY_PATH` — no
 ldconfig, no fallback. Replit populates `REPLIT_LD_LIBRARY_PATH` with the
-**top-level `lib` dirs of the declared packages only** (~8: the packages
-themselves + a few direct deps). The transitive closure — `libX11-xcb.so.1`,
+**top-level `lib` dirs of the declared packages only** (24 dirs on this
+box: the packages themselves + their direct deps). The transitive closure — `libX11-xcb.so.1`,
 `libxcb`, `pango`, `cairo`, `gdk-pixbuf`, `harfbuzz`, `freetype`, … (100+
 dirs for GTK3) — is invisible to it.
 
