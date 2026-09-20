@@ -126,22 +126,3 @@ tr '\0' '\n' < /proc/$PID/environ | grep -E 'TAB_INACTIVITY|SESSION_TIMEOUT'
   — press **Run** (or restart the workflow) to bring it back.
 - `pgrep -f 'camofox-browser/server.js'` **matches your own command line** and
   can return the wrong pid. Prefer `ps -eo pid,args | grep 'node server.js'`.
-
-## Editing this skill: four copies exist
-
-The skill is installed in four independent directories (no symlinks), so an
-edit to one does **not** propagate:
-
-| path | role |
-|---|---|
-| `skynight137-skills/skills/camofox-on-replit/` | **canonical**, git-tracked → `github.com/skynight137/skills` |
-| `.hermes/skills/replit/camofox-on-replit/` | live install Hermes actually loads |
-| `.hermes/profiles/xbotz/skills/replit/camofox-on-replit/` | another profile's copy |
-| `.config/claude/skills/camofox-on-replit/` | Claude Code copy |
-
-**Edit the canonical copy, then sync outward** — otherwise the fix lands in a
-file nothing reads. Check for drift before assuming they match:
-
-```bash
-md5sum */SKILL.md
-```
