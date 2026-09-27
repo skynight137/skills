@@ -755,6 +755,34 @@ rc_path_lines() {
   done
 }
 
+# Hermes PM stages its own x64 Node tarball under $HERMES_HOME/tools; the
+# binary dynamically needs libatomic.so.1, which this Nix image only ships
+# inside /nix/store — hashed paths that get garbage-collected, so they must
+# never be referenced directly. Copy a verified x86-64 build into the durable
+# $WORKSPACE/.local/lib (the dir the managed rc block puts on LD_LIBRARY_PATH;
+# note the gcc-14.2.1 copy on some images is i386 — check ELF class).
+# Runs every setup.sh: cheap no-op once the lib is in place.
+ensure_libatomic() {
+  local target_dir="${1:-$WORKSPACE/.local/lib}" src
+  if ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
+    return 0  # plain distro / NixOS: the system loader already resolves it
+  fi
+  if compgen -G "$target_dir/libatomic.so.1*" >/dev/null; then
+    ok "libatomic for PM-staged node already present: $target_dir"
+    return 0
+  fi
+  mkdir -p "$target_dir" 2>/dev/null || { warn "cannot create $target_dir — libatomic not staged"; return 0; }
+  for src in /nix/store/*gcc-*-lib/lib/libatomic.so.1* /nix/store/*/lib/libatomic.so.1*; do
+    [[ -f "$src" ]] || continue
+    file "$src" 2>/dev/null | grep -q 'ELF 64-bit' || continue
+    cp -f "$src" "$target_dir/" 2>/dev/null || continue
+    ln -sf "$(basename -- "$src")" "$target_dir/libatomic.so.1"
+    ok "libatomic staged for PM node: $target_dir/libatomic.so.1 (from $(basename "$(dirname "$(dirname "$src")")"))"
+    return 0
+  done
+  warn "no x86-64 libatomic.so.1 found in /nix/store — Hermes PM-staged node will fail 'hermes update' verification"
+}
+
 emit_managed_block() {
   cat <<EOF
 
@@ -769,20 +797,15 @@ export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
 export GOPROXY="https://proxy.golang.org,direct"
 export PIP_TRUSTED_HOST="pypi.org"
 
-# Hermes PM's staged node (x64 tarballs) dynamically needs libatomic.so.1;
-# on stock Nix Replit images it exists only in /nix/store (unsuitable —
-# garbage-collected). Keep a durable copy in $WORKSPACE and export it below.
-# Replit's package firewall exports UV_INDEX_URL/UV_INSECURE_HOST with a
-# TRAILING SLASH on /simple/ which makes `uv sync --locked` reject
-# Hermes' pm/uv.lock (uv sees a "different registry"), and it is NOT in
-# [userenv.shared] — the only channel that reaches non-login shells (where
-# this rc is not sourced). The guard below unsets them when the value is
-# redundant (pypi.org over plain https) so uv falls back to the lockfile.
-if [[ "${UV_INDEX_URL:-}" == "https://pypi.org/simple/"* && "${UV_INSECURE_HOST:-}" == *pypi.org* ]]; then
-  unset UV_INDEX_URL UV_INSECURE_HOST
-fi
-if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
-  case ":${LD_LIBRARY_PATH}:" in *":$WORKSPACE/.local/lib:"*) ;; *) export LD_LIBRARY_PATH="$WORKSPACE/.local/lib:$LD_LIBRARY_PATH" ;; esac
+# Hermes PM stages its own x64 Node tarball under $HERMES_HOME/tools; it
+# links libatomic.so.1, which this Nix image only ships under garbage-
+# collected /nix/store paths — see ensure_libatomic for the durable copy.
+# This is an APPEND (the platform's own nix closure dirs stay on the path);
+# the \$ escapes keep the test at rc-source time — unescaped, the write-time
+# heredoc expansion would bake the current value in and turn the append
+# into a clobber of the platform LD_LIBRARY_PATH.
+if [[ -n "\${LD_LIBRARY_PATH:-}" ]]; then
+  case ":\$LD_LIBRARY_PATH:" in *":$WORKSPACE/.local/lib:"*) ;; *) export LD_LIBRARY_PATH="$WORKSPACE/.local/lib:\$LD_LIBRARY_PATH" ;; esac
 else
   export LD_LIBRARY_PATH="$WORKSPACE/.local/lib"
 fi
@@ -1842,7 +1865,6 @@ install_hermes() {
   #     script's exported PATH contains it, and the
   #     installer's PATH check skips the .bashrc append.
   # HERMES_HOME governs the data dir (INSTALL_DIR=$HERMES_HOME/hermes-agent).
-  # --skip-computer-use avoids cua-driver which writes to $HOME/.bashrc.
   # Skip the bundled Playwright Chromium; we hand Hermes the Replit Chromium.
   local chrome="${REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE:-}"
   if [[ -n "$chrome" && -x "$chrome" ]]; then
@@ -1855,7 +1877,7 @@ install_hermes() {
     hermes_home="$HOME"
   fi
   HERMES_HOME="$HERMES_HOME" HOME="$hermes_home" bash "$installer" \
-    --skip-setup --skip-computer-use --skip-browser \
+    --skip-setup --skip-browser \
     || die "Hermes installer failed"
   rm -f "$installer"
 
@@ -2574,6 +2596,9 @@ main() {
   add_exit_action 'write_replit_bashrc'
 
   mkdir -p "$XDG_BIN_HOME" "$XDG_DATA_HOME"
+  # Independent of tool selection: Hermes PM's staged node needs libatomic
+  # even when Hermes itself was not reinstalled this run.
+  ensure_libatomic
 
   $INSTALL_ANDROID  && install_android_tools
   $INSTALL_UV       && install_uv

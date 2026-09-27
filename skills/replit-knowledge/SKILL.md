@@ -1,7 +1,7 @@
 ---
 name: replit-knowledge
 description: "Replit sandbox platform facts (no Nix): $HOME wiped on recreate, the /run/replit/env env-load channel, the rc chain (~/.bashrc store bootstrap -> $REPL_HOME/.config/bashrc, with .config/replit_bashrc as a REPLIT_MODE shim), GIT_CONFIG_GLOBAL is workspace-persistent not tmpfs, bare python is the platform runtime. Use before persisting data or debugging env/rc/git on Replit."
-version: 2.0.0
+version: 2.1.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers)."
@@ -13,9 +13,12 @@ metadata:
 
 # Replit sandbox: what platform you're on
 
-Field-verified platform facts only (2026-09-02/03, 2026-09-12, re-verified 2026-09-17).
+Field-verified platform facts only (2026-09-02/03, 2026-09-12, re-verified
+2026-09-17, 2026-09-26).
 How to actually pull packages out of `/nix/store` (replit.nix, nix-env, closures) is
-the **`replit-nix`** skill.
+the **`replit-nix`** skill. Hermes-on-Replit recovery (uv `--locked`
+trailing-slash failures, `libatomic` for PM-staged node):
+`references/hermes-on-replit.md`.
 
 ## 1. What survives a restart (the #1 gotcha)
 
