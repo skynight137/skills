@@ -763,24 +763,36 @@ rc_path_lines() {
 # note the gcc-14.2.1 copy on some images is i386 — check ELF class).
 # Runs every setup.sh: cheap no-op once the lib is in place.
 ensure_libatomic() {
-  local target_dir="${1:-$WORKSPACE/.local/lib}" src
-  if ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
+  local target_dir="${1:-$WORKSPACE/.local/lib}" marker src found=0
+  # Marker cache: /nix/store is a NETWORK filesystem on Replit — every glob
+  # here costs minutes on a cold store (measured: one /*gcc-*-lib/ pass =
+  # 70s). The marker makes repeat runs instant.
+  marker="$target_dir/.libatomic-ok"
+  [[ -f "$marker" ]] && { ok "libatomic already staged (marker: $marker)"; return 0; }
+  if command -v ldconfig &>/dev/null \
+     && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
     return 0  # plain distro / NixOS: the system loader already resolves it
   fi
+  mkdir -p "$target_dir" 2>/dev/null || { warn "cannot create $target_dir — libatomic not staged"; return 0; }
   if compgen -G "$target_dir/libatomic.so.1*" >/dev/null; then
-    ok "libatomic for PM-staged node already present: $target_dir"
+    touch "$marker"; ok "libatomic for PM-staged node already present: $target_dir"
     return 0
   fi
-  mkdir -p "$target_dir" 2>/dev/null || { warn "cannot create $target_dir — libatomic not staged"; return 0; }
-  for src in /nix/store/*gcc-*-lib/lib/libatomic.so.1* /nix/store/*/lib/libatomic.so.1*; do
+  # ONE store pass, gcc-lib dir only — libatomic always ships there. Never
+  # glob all of /nix/store/*/* (each pass costs minutes on a cold store).
+  echo "  scanning /nix/store for libatomic (first run only; cold store: up to a few minutes)..."
+  for src in /nix/store/*gcc-*-lib/lib/libatomic.so.1.*; do
     [[ -f "$src" ]] || continue
+    found=1
     file "$src" 2>/dev/null | grep -q 'ELF 64-bit' || continue
     cp -f "$src" "$target_dir/" 2>/dev/null || continue
     ln -sf "$(basename -- "$src")" "$target_dir/libatomic.so.1"
+    touch "$marker"
     ok "libatomic staged for PM node: $target_dir/libatomic.so.1 (from $(basename "$(dirname "$(dirname "$src")")"))"
     return 0
   done
-  warn "no x86-64 libatomic.so.1 found in /nix/store — Hermes PM-staged node will fail 'hermes update' verification"
+  $found && warn "only non-x86-64 libatomic in store — check ELF class (replit-nix §2)" \
+          || warn "no gcc-*-lib dirs in /nix/store yet (store cold?) — rerun setup.sh once the image is warm"
 }
 
 emit_managed_block() {
