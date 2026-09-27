@@ -3,6 +3,43 @@
 Source of truth for why a long `--tools refresh-page` loop silently ends up
 logged out. Verified against `camofox-browser` on this box (Sep 2026).
 
+## Failure triage: opaque 500 on `POST /sessions/:userId/cookies`
+
+`camofox.py` prints `import failed: {'_http_error': 500, '_body': '{"error":"Internal server error"}'}`
+whenever the server's 500 handler runs with `NODE_ENV=production`: `safeError()`
+(server.js) logs the REAL message to the server's stdout and returns the generic
+string. The client is innocent — always read the server log first:
+
+```bash
+PID=$(pgrep -f 'node server.js' | head -1); ls -l /proc/$PID/fd/1   # where the real error went
+grep '"level":"error"' <that file> | tail
+```
+
+Two verified causes of that 500 on this box (Sep 2026):
+
+1. **`LD_LIBRARY_PATH` clobbering.** `.replit [userenv.shared]` pins
+   `LD_LIBRARY_PATH=/home/runner/workspace/.local/lib`, and `start-camofox.sh`
+   only sets the GTK closure `if [[ -z "${LD_LIBRARY_PATH:-}" ]]` — so the server
+   launches WITHOUT gtk-3. Camoufox dies with
+   `XPCOMGlueLoad error ... libgtk-3.so.0: cannot open shared object file`, the
+   lazy launch fails, and every session-creating call (incl. cookie import)
+   returns the masked 500 (classified `browser_launch_timeout`). Fix, in two
+   layers: (a) `scripts/libpool.sh` symlinks the whole closure into the pinned
+   pool dir `.local/lib` — host-wide, so Hermes' node and any other consumer get
+   the libs too; (b) start-camofox.sh now APPENDS the closure to a pre-set
+   `LD_LIBRARY_PATH` instead of skipping it, so hosts without the pool convention
+   still work (idempotent via a substring guard).
+2. **Missing `camofox/.env`.** Cookie import is key-gated: with no
+   `CAMOFOX_API_KEY` in the SERVER env it answers 403 in production (not 500) —
+   write `$CAMOFOX_ROOT/.env` with the secret from `/run/replit/env/latest.json`
+   (chmod 600; `camofox/` is gitignored) so both server and `camofox.py` find it
+   without relying on platform env.
+
+Also note: this repl's server runs on **`:9000`** (Secret `CAMOFOX_PORT`), not the
+`:9377` default — the platform env snapshot carries `CAMOFOX_URL`, but a shell
+without it (or a probe hardcoding 9377) gets connection refused, which `camofox.py`
+reports as `_error`, not `_http_error`.
+
 ## The two reapers
 
 Both are `setInterval(..., 60_000)` in `server.js`, so thresholds quantize to

@@ -144,8 +144,26 @@ if ! closure_ok "$REPO/LD_LIBRARY_PATH.txt"; then
     echo "[provision] generating lib closure -> $REPO/LD_LIBRARY_PATH.txt"
     bash "$SKILL_DIR/scripts/generate-closure.sh" "$REPO/LD_LIBRARY_PATH.txt"
 fi
+# Also materialize the closure into the host-wide lib pool ($REPL_HOME/.local/lib,
+# the dir Replit users commonly pin as LD_LIBRARY_PATH in [userenv.shared]) so
+# EVERY consumer — other shells, Hermes' staged node, native addons — sees
+# GTK/ALSA too, not just this server's env. Idempotent + heals dangling links
+# after a store rebuild; cheap (symlinks only). Safe to skip via LIBPOOL_SKIP=1.
+if [[ "${LIBPOOL_SKIP:-0}" != "1" ]]; then
+    bash "$SCRIPT_DIR/libpool.sh" || echo "[libpool] WARNING: pool refresh failed — server still gets the closure via LD_LIBRARY_PATH below" >&2
+fi
+# The closure is NOT optional even when the caller pinned LD_LIBRARY_PATH
+# (e.g. Replit `.replit [userenv.shared]`): Camoufox cannot start without
+# libgtk-3, and a shell that skips it dies with an XPCOMGlueLoad error that
+# surfaces to clients only as a generic 500 ("safeError" masks it under
+# NODE_ENV=production). Append, don't replace: directories the caller pinned
+# keep first-search priority for libs they deliberately provide (libatomic),
+# the closure only fills gaps. Dedup guard keeps re-runs idempotent.
+CLOSURE="$(cat "$REPO/LD_LIBRARY_PATH.txt")"
 if [[ -z "${LD_LIBRARY_PATH:-}" ]]; then
-    export LD_LIBRARY_PATH="$(cat "$REPO/LD_LIBRARY_PATH.txt")"
+    export LD_LIBRARY_PATH="$CLOSURE"
+elif [[ ":$LD_LIBRARY_PATH:" != *":$CLOSURE:"* ]]; then
+    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$CLOSURE"
 fi
 
 # 4) npm deps — ALWAYS run (fixed step). Self-healing: with the pinned

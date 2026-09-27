@@ -1,7 +1,7 @@
 ---
 name: camofox-on-replit
 description: "One-command anti-detection Firefox scraping server (Camoufox) on a Replit/Nix sandbox. Use when you need to open/verify bot-hardened sites (Cloudflare/Turnstile/WAF-protected, DuckDuckGo, etc.) that plain Chromium can't pass, or when the user wants a persistent headed-Firefox session with CDP. Provisions libs and launches everything in a single script."
-version: 3.3.0
+version: 3.4.0
 license: MIT
 platforms: [linux]
 compatibility: "Node >= 18 + nix on a Replit sandbox. GTK3/ALSA/X11 libs must EXIST in /nix/store — via replit.nix (recommended), nix-env, or a warm store from a prior build. Gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm  (~10s; never glob /nix/store/*/lib/* on this box)"
@@ -545,6 +545,13 @@ the usual cause of the columns running together.
 - `scripts/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
   (called by start-camofox.sh; usable standalone with an output path).
 - `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
+- `scripts/libpool.sh` — materializes the closure into the host-wide pool
+  `$REPL_HOME/.local/lib` (the dir pinned as `LD_LIBRARY_PATH` in
+  `.replit [userenv.shared]`) as symlinks, so EVERY consumer — camofox,
+  Hermes' staged node, any native addon — can dlopen GTK/ALSA/etc, not just
+  the server. Called automatically by start-camofox.sh (step 4b); run it
+  standalone only to refresh the pool without starting the server. First-wins
+  on collisions, real files in the pool are never touched.
 - `camofox.env.example` — every tunable with its Camofox default.
 - `references/session-keepalive.md`, `references/web-content-lanes.md`.
 
