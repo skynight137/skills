@@ -761,13 +761,31 @@ emit_managed_block() {
 # >>> toolchain >>>
 
 # use global registry
-export YARN_REGISTRY="https://registry.yarnpkg.com/"
-export YARN_NPM_REGISTRY_SERVER="https://registry.yarnpkg.com/"
-export PIP_INDEX_URL="https://pypi.org/simple/"
-export npm_config_registry="https://registry.npmjs.org/"
-export NPM_CONFIG_REGISTRY="https://registry.npmjs.org/"
+export YARN_REGISTRY="https://registry.yarnpkg.com"
+export YARN_NPM_REGISTRY_SERVER="https://registry.yarnpkg.com"
+export PIP_INDEX_URL="https://pypi.org/simple"
+export npm_config_registry="https://registry.npmjs.org"
+export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
 export GOPROXY="https://proxy.golang.org,direct"
 export PIP_TRUSTED_HOST="pypi.org"
+
+# Hermes PM's staged node (x64 tarballs) dynamically needs libatomic.so.1;
+# on stock Nix Replit images it exists only in /nix/store (unsuitable —
+# garbage-collected). Keep a durable copy in $WORKSPACE and export it below.
+# Replit's package firewall exports UV_INDEX_URL/UV_INSECURE_HOST with a
+# TRAILING SLASH on /simple/ which makes `uv sync --locked` reject
+# Hermes' pm/uv.lock (uv sees a "different registry"), and it is NOT in
+# [userenv.shared] — the only channel that reaches non-login shells (where
+# this rc is not sourced). The guard below unsets them when the value is
+# redundant (pypi.org over plain https) so uv falls back to the lockfile.
+if [[ "${UV_INDEX_URL:-}" == "https://pypi.org/simple/"* && "${UV_INSECURE_HOST:-}" == *pypi.org* ]]; then
+  unset UV_INDEX_URL UV_INSECURE_HOST
+fi
+if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+  case ":${LD_LIBRARY_PATH}:" in *":$WORKSPACE/.local/lib:"*) ;; *) export LD_LIBRARY_PATH="$WORKSPACE/.local/lib:$LD_LIBRARY_PATH" ;; esac
+else
+  export LD_LIBRARY_PATH="$WORKSPACE/.local/lib"
+fi
 
 # Platform-level dirs only. Tool vars (JAVA_HOME, NODE_DIR, OLLAMA_MODELS,
 # config dirs) are NOT re-exported here: .replit [userenv.shared] is the single
@@ -1080,11 +1098,11 @@ replit_resolve_py() {
 _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
   npm_config_registry NPM_CONFIG_REGISTRY GOPROXY PIP_TRUSTED_HOST)
 declare -A _REGISTRY_ENV_VALUES=(
-  [YARN_REGISTRY]="https://registry.yarnpkg.com/"
-  [YARN_NPM_REGISTRY_SERVER]="https://registry.yarnpkg.com/"
-  [PIP_INDEX_URL]="https://pypi.org/simple/"
-  [npm_config_registry]="https://registry.npmjs.org/"
-  [NPM_CONFIG_REGISTRY]="https://registry.npmjs.org/"
+  [YARN_REGISTRY]="https://registry.yarnpkg.com"
+  [YARN_NPM_REGISTRY_SERVER]="https://registry.yarnpkg.com"
+  [PIP_INDEX_URL]="https://pypi.org/simple"
+  [npm_config_registry]="https://registry.npmjs.org"
+  [NPM_CONFIG_REGISTRY]="https://registry.npmjs.org"
   [GOPROXY]="https://proxy.golang.org,direct"
   [PIP_TRUSTED_HOST]="pypi.org"
 )
