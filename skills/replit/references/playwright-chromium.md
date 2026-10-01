@@ -1,16 +1,3 @@
----
-name: replit-playwright-chromium
-description: "Playwright (Chromium) on Replit without any browser download: Replit ships a Playwright-managed Chromium in the Nix store at $REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE. Use when playwright install fails/hangs, or when you need headless Chromium via executable_path or a CDP daemon."
-version: 2.1.0
-license: MIT
-platforms: [linux]
-compatibility: "Replit sandbox with $REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE set; Python 3 + pip (or venv)."
-metadata:
-  hermes:
-    tags: [Playwright, Chromium, Replit, executable_path, CDP, headless]
-    related_skills: [replit-nix, replit-knowledge, camofox-on-replit]
----
-
 # Playwright (Chromium) on Replit — no download
 
 Replit ships a **Playwright-managed Chromium** in the Nix store, exposed as
@@ -19,9 +6,9 @@ downloads a browser) is both unnecessary and broken here — point Playwright
 at the store browser with `executable_path` and be done.
 
 If you need Firefox-level anti-detection instead of Chromium, use the
-**`camofox-on-replit`** skill. Replit platform gotchas ($HOME wipes,
-XDG persistence, registry firewall) live in the **`replit-knowledge`**
-skill; Nix/closure mechanics live in **`replit-nix`**.
+**`references/camofox.md`**. Replit platform gotchas ($HOME wipes,
+XDG persistence, registry firewall) live in **`references/platform.md`**;
+Nix/closure mechanics live in **`references/nix.md`**.
 
 ## The 4 steps
 
@@ -98,10 +85,10 @@ CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
   under the registry firewall). The browser is in the Nix store.
 - **Registry firewall:** plain `pip install` uses the pinned PyPI index; if
   a mirror 404s, `export PIP_INDEX_URL=https://pypi.org/simple/`. (npm
-  equivalent: see `replit-knowledge`.)
+  equivalent: see `references/platform.md`.)
 - **`LD_LIBRARY_PATH`:** usually unnecessary — the Nix `chrome` wrapper
   points at its own store. Only touch it if you see `cannot open shared
-  object file`, and then use the closure method from `replit-nix` §3, never
+  object file`, and then use the closure method from `references/nix.md` §3, never
   a hand-picked partial list.
 - Playwright scripts and CDP are independent lanes to the same browser;
   neither needs `agent-browser` or any other npm driver.

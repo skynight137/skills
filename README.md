@@ -6,18 +6,12 @@ Agent skills ([agentskills.io](https://agentskills.io) / [skills.sh](https://ski
 
 | Skill | Purpose |
 |-------|---------|
-| [`replit-nix`](skills/replit-nix/) | Replit + Nix: `/nix/store` warm/cold store, `replit.nix` vs `nix-env`, the full transitive `LD_LIBRARY_PATH` closure (the top-level `$REPLIT_LD_LIBRARY_PATH` is never enough), `nix eval`/`path-info` gotchas. Load this when a Replit workload needs system libs. |
-| [`replit-knowledge`](skills/replit-knowledge/) | Replit platform facts: `$HOME` wiped on recreate, `$REPL_HOME` is the workspace, XDG pre-set, `REPL_*` env vars, `.replit`/`.bashrc`, npm package firewall, `replit shutdown`. Load this before persisting data or choosing paths on Replit. |
-| [`camofox-on-replit`](skills/camofox-on-replit/) | Anti-detection Firefox scraping server — bypasses bot-hardened sites (Cloudflare/Turnstile/WAF, DuckDuckGo) that plain Chromium can't handle. One script provisions everything. |
-| [`replit-playwright-chromium`](skills/replit-playwright-chromium/) | Playwright against a pre-installed Chromium — skip `playwright install` entirely; launch via `executable_path`, with an on-demand CDP daemon helper. |
+| [`replit`](skills/replit/) | The Replit sandbox toolkit — everything that only makes sense on a Replit/Nix workspace, as one installable skill with topic references: platform facts (`$HOME` wiped on recreate, `REPL_HOME`/XDG, the env-load channel, rc & git persistence), Nix store work (`replit.nix` vs `nix-env`, the full transitive `LD_LIBRARY_PATH` closure — the top-level `$REPLIT_LD_LIBRARY_PATH` is never enough), Playwright on the bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, keep-alive). |
 
 ## Install
 
 ```bash
-npx -y skills add skynight137/skills -s replit-nix
-npx -y skills add skynight137/skills -s replit-knowledge
-npx -y skills add skynight137/skills -s camofox-on-replit
-npx -y skills add skynight137/skills -s replit-playwright-chromium
+npx -y skills add skynight137/skills -s replit
 
 # or all:
 npx -y skills add skynight137/skills

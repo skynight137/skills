@@ -1,22 +1,9 @@
----
-name: replit-knowledge
-description: "Replit sandbox platform facts (no Nix): $HOME wiped on recreate, the /run/replit/env env-load channel, the rc chain (~/.bashrc store bootstrap -> $REPL_HOME/.config/bashrc, with .config/replit_bashrc as a REPLIT_MODE shim), GIT_CONFIG_GLOBAL is workspace-persistent not tmpfs, bare python is the platform runtime. Use before persisting data or debugging env/rc/git on Replit."
-version: 2.1.0
-license: MIT
-platforms: [linux]
-compatibility: "Replit workspaces (/home/runner containers)."
-metadata:
-  hermes:
-    tags: [Replit, sandbox, persistence, XDG, REPL_HOME, npm, replit-shutdown, bashrc, git, env, secrets]
-    related_skills: [replit-nix, camofox-on-replit, replit-playwright-chromium]
----
-
 # Replit sandbox: what platform you're on
 
 Field-verified platform facts only (2026-09-02/03, 2026-09-12, re-verified
 2026-09-17, 2026-09-26).
 How to actually pull packages out of `/nix/store` (replit.nix, nix-env, closures) is
-the **`replit-nix`** skill. Hermes-on-Replit recovery (uv `--locked`
+the **`references/nix.md`** reference. Hermes-on-Replit recovery (uv `--locked`
 trailing-slash failures, `libatomic` for PM-staged node):
 `references/hermes-on-replit.md`.
 
@@ -27,7 +14,7 @@ trailing-slash failures, `libatomic` for PM-staged node):
   box) is the durable home. Default working dir is the only home for durable files.
 - `replit shutdown` stops the container without wiping `$HOME` or deleting
   `replit.nix`; none of these touch **`/nix/store`** (it persists outside all three
-  until GC). See `replit-nix` for what that means for libs.
+  until GC). See `references/nix.md` for what that means for libs.
 - **`/run` is tmpfs** (RAM, ~50MB — `df -h /run` confirms). Everything under it is
   gone on every recreate. Two subtrees matter:
   - `/run/replit/env/` — the **platform env-load channel** (§3). `latest`,
@@ -65,8 +52,8 @@ anytime with `printenv | rg 'REPL'`. The ones that matter:
 | `$REPLIT_DOMAINS` / `$REPLIT_DEV_DOMAIN` | public `<repl>.<cluster>.replit.dev` |
 | `$REPLIT_BASHRC` | path to the rc a shell sources — **overridable** in `.replit` (§4); on this workspace it is `$REPL_HOME/.config/replit_bashrc`, NOT the store default |
 | `$REPLIT_NIX_CHANNEL` | nixpkgs channel this repl builds against (e.g. `stable-25_05`) |
-| `$REPLIT_LD_AUDIT` / `$REPLIT_RTLD_LOADER` | the custom dynamic loader (see `replit-nix` §3) |
-| `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` | store Chromium for Playwright (see `replit-playwright-chromium`) |
+| `$REPLIT_LD_AUDIT` / `$REPLIT_RTLD_LOADER` | the custom dynamic loader (see `references/nix.md` §3) |
+| `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` | store Chromium for Playwright (see `references/playwright-chromium.md`) |
 | `$REPLIT_RUN_PATH` | `/run/replit` (per-user run state) |
 
 Rest are identity/cluster/p2p tokens — don't echo them into logs.
@@ -78,7 +65,7 @@ Rest are identity/cluster/p2p tokens — don't echo them into logs.
   (the channel `replit.nix` builds against), `[userenv.shared] KEY=VALUE` (env
   for **every** shell, incl. registry pins — §3/§5), `[[ports]]
   localPort/externalPort` (publishing), `entrypoint`, `run`, `[workflows]`.
-- **`replit.nix`** — workspace-root Nix deps; mechanics in `replit-nix`.
+- **`replit.nix`** — workspace-root Nix deps; mechanics in `references/nix.md`.
 - **`$HOME/.bashrc`** — symlink into `/nix/store` (platform-regenerated
   bootstrap, not yours). Your rc is `$REPL_HOME/.config/bashrc` — §4.
 - **`.config/replit_bashrc`** — the re-entry shim §4 describes.

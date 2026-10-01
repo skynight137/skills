@@ -791,7 +791,7 @@ ensure_libatomic() {
     ok "libatomic staged for PM node: $target_dir/libatomic.so.1 (from $(basename "$(dirname "$(dirname "$src")")"))"
     return 0
   done
-  $found && warn "only non-x86-64 libatomic in store — check ELF class (replit-nix §2)" \
+  $found && warn "only non-x86-64 libatomic in store — check ELF class (references/nix.md §2)" \
           || warn "no gcc-*-lib dirs in /nix/store yet (store cold?) — rerun setup.sh once the image is warm"
 }
 

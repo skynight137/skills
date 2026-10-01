@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Toggle the live browser monitor (the "watch what the agent's browser is doing"
-# screenshot stream on port 5000). Ships with the replit-playwright-chromium
-# skill; self-contained — resolves paths from this file's own directory.
+# screenshot stream on port 5000). Ships with the replit skill
+# (references/playwright-chromium.md); self-contained — resolves paths from this file's own directory.
 #
 # Default is OFF — the agent drives Chrome directly on the CDP port (9222)
 # with zero screenshot overhead. Start the monitor ONLY when you want to watch.

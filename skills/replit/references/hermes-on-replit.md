@@ -27,7 +27,7 @@ ELFCLASS32` behind the generic "staged entry failed verification … exited
 2. **libatomic for staged node.** PM's node is a standalone x64 tarball that
    links `libatomic.so.1`; the Nix image has no loader path for it. Store
    copies exist under `gcc-*-lib`/`gfortran`/`julia` dirs but some are
-   **32-bit** — `file` before exporting (replit-nix §2), and keep the durable
+   **32-bit** — `file` before exporting (references/nix.md §2), and keep the durable
    copy in the workspace (`$REPL_HOME/.local/lib`), not `$HOME` (wiped) or
    `/nix/store` (GC'd).
 

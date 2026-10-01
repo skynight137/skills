@@ -1,16 +1,3 @@
----
-name: camofox-on-replit
-description: "One-command anti-detection Firefox scraping server (Camoufox) on a Replit/Nix sandbox. Use when you need to open/verify bot-hardened sites (Cloudflare/Turnstile/WAF-protected, DuckDuckGo, etc.) that plain Chromium can't pass, or when the user wants a persistent headed-Firefox session with CDP. Provisions libs and launches everything in a single script."
-version: 3.5.0
-license: MIT
-platforms: [linux]
-compatibility: "Node >= 18 + nix on a Replit sandbox. GTK3/ALSA/X11 libs must EXIST in /nix/store — via replit.nix (recommended), nix-env, or a warm store from a prior build. Gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm  (~10s; never glob /nix/store/*/lib/* on this box)"
-metadata:
-  hermes:
-    tags: [Camoufox, Firefox, anti-detection, Replit, Nix, CDP, scraping, Cloudflare, headless]
-    related_skills: [replit-nix, replit-knowledge, replit-playwright-chromium]
----
-
 # Camofox on Replit — one command
 
 `camofox-browser` (jo-inc) is a small HTTP server that drives a
@@ -22,8 +9,8 @@ repo's `openapi.json`).
 
 This skill is **self-contained**: `SKILL.md` + `scripts/` in one folder,
 installs via `npx skills add`. Nix/closure mechanics live in the
-**`replit-nix`** skill (same repo) — platform facts (persistence, XDG
-pre-set, firewall) live in the **`replit-knowledge`** skill — this one just
+**`references/nix.md`** — platform facts (persistence, XDG
+pre-set, firewall) live in **`references/platform.md`** — this file just
 uses them.
 
 ## Pick the cheapest lane first
@@ -204,7 +191,7 @@ ${REPL_HOME:-$HOME}/camofox/
 
 Full depth (the verified T0/T1/T2/T3 matrix, `replit.nix` vs `nix-env`,
 npm package-firewall, `/nix/store` warm/cold mechanics, the `LD_AUDIT`
-loader) is in the **`replit-nix`** skill — load it when something here
+loader) is in **`references/nix.md`** — read it when something here
 fails or you're setting up a different Replit workload.
 
 ## Doing it by hand
@@ -222,8 +209,7 @@ bash scripts/generate-closure.sh "$CAMOFOX_ROOT/camofox-browser/LD_LIBRARY_PATH.
 bash scripts/start-camofox.sh   # fast self-verification pass, then launches :9377
 ```
 
-The closure/loader mechanics *why* each step exists: the `replit-nix`
-skill. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
+The closure/loader mechanics *why* each step exists: `references/nix.md`. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
 `CAMOUFOX_INSTALL_DIR`, `CAMOFOX_STATE_DIR`, `CAMOFOX_PORT` (default
 9377), `CAMOFOX_API_KEY` (optional auth — this is the real name, there is
 no `CAMOFOX_ACCESS_KEY`), `CAMOFOX_ENV_FILE` (optional env file — see
@@ -268,7 +254,7 @@ If that misses, pick ONE:
 nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
 ```
 
-Then re-run `start-camofox.sh`. The `replit-nix` skill explains why each
+Then re-run `start-camofox.sh`. The `references/nix.md` reference explains why each
 option behaves as it does (T0–T3 matrix).
 
 ## Troubleshooting
@@ -359,7 +345,7 @@ disk — never print cookie contents to the chat/terminal.
 **One CLI does everything** — `scripts/camofox.py`:
 
 ```bash
-cd ~/workspace/skynight137-skills/skills/camofox-on-replit
+cd ~/workspace/skynight137-skills/skills/replit
 
 python3 scripts/camofox.py --user list        # list accounts (cookie jars)
 python3 scripts/camofox.py --session list      # list live sessions (open tabs)
@@ -576,8 +562,8 @@ files, not symlinks.** Edit one and the other silently keeps serving the old
 behaviour:
 
 ```
-$HOME/workspace/skynight137-skills/skills/camofox-on-replit   <- git repo, source of truth
-$HOME/workspace/.hermes/skills/replit/camofox-on-replit       <- what Hermes actually loads
+$HOME/workspace/skynight137-skills/skills/replit   <- git repo, source of truth
+$HOME/workspace/.hermes/skills/replit/                        <- what Hermes actually loads
 ```
 
 Edit the repo copy, `cp` the changed files into the deployed copy, then verify
@@ -589,5 +575,5 @@ Running any script in this skill writes `scripts/__pycache__/`; the repo has no
 `.gitignore`, so `git status` shows it as untracked noise. It is not tracked —
 never `git add` it.
 
-Nix/closure depth (cold store, T-matrix, loader mechanics): the
-`replit-nix` skill.
+Nix/closure depth (cold store, T-matrix, loader mechanics):
+`references/nix.md`.

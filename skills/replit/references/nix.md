@@ -1,21 +1,8 @@
----
-name: replit-nix
-description: "Replit + Nix: getting system libs from /nix/store — replit.nix vs nix-env, warm/cold store, the full transitive LD_LIBRARY_PATH closure (REPLIT_LD_LIBRARY_PATH alone is never enough), nix eval/path-info gotchas. Use when a Replit workload needs shared libs (GTK/X11/ALSA/...) or 'cannot open shared object file' appears."
-version: 2.0.0
-license: MIT
-platforms: [linux]
-compatibility: "Replit workspaces (Nix-managed containers, /home/runner)."
-metadata:
-  hermes:
-    tags: [Replit, Nix, nix-store, replit.nix, nix-env, LD_LIBRARY_PATH, closure]
-    related_skills: [replit-knowledge, camofox-on-replit, replit-playwright-chromium]
----
-
 # Replit + Nix: use the store's libs
 
 Field-verified (2026-09-02/03). Scope: everything about pulling packages out of
 `/nix/store` at runtime. Platform facts (persistence, `$HOME` wipes, XDG,
-registry firewall, `.replit`) live in the **`replit-knowledge`** skill.
+registry firewall, `.replit`) live in **`references/platform.md`**.
 
 ## 1. The three-layer model
 
@@ -84,7 +71,7 @@ Symptom matrix (all observed):
 | store warm + generated closure | works |
 
 **The fix is always the same: generate the closure.** For GTK3 the
-`camofox-on-replit` skill ships `scripts/generate-closure.sh` (verified,
+This skill ships `scripts/generate-closure.sh` (verified,
 ~140 dirs). The generic recipe, for other stacks:
 
 ```bash

@@ -29,8 +29,8 @@
 # Gate (~2s, resolve the store path — never glob the whole store, a
 # /nix/store/*/lib/* glob never finishes on a warm 700k-entry store):
 #   R="$(nix eval --raw nixpkgs#gtk3 2>/dev/null)"; [ -e "$R/lib/libgtk-3.so.0" ] && echo warm
-# Background (persistence, /nix/store fast path, npm firewall): the
-# replit-nix skill.
+# Background (persistence, /nix/store fast path, npm firewall):
+# references/nix.md in this skill.
 
 set -euo pipefail
 

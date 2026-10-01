@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ensure_browser.sh — idempotent, ON-DEMAND launcher for the headless Chromium
 # daemon on Replit (the Playwright-managed store browser). Serves the
-# replit-playwright-chromium skill; ship it alongside SKILL.md so the skill is
-# self-contained.
+# replit skill (references/playwright-chromium.md); ship it alongside
+# SKILL.md so the skill is self-contained.
 #
 # Usage: run it ONCE when you need the browser. It is a no-op when the CDP port
 # is already live (safe to run right before any automation). Do NOT schedule it
