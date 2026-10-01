@@ -1,7 +1,7 @@
 ---
 name: camofox-on-replit
 description: "One-command anti-detection Firefox scraping server (Camoufox) on a Replit/Nix sandbox. Use when you need to open/verify bot-hardened sites (Cloudflare/Turnstile/WAF-protected, DuckDuckGo, etc.) that plain Chromium can't pass, or when the user wants a persistent headed-Firefox session with CDP. Provisions libs and launches everything in a single script."
-version: 3.4.0
+version: 3.5.0
 license: MIT
 platforms: [linux]
 compatibility: "Node >= 18 + nix on a Replit sandbox. GTK3/ALSA/X11 libs must EXIST in /nix/store — via replit.nix (recommended), nix-env, or a warm store from a prior build. Gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm  (~10s; never glob /nix/store/*/lib/* on this box)"
@@ -158,6 +158,22 @@ ${REPL_HOME:-$HOME}/camofox/
   there would vanish on an engine bump. Sibling dirs; same single root.
 - **Naming:** `camofox` = the server (jo-inc/camofox-browser);
   `camoufox` = the engine (daijro/camoufox Firefox build). Don't mix.
+
+## Two Replit-specific deps outside the lib closure
+
+- **Xvfb.** server.js spawns Xvfb per browser (camoufox-js `virtdisplay.js`
+  resolves it via `which Xvfb`). Missing → log line `xvfb not available,
+  falling back to headless` and WebGL has no GLX context — a massive bot
+  signal, so the fallback is NOT cosmetic. Fix: `pkgs.xorg.xvfb` in
+  replit.nix (verified 2026-09-28: `xvfb virtual display started`, args carry
+  `+extension GLX`).
+- **yt-dlp** (youtube plugin transcripts). Provision with the plugin's own
+  pinned installer, redirected to the durable PATH dir — its default
+  `/usr/local/bin` is read-only on Replit, and that's what triggers
+  `[note] yt-dlp not on PATH`:
+  `YT_DLP_INSTALL_PATH=$WORKSPACE/.local/bin/yt-dlp sh plugins/youtube/post-install.sh`
+  (official GitHub release; the script sha256-verifies its own pin, 2026.08.19
+  at time of writing). Restart the server to re-detect.
 
 ## Why this works on Replit (the three non-obvious facts)
 

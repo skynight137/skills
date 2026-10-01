@@ -34,4 +34,28 @@ while IFS= read -r d; do
         ln -s "$so" "$link" && linked=$((linked+1))
     done
 done < <(tr ':' '\n' < "$TXT")
-echo "libpool: linked $linked, skipped $kept existing (pool now has $(find "$POOL" -maxdepth 1 \( -type l -o -type f \) | wc -l) entries)"
+
+# Self-heal SONAME links from the pool's OWN real files. The sweep above deletes
+# any /nix/store symlink whose target was GC'd (a `hermes update` does exactly
+# that: it re-locks and prunes the store). libs that live in the pool as real
+# files rather than store links -- e.g. libatomic.so.1.2.0, which NO closure dir
+# contains -- therefore lose their companion link (libatomic.so.1) permanently,
+# and the next staged-tool launch dies with:
+#   node: error while loading shared libraries: libatomic.so.1
+# Recreate libX.so.<major> -> libX.so.<major>.<minor>.<patch> for every real file
+# matching that shape (never overwriting an existing link or file).
+healed=0
+for real in "$POOL"/lib*.so.[0-9]*; do
+    [[ -f "$real" && ! -L "$real" ]] || continue
+    base=$(basename "$real")
+    # libatomic.so.1.2.0 -> libatomic.so.1 (strip everything after the major)
+    stem=${base%%.so.*}
+    ver=${base#*.so.}
+    soname="$stem.so.${ver%%.*}"
+    [[ "$soname" == "$base" ]] && continue
+    link="$POOL/$soname"
+    if [[ ! -e "$link" && ! -L "$link" ]]; then
+        ln -s "$base" "$link" && healed=$((healed+1))
+    fi
+done
+echo "libpool: linked $linked, skipped $kept existing, self-healed $healed SONAME links (pool now has $(find "$POOL" -maxdepth 1 \( -type l -o -type f \) | wc -l) entries)"
