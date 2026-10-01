@@ -119,6 +119,43 @@ When a var "isn't there", it is exactly one of these — identify which before f
    file "changed". The var is fine; your view of it is not. Verify with a
    length/hash check (`sha256sum`, `wc -c`, `od -c`) rather than trusting the
    rendered text.
+- **The `replit` CLI is on PATH** (nix `replit-runtime-path`) and reads the
+platform env directly — the cleanest way to touch **Replit Secrets**:
+- `replit secrets list` — **names without values** (verified: prints bare
+`NAME` lines; immune to the value-redaction confusion above — use it to
+audit which secrets exist).
+- `replit secrets get NAME` — writes ONE value to stdout; avoid unless a
+consumer needs it in a pipe.
+- `replit secrets exec -- NAME cmd ...` — passes only the selected secrets
+to a child process; the scoping tool when a script needs exactly one.
+- Also: `replit identity` (token create/verify/seal), `replit ai -m MODEL
+"prompt"` (modelfarm completions, experimental), `replit shutdown`.
+
+## 3b. Platform-bundled agent skills (`~/.local/skills`)
+
+The Replit runtime ships **its own skill set** at `$REPL_HOME/.local/skills/`
+(~75 dirs: `routines`, `deployment`, `replit-docs`, `skill-authoring`,
+`integrations`, `security-scan`, …) plus an empty `$REPL_HOME/.local/custom_skills/`.
+They are **platform-managed** — regenerated on updates; do not edit them.
+
+- License (`LICENSE.txt`): proprietary inside Replit; **CC BY-NC 4.0 outside**
+with attribution. Fine to *read for reference*; do not copy text into a
+public repo.
+- They are written for **Replit's own agent harness** — most "functions"
+(`presentAsset`, `findResources`, `searchReplitDocs`, `viewEnvVars`, the
+`routine` CLI, `replit-imagegen`) exist only inside CodeExecution/Agent
+contexts. Verified absent from a plain shell here: no `routine` binary, no
+`replit-imagegen`, no `/home/runner/work` (their skills assume it; Hermes
+workspaces use `$REPL_HOME` directly). **Don't import their claims as fact
+without testing on the live box.**
+- Useful as documentation anyway: `routines` (cron semantics: one-time tasks
+disable after running; missed schedules skipped), `replit-docs` (docs URL
+index), `deployment` (Autoscale/Reserved-VM env contract:
+`REPLIT_DEV_DOMAIN` unset in prod, `REPLIT_APP_DOMAIN`/`REPLIT_INSTANCE_ID`
+set), `environment-secrets` (secret-management API surface).
+- `.agents/skills/` (workspace-relative) is Replit's **agent-editable** skill
+dir — their `skill-authoring` says create skills there. Hermes does not read
+it; this agent's skills live under `.hermes/skills/` as before.
 
 ## 4. The shell rc chain (verified 2026-09-17)
 
@@ -352,6 +389,7 @@ Bare `python3` resolves to a **Replit runtime**, not the project venv and not uv
 | env var missing in a shell | one of 3 causes | §3: check `.replit` → platform snapshot → scrub → redaction, in that order |
 | env var missing only in workflow/run-button shell | user rc skipped (`REPLIT_MODE` set) | §4: pin in `.replit [userenv.shared]` |
 | var present in `printenv` but a child tool lacks it | harness secret scrub | §3 cause 2: confirm via `/proc/<pid>/environ` |
+| need to know WHICH Replit Secrets exist (not values) | platform secret store | §3: `replit secrets list` — names only, redaction-proof |
 | file content looks mangled/changed between reads | secret-value redaction, non-deterministic | §8: verify with `sha256sum`/`od -c`, not the rendered text |
 | commit author reverts | `GIT_CONFIG_GLOBAL` points at `/run` tmpfs (no `.replit` pin) | §7: pin it in `.replit [userenv.shared]`; here it is already workspace-persistent |
 | renamed/added pre-commit hook does nothing | stale `core.hookspath` to missing dir | §7: unset `core.hookspath`; verify `git var` |
