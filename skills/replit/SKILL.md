@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.3.0
+version: 4.3.1
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -53,6 +53,9 @@ PM-staged node needing libatomic): `references/hermes-on-replit.md`.
   with zero downloads/reinstalls — safe after a $HOME wipe or a partial
   recreate. `--doctor --fix` = report then repair. Re-running `--fix` is a
   byte-identical fixed point.
+  Pitfall encoded in the script: `--fix` never execs the `hermes` launcher —
+  any subcommand can boot the full source-update cycle (venv sync, npm build,
+  GB-scale runtime clone). config.yaml is edited textually + verified instead.
 - `replit_userenv.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
 - `start-camofox.sh` — one-command provision + launch of the Camoufox server.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,

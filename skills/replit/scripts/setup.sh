@@ -197,6 +197,10 @@ export JAVA_HOME ANDROID_HOME NODE_DIR \
        HERMES_HOME OLLAMA_INSTALL_DIR OLLAMA_MODELS
 
 # Make binaries discoverable for the rest of this script run.
+# Snapshot the INCOMING PATH first: doctor's "XDG_BIN_HOME on PATH" check
+# must test the user's shell wiring, not the PATH this script just built
+# (otherwise the export below makes the check self-fulfilling).
+_ENTRY_PATH="$PATH"
 export PATH="$XDG_BIN_HOME:$JAVA_HOME/bin:$SDK/cmdline-tools/bin:$SDK/platform-tools:$NODE_DIR/bin:$PATH"
 
 # Per-tool registration ─────────────────────────────────────────────────────
@@ -779,7 +783,11 @@ EOF
     echo ""
     echo "# >>> toolchain-profile >>> (managed by scripts/setup.sh --fix)"
     echo "export WORKSPACE=\"$WORKSPACE\""
-    local vars=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_BIN_HOME HERMES_HOME JAVA_HOME ANDROID_HOME)
+    # Only export tool vars whose payload exists: a JAVA tool honoring a
+    # JAVA_HOME that points at a deleted dir mis-detects worse than one
+    # that is unset. XDG/HERMES_HOME are platform paths — always valid.
+    local vars=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_BIN_HOME HERMES_HOME)
+    [[ -d "$SDK" ]] && vars+=(JAVA_HOME ANDROID_HOME)
     local v
     for v in "${vars[@]}"; do printf 'export %s="%s"\n' "$v" "${!v}"; done
     echo "export PATH=\"$XDG_BIN_HOME:\$PATH\""
@@ -800,28 +808,76 @@ EOF
   rm -f "$tmp"
 }
 
+# Parse terminal.shell_init_files from the RAW config.yaml: the key line plus
+# immediately-following '- ' items (any indent depth, unbounded count —
+# grep -A3 silently misses the chain when other keys sit between). Prints the
+# block; empty when the key is absent. Shared by fix_hermes_config and doctor.
+_parse_shell_init() {
+  awk '
+    /^[[:space:]]*shell_init_files:/ {f=1; print; next}
+    f && /^[[:space:]]*-/             {print; next}
+    f                                 {exit}
+  ' "$1"
+}
+
 fix_hermes_config() {
   local cfg="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}/config.yaml"
   # Parse the RAW yaml (hermes config get EXPANDS ${REPLIT_BASHRC} to its
   # value, so a resolved-read can't prove the literal is stored). Accept
   # either order of the two entries.
   local raw=""
-  [[ -f "$cfg" ]] && raw="$(awk '
-    /^[[:space:]]*shell_init_files:/ {f=1; print; next}
-    f && /^[[:space:]]*-/             {print; next}
-    f                                 {exit}
-  ' "$cfg")"
+  [[ -f "$cfg" ]] && raw="$(_parse_shell_init "$cfg")"
   if [[ "$raw" == *~/.profile* && "$raw" == *REPLIT_BASHRC* ]]; then
     ok "hermes config terminal.shell_init_files already chained"
     return 0
   fi
-  if ! command -v hermes &>/dev/null; then
-    warn "hermes launcher not on PATH — set it by hand in $cfg: shell_init_files: [~/.profile, \${REPLIT_BASHRC}]"
+  # NEVER execute the `hermes` launcher from a wiring-only repair: any
+  # subcommand can boot the full source-update cycle (venv sync, npm build,
+  # a multi-GB runtime clone) — minutes of side effects for a YAML write.
+  # Edit the file textually instead (comments/format outside the block
+  # untouched), verify by re-parsing, revert from backup if wrong.
+  if [[ ! -f "$cfg" ]]; then
+    warn "$cfg missing — start hermes once (or create it), then re-run: bash scripts/setup.sh --fix"
     return 0
   fi
-  hermes config set terminal.shell_init_files '["~/.profile", "${REPLIT_BASHRC}"]' \
-    && ok "hermes config terminal.shell_init_files -> [~/.profile, \${REPLIT_BASHRC}]" \
-    || warn "hermes config set failed — edit $cfg by hand"
+  [[ -w "$cfg" ]] || { warn "$cfg not writable — edit by hand: shell_init_files: [~/.profile, \${REPLIT_BASHRC}]"; return 0; }
+  local backup; backup="$(mktemp)"
+  cp "$cfg" "$backup"
+  if grep -qE '^[[:space:]]*shell_init_files:' "$cfg"; then
+    awk '
+      /^[[:space:]]*shell_init_files:/ && !done {
+        indent = match($0, /[^ ]/) - 1
+        print substr("                ", 1, indent) "shell_init_files:"
+        print substr("                  ", 1, indent + 2) "- ~/.profile"
+        print substr("                  ", 1, indent + 2) "- ${REPLIT_BASHRC}"
+        done = 1; swallow = 1; next
+      }
+      swallow && /^[[:space:]]*-/ { next }
+      { swallow = 0; print }
+    ' "$backup" > "$cfg"
+  elif grep -qE '^terminal:' "$cfg"; then
+    awk '
+      { print }
+      /^terminal:/ && !done {
+        print "  shell_init_files:"
+        print "    - ~/.profile"
+        print "    - ${REPLIT_BASHRC}"
+        done = 1
+      }
+    ' "$backup" > "$cfg"
+  else
+    rm -f "$backup"
+    warn "no terminal: block in $cfg — edit by hand: terminal.shell_init_files: [~/.profile, \${REPLIT_BASHRC}]"
+    return 0
+  fi
+  local after; after="$(_parse_shell_init "$cfg")"
+  if [[ "$after" == *~/.profile* && "$after" == *REPLIT_BASHRC* ]]; then
+    rm -f "$backup"
+    ok "hermes config terminal.shell_init_files -> [~/.profile, \${REPLIT_BASHRC}] (direct edit)"
+  else
+    cat "$backup" > "$cfg"; rm -f "$backup"
+    warn "shell_init_files edit failed verification — $cfg reverted; edit it by hand"
+  fi
 }
 
 run_fix() {
@@ -1183,11 +1239,11 @@ write_bashrc() {
   chmod u+rw "$BASHRC" 2>/dev/null || true
 
   # Strip any prior managed block (old or new markers) so re-runs stay clean,
-  # and trim trailing blank lines — the block's separator line would otherwise
-  # accumulate one per re-run. Read the whole file, filter in memory, and
-  # write back THROUGH the path (cat >): if $BASHRC is a symlink
-# sed on $BASHRC would silently replace a symlink with a plain file; the in-place edit happens here.
-  # file; an in-place edit happens here.
+  # and squeeze blank runs (see the awk below) — the block's separator line
+  # would otherwise accumulate one per re-run. Read the whole file, filter in
+  # memory, and write back THROUGH the path (cat >): if $BASHRC is a symlink,
+  # an in-place edit happens here, so sed/awk on $BASHRC could not silently
+  # replace the symlink with a plain file.
   # Lift this run's predecessors' wiring before the strip — see rescue_tool_lines.
   rescue_tool_lines "$BASHRC"
 
@@ -1615,7 +1671,7 @@ doctor() {
     fail=1
   fi
 
-  case ":$PATH:" in
+  case ":$_ENTRY_PATH:" in
     *":$XDG_BIN_HOME:"*) ok "XDG_BIN_HOME on PATH" ;;
     *) warn "XDG_BIN_HOME NOT on PATH (open a new shell)"; fail=1 ;;
   esac
@@ -1650,7 +1706,8 @@ doctor() {
     wfail=1
   fi
   if [[ -f "${HERMES_HOME}/config.yaml" ]] \
-     && grep -A3 'shell_init_files:' "${HERMES_HOME}/config.yaml" | grep -q 'REPLIT_BASHRC'; then
+     && _parse_shell_init "${HERMES_HOME}/config.yaml" | grep -q '~/.profile' \
+     && _parse_shell_init "${HERMES_HOME}/config.yaml" | grep -q 'REPLIT_BASHRC'; then
     ok "hermes config shell_init_files chained"
   else
     warn "hermes terminal shells don't source ~/.profile/\$REPLIT_BASHRC — run: bash scripts/setup.sh --fix"
@@ -2942,11 +2999,16 @@ main() {
 
   # --fix: repair wiring WITHOUT deleting/reinstalling tools. --doctor --fix
   # reports first then repairs; bare --fix repairs then reports. The doctor
-  # ALWAYS runs after run_fix as the post-repair verification pass.
+  # ALWAYS runs after run_fix as the post-repair verification pass. Exit
+  # reflects what --fix is responsible for: 2 = wiring still broken after
+  # repair (real failure — scripts can gate on it); 0 otherwise. Missing
+  # tools (doctor's 1) are an install-scope fact --fix cannot act on, so
+  # they warn in the report without failing the command.
   if $FIX; then
     if $DOCTOR; then doctor || true; fi
     run_fix
-    doctor || true
+    local drc=0; doctor || drc=$?
+    (( drc == 2 )) && exit 2
     exit 0
   fi
 
