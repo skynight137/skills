@@ -25,7 +25,13 @@ ELFCLASS32` behind the generic "staged entry failed verification … exited
    `UV_INDEX_URL` and its PIP bridge; harmless-but-noise:
    `UV_INSECURE_HOST`, `UV_PYTHON_*`.
 2. **libatomic for staged node.** PM's node is a standalone x64 tarball that
-   links `libatomic.so.1`; the Nix image has no loader path for it. Store
+   links `libatomic.so.1`; the Nix image has no loader path for it. NOT
+   Hermes-specific: EVERY official linux-x64 Node ≥ 22 (setup.sh `--node`
+   ships 26 for Camofox) needs the same lib — the fix is one function,
+   `ensure_libatomic` (run by `--node`, `--fix`, and every install), which
+   stages the copy AND prepends the pool to the current process's
+   LD_LIBRARY_PATH. A `✓ already staged` on a machine where node still fails
+   = stale setup.sh (pre-4.5.1 marker-only check). Store
    copies exist under `gcc-*-lib`/`gfortran`/`julia` dirs but some are
    **32-bit** — `file` before exporting (references/nix.md §2), and keep the durable
    copy in the workspace (`$REPL_HOME/.local/lib`), not `$HOME` (wiped) or

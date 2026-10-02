@@ -908,7 +908,7 @@ run_fix() {
   fix_profile
   fix_hermes_config
 
-  # --- 5. durable libatomic (Hermes PM node needs it regardless) ---
+  # --- 5. durable libatomic (official Node tarballs need it regardless) ---
   ensure_libatomic
 
   ok "wiring repair complete — open a new shell (or 'source $BASHRC') to load"
@@ -1097,26 +1097,46 @@ rc_path_lines() {
 }
 
 # Hermes PM stages its own x64 Node tarball under $HERMES_HOME/tools; the
-# binary dynamically needs libatomic.so.1, which this Nix image only ships
-# inside /nix/store — hashed paths that get garbage-collected, so they must
-# never be referenced directly. Copy a verified x86-64 build into the durable
-# $WORKSPACE/.local/lib (the dir the managed rc block puts on LD_LIBRARY_PATH;
-# note the gcc-14.2.1 copy on some images is i386 — check ELF class).
+# official Node linux-x64 binary (>=22 line — what install_node ships, and
+# what Camofox requires) is dynamically linked against libatomic.so.1, which
+# this Nix image only ships inside /nix/store — hashed paths that get
+# garbage-collected, so they must never be referenced directly. Copy a
+# verified x86-64 build into the durable $WORKSPACE/.local/lib (the dir the
+# managed rc block puts on LD_LIBRARY_PATH; note the gcc-14.2.1 copy on some
+# images is i386 — check ELF class).
 # Runs every setup.sh: cheap no-op once the lib is in place.
+# _ldpool_prepend DIR — make the current setup process (and every child it
+# spawns: install_node's version probe, npm, the node server when setup.sh is
+# used as a launcher) see the pool WITHOUT clobbering an LD_LIBRARY_PATH the
+# platform already set. Idempotent; mirrors emit_managed_block's guard.
+_ldpool_prepend() {
+  case ":${LD_LIBRARY_PATH:-}:" in
+    *":$1:"*) ;;
+    *) export LD_LIBRARY_PATH="$1${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
+  esac
+}
+
 ensure_libatomic() {
   local target_dir="${1:-$WORKSPACE/.local/lib}" marker src found=0
   # Marker cache: /nix/store is a NETWORK filesystem on Replit — every glob
   # here costs minutes on a cold store (measured: one /*gcc-*-lib/ pass =
-  # 70s). The marker makes repeat runs instant.
+  # 70s). The marker makes repeat runs instant — but ONLY valid while the
+  # lib itself still resolves: a marker without a live libatomic.so.1 (e.g.
+  # $HOME-wipe, hand-copied pool, GC'd symlink) must fall through and heal,
+  # otherwise setup prints "✓ already staged" while node dies at the loader.
   marker="$target_dir/.libatomic-ok"
-  [[ -f "$marker" ]] && { ok "libatomic already staged (marker: $marker)"; return 0; }
+  [[ -f "$marker" && -e "$target_dir/libatomic.so.1" ]] && \
+    { ok "libatomic already staged (marker: $marker)"; _ldpool_prepend "$target_dir"; return 0; }
   if command -v ldconfig &>/dev/null \
      && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
     return 0  # plain distro / NixOS: the system loader already resolves it
   fi
   mkdir -p "$target_dir" 2>/dev/null || { warn "cannot create $target_dir — libatomic not staged"; return 0; }
-  if compgen -G "$target_dir/libatomic.so.1*" >/dev/null; then
-    touch "$marker"; ok "libatomic for PM-staged node already present: $target_dir"
+  # -e (not compgen -G): a DANGLING symlink matches a glob but satisfies no
+  # loader — demand the real file and re-stage otherwise.
+  if [[ -e "$target_dir/libatomic.so.1" ]]; then
+    touch "$marker"; ok "libatomic for official Node tarballs already present: $target_dir"
+    _ldpool_prepend "$target_dir"
     return 0
   fi
   # ONE store pass, gcc-lib dir only — libatomic always ships there. Never
@@ -1129,10 +1149,11 @@ ensure_libatomic() {
     cp -f "$src" "$target_dir/" 2>/dev/null || continue
     ln -sf "$(basename -- "$src")" "$target_dir/libatomic.so.1"
     touch "$marker"
-    ok "libatomic staged for PM node: $target_dir/libatomic.so.1 (from $(basename "$(dirname "$(dirname "$src")")"))"
+    ok "libatomic staged: $target_dir/libatomic.so.1 (from $(basename "$(dirname "$(dirname "$src")")"))"
+    _ldpool_prepend "$target_dir"
     return 0
   done
-  $found && warn "only non-x86-64 libatomic in store — check ELF class (references/nix.md §2)" \
+  $found && warn "only non-x86-64 libatomic in store — every candidate failed the ELF 64-bit check" \
           || warn "no gcc-*-lib dirs in /nix/store yet (store cold?) — rerun setup.sh once the image is warm"
 }
 
@@ -1150,9 +1171,10 @@ export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
 export GOPROXY="https://proxy.golang.org,direct"
 export PIP_TRUSTED_HOST="pypi.org"
 
-# Hermes PM stages its own x64 Node tarball under $HERMES_HOME/tools; it
-# links libatomic.so.1, which this Nix image only ships under garbage-
-# collected /nix/store paths — see ensure_libatomic for the durable copy.
+# Hermes PM stages its own x64 Node tarball AND --node installs the official
+# x64 tarball: both link libatomic.so.1, which this Nix image only ships under
+# garbage-collected /nix/store paths — see ensure_libatomic for the durable
+# copy in $WORKSPACE/.local/lib (the dir this block prepends below).
 # This is an APPEND (the platform's own nix closure dirs stay on the path);
 # the \$ escapes keep the test at rc-source time — unescaped, the write-time
 # heredoc expansion would bake the current value in and turn the append
@@ -3023,8 +3045,10 @@ main() {
   add_exit_action 'write_replit_bashrc'
 
   mkdir -p "$XDG_BIN_HOME" "$XDG_DATA_HOME"
-  # Independent of tool selection: Hermes PM's staged node needs libatomic
-  # even when Hermes itself was not reinstalled this run.
+  # Independent of tool selection: official Node >= 22 tarballs (what
+  # --node installs, and what Camofox needs) are linked against
+  # libatomic.so.1 — needed even when neither Hermes nor Node is reinstalled
+  # this run (a prior $HOME-wipe may have orphaned the pool).
   ensure_libatomic
 
   $INSTALL_ANDROID  && install_android_tools
