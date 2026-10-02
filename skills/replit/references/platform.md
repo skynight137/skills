@@ -15,6 +15,11 @@ trailing-slash failures, `libatomic` for PM-staged node):
 - `replit shutdown` stops the container without wiping `$HOME` or deleting
   `replit.nix`; none of these touch **`/nix/store`** (it persists outside all three
   until GC). See `references/nix.md` for what that means for libs.
+- GC removes store TARGETS but leaves symlink POINTERS dangling: `~/.local/state/nix/profiles/*`,
+  `.nix-defexpr/channels_root`, per-repo `.bin/<hash>` caches. Anything that `stat()`s
+  directory entries chokes on them (Hermes dashboard /files returns 500 "Could not stat
+  path" — listing dies on the first broken link). Sweep: `find ~ -xdev -type l | while
+  read l; do [ -e "$l" ] || echo "$l"; done` → delete the nix-pointing ones.
 - **`/run` is tmpfs** (RAM, ~50MB — `df -h /run` confirms). Everything under it is
   gone on every recreate. Two subtrees matter:
   - `/run/replit/env/` — the **platform env-load channel** (§3). `latest`,

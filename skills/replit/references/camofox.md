@@ -23,8 +23,8 @@ launch (~20s, sometimes 60-90s).
 |------|---------|------|
 | `web_search` | finding URLs / answering a question | no browser |
 | `web_extract(url)` | reading a page you already have the URL for | no browser, markdown |
-| `browser_exec` | clicking, typing, JS, logins on ordinary sites | one Chromium tab |
-| **Camofox `:9377`** | **the above returned a bot wall** | ~20s cold launch |
+| **camofox MCP (`camofox_*` tools)** | **clicking, typing, JS, logins, bot-walled sites — ALL agent browsing** | one Camofox tab |
+| ~~`browser_exec`~~ | ⛔ broken on this box (see *Hermes integration* below) | — |
 
 Recognize a block by its signature, not by "the page was empty": under
 `browser_exec` a WAF-blocked page shows a placeholder title (an emoji-prefixed
@@ -211,9 +211,11 @@ bash scripts/start-camofox.sh   # fast self-verification pass, then launches :93
 
 The closure/loader mechanics *why* each step exists: `references/nix.md`. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
 `CAMOUFOX_INSTALL_DIR`, `CAMOFOX_STATE_DIR`, `CAMOFOX_PORT` (default
-9377), `CAMOFOX_API_KEY` (optional auth — this is the real name, there is
-no `CAMOFOX_ACCESS_KEY`), `CAMOFOX_ENV_FILE` (optional env file — see
-below).
+9377), `CAMOFOX_API_KEY` (cookie-import-only gate),
+**`CAMOFOX_ACCESS_KEY`** (global superkey — required on every route except
+`/health`/`/stop` once set; `lib/config.js:137`, `accessKeyMiddleware`
+`server.js:188`), `CAMOFOX_BIND_HOST`, `CAMOFOX_ENV_FILE` (optional env file —
+see below).
 
 **No agent framework required.** The skill never hard-requires Hermes or any
 other tool. An env file is only *optional* convenience: both
@@ -531,6 +533,94 @@ the usual cause of the columns running together.
   the group; `DELETE /tabs/group/:listItemId` clears the whole group.
 - Same user, **different URL** → give each loop its own `--session` (and
   its own process); same `--session` reattaches instead of opening a new tab.
+
+## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
+
+Hermes' builtin `browser_exec` is **unusable on this box** (verified
+2026-10-02): the Nix Playwright Chromium dies on a GLIBC-2.39 symbol in
+`.local/lib/libsystemd.so.0`, and Hermes' staged
+`.hermes/tools/chromium-1208` can't dlopen `libnspr4` (installing /repl's NSS
+libs drags glibc 2.42 into conflict). Replit's own Chromium (`ensure_browser.sh`,
+CDP :9222) works for local/dev targets but its UA leaks `HeadlessChrome` —
+instant bot-wall bait. The answer for agent automation is the
+**camofox-browser MCP adapter** (`camofox-browser/mcp/server.mjs`), which
+exposes 11 `camofox_*` tools (create_tab/snapshot/click/type/navigate/scroll/
+screenshot/close_tab/evaluate/list_tabs/import_cookies) over the local REST
+server.
+
+Register once (deps first if `mcp/node_modules` is missing):
+
+```bash
+(cd "$CAMOFOX_ROOT/camofox-browser/mcp" && npm i --registry=https://registry.npmjs.org/)
+hermes mcp add camofox-browser \
+  --command "$(command -v node)" \
+  --args "$CAMOFOX_ROOT/camofox-browser/mcp/server.mjs" \
+  --env CAMOFOX_PORT=9377 CAMOFOX_BASE_URL=http://127.0.0.1:9377 \
+  --connect-timeout 20        # then answer the enable-tools prompt
+```
+
+Pitfalls found while wiring this (all verified live):
+- `hermes mcp add --command` takes the **executable only**; the script goes in
+  `--args` (last option). A single string "node /path/server.mjs" fails with
+  `missing executable`.
+- Hermes strips the inherited `LD_LIBRARY_PATH` for MCP children — Hermes'
+  PM-staged node 26.7.0 needs `libatomic`, so pass
+  `--env LD_LIBRARY_PATH=/home/runner/workspace/.local/lib` like every other
+  node consumer on this box (see hermes-on-replit.md).
+- The MCP adapter is **stdio-only** — it never listens, so there is nothing
+  "public" about it; it just forwards to `CAMOFOX_BASE_URL`
+  (default `http://localhost:$CAMOFOX_PORT||9377`; the published
+  `@askjo/camofox-browser-mcp` npx version still defaults to :9000, so set
+  `CAMOFOX_BASE_URL` or `CAMOFOX_PORT` explicitly when the server lives
+  elsewhere).
+- `/browser connect` + `browser.cdp_url` do NOT help: Camofox is
+  Firefox/Juggler, not CDP. Don't point the CDP override at :9377/:9000.
+- Google search macro falls back to DuckDuckGo automatically
+  (`fallbackFrom:"google"`) — fine for scraping, intentional.
+
+## Exposing Camofox beyond localhost (Replit dev domain) — verified + the hole it opens
+
+`https://$REPL_ID...sisko.replit.dev:<port>` serves ANY port the app binds
+(no `.replit [[ports]]` entry needed) — verified 2026-10-02 end-to-end:
+`CAMOFOX_PORT=9000 CAMOFOX_BIND_HOST=0.0.0.0 node server.js` → tab create /
+snapshot / close all worked through the public HTTPS URL, and a remote MCP
+adapter reached it with `CAMOFOX_BASE_URL=https://<dev-domain>:9000`.
+
+Two non-obvious facts, both measured:
+
+1. **Node ≥ 24 can't verify Replit's TLS chain** (`unable to verify the first
+   certificate` — `fetch failed`; curl is fine). Any Node client (including
+   the MCP adapter) talking HTTPS to a `*.replit.dev` URL needs
+   `NODE_OPTIONS=--use-system-ca`.
+2. **⚠ The Replit proxy makes every request look like loopback
+   (`req.ip = 127.0.0.1`) — and the loopback auth bypass is defeated.**
+   Worse: without `CAMOFOX_ACCESS_KEY` set, the tabs routes are open to ALL
+   clients regardless of `NODE_ENV=production` (verified: a foreign `userId`
+   tab create through the public URL succeeded unauthenticated, while the box
+   itself was running production mode; `accessKeyMiddleware` is a
+   pass-through when the key is unset, and `/tabs*` carries no per-route
+   `requireAuth` — only cookie-import/traces do). **Never expose the server
+   without `CAMOFOX_ACCESS_KEY`**; `NODE_ENV` alone is not protection here.
+   Anyone holding the URL without a key gets: your stealth browser, your
+   cookie jars (list/create/delete tabs, evaluate JS), and your Replit IP as
+   egress. The dev subdomain is guessable (cluster name + short hash) and this
+   Replit account already publishes other ports.
+
+Public-mode launch (this box's durable pattern):
+
+```bash
+CAMOFOX_PORT=9000 CAMOFOX_BIND_HOST=0.0.0.0 \
+CAMOFOX_ACCESS_KEY="$(openssl rand -hex 32)" \
+NODE_ENV=production node server.js
+
+# client (anywhere):
+CAMOFOX_BASE_URL=https://<dev-domain>:9000 CAMOFOX_ACCESS_KEY=*** \
+NODE_OPTIONS=--use-system-ca \
+node "$CAMOFOX_ROOT/camofox-browser/mcp/server.mjs"
+```
+
+The adapter forwards the access key automatically (tool-contracts declare
+`auth:'accessKey'` per route).
 
 ## Verification (done)
 
