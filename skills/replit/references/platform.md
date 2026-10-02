@@ -4,7 +4,7 @@ Field-verified platform facts only (2026-09-02/03, 2026-09-12, re-verified
 2026-09-17, 2026-09-26).
 How to actually pull packages out of `/nix/store` (replit.nix, nix-env, closures) is
 the **`references/nix.md`** reference. Hermes-on-Replit recovery (uv `--locked`
-trailing-slash failures, `libatomic` for PM-staged node):
+trailing-slash failures, `libatomic` for official Node ≥22 tarballs):
 `references/hermes-on-replit.md`.
 
 ## 1. What survives a restart (the #1 gotcha)

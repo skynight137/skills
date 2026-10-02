@@ -107,6 +107,12 @@ for _cand in "${CAMOFOX_ENV_FILE:-}" "$CAMOFOX_ROOT/.env"; do
 done
 unset _cand
 
+# 0) preflight — hard deps, fail with instructions instead of a raw 127 later
+for _c in git node npm uv; do
+    command -v "$_c" >/dev/null 2>&1 || { echo "[error] '$_c' not on PATH — on Replit run: bash scripts/setup.sh --node --uv (fresh machine: open a NEW shell after setup)" >&2; exit 1; }
+done
+unset _c
+
 # 1) repo ------------------------------------------------------------------------
 if [[ ! -f "$REPO/server.js" ]]; then
     echo "[provision] cloning camofox-browser -> $REPO"
@@ -150,7 +156,10 @@ fi
 # GTK/ALSA too, not just this server's env. Idempotent + heals dangling links
 # after a store rebuild; cheap (symlinks only). Safe to skip via LIBPOOL_SKIP=1.
 if [[ "${LIBPOOL_SKIP:-0}" != "1" ]]; then
-    bash "$SCRIPT_DIR/libpool.sh" || echo "[libpool] WARNING: pool refresh failed — server still gets the closure via LD_LIBRARY_PATH below" >&2
+    # Caller owns path truth (CAMOFOX_ROOT/CAMOFOX_REPO_DIR overrides): pass
+    # the resolved closure file + pool so libpool never re-derives defaults.
+    TXT="$REPO/LD_LIBRARY_PATH.txt" POOL="$CAMOFOX_HOME/.local/lib" \
+        bash "$SCRIPT_DIR/libpool.sh" || echo "[libpool] WARNING: pool refresh failed — server still gets the closure via LD_LIBRARY_PATH below" >&2
 fi
 # The closure is NOT optional even when the caller pinned LD_LIBRARY_PATH
 # (e.g. Replit `.replit [userenv.shared]`): Camoufox cannot start without
@@ -160,11 +169,24 @@ fi
 # keep first-search priority for libs they deliberately provide (libatomic),
 # the closure only fills gaps. Dedup guard keeps re-runs idempotent.
 CLOSURE="$(cat "$REPO/LD_LIBRARY_PATH.txt")"
-if [[ -z "${LD_LIBRARY_PATH:-}" ]]; then
-    export LD_LIBRARY_PATH="$CLOSURE"
-elif [[ ":$LD_LIBRARY_PATH:" != *":$CLOSURE:"* ]]; then
-    export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$CLOSURE"
-fi
+# Pool FIRST when it exists (official-node libatomic + host-wide GTK symlinks
+# live there; matches the setup.sh rc contract of prepending the pool), then
+# per-dir idempotent append (mirrors setup.sh _ldpool_prepend): a whole-string
+# substring match only dedups when the ENTIRE closure appears contiguously —
+# a pinned path with the same dirs split/reordered would re-append the full
+# closure every launch.
+IFS=':' read -ra _cdirs <<< "$CLOSURE"
+[[ -d "$CAMOFOX_HOME/.local/lib" && ":${LD_LIBRARY_PATH:-}:" != *":$CAMOFOX_HOME/.local/lib:"* ]] \
+    && LD_LIBRARY_PATH="$CAMOFOX_HOME/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+for _d in "${_cdirs[@]}"; do
+    [[ -n "$_d" ]] || continue
+    case ":${LD_LIBRARY_PATH:-}:" in
+        *":$_d:"*) ;;
+        *) LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$_d" ;;
+    esac
+done
+unset _d _cdirs
+export LD_LIBRARY_PATH
 
 # 4) npm deps — ALWAYS run (fixed step). Self-healing: with the pinned
 #    package-lock.json an already-correct tree resolves in seconds; a
@@ -208,6 +230,16 @@ echo "[start-camofox] root=$CAMOFOX_ROOT"
 echo "[start-camofox] repo=$REPO"
 echo "[start-camofox] engine=$ENGINE"
 echo "[start-camofox] state=$STATE"
+# Auth preflight: the server binds ALL interfaces by default (bindHost '' ->
+# INADDR_ANY) and on Replit ANY bound port is reachable via the public dev
+# domain with req.ip spoofed to 127.0.0.1 — loopback trust does not hold
+# there, and with no key set the accessKey middleware is a pass-through:
+# unauthenticated tab-control + cookie jars, publicly. Keyless is only safe
+# behind a guaranteed-loopback bind. (camofox.md §'Exposing beyond localhost')
+if [[ -z "${CAMOFOX_ACCESS_KEY:-}" && -z "${CAMOFOX_API_KEY:-}" ]] \
+   && [[ -z "${CAMOFOX_BIND_HOST:-}" || "${CAMOFOX_BIND_HOST:-}" == 0.0.0.0 ]]; then
+    echo "[start-camofox] WARNING: binding all interfaces with NO CAMOFOX_ACCESS_KEY/CAMOFOX_API_KEY — on Replit the dev domain makes :$CAMOFOX_PORT publicly reachable with NO auth. Set CAMOFOX_ACCESS_KEY, or CAMOFOX_BIND_HOST=127.0.0.1 for loopback-only." >&2
+fi
 echo "[start-camofox] listening on :$CAMOFOX_PORT"
 cd "$REPO"
 exec node server.js

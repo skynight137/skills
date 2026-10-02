@@ -1110,6 +1110,7 @@ rc_path_lines() {
 # used as a launcher) see the pool WITHOUT clobbering an LD_LIBRARY_PATH the
 # platform already set. Idempotent; mirrors emit_managed_block's guard.
 _ldpool_prepend() {
+  [[ -d "$1" ]] || return 0   # loader skips missing dirs; keep the env clean
   case ":${LD_LIBRARY_PATH:-}:" in
     *":$1:"*) ;;
     *) export LD_LIBRARY_PATH="$1${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
@@ -1118,43 +1119,91 @@ _ldpool_prepend() {
 
 ensure_libatomic() {
   local target_dir="${1:-$WORKSPACE/.local/lib}" marker src found=0
+  # A staged/present lib counts only if it is an x86-64 shared object: the
+  # image also ships i386 gcc copies, /nix/store is runner-writable on Replit
+  # (so a planted path can win the glob), and 'ELF 64-bit' alone would accept
+  # aarch64/ppc64 too. file -L dereferences the SONAME symlink (plain `file`
+  # would print "symbolic link to ..." and fail the grep); missing file(1)
+  # fails closed (nonzero -> re-scan).
+  _la_is_x86_64() { file -L "$1" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'; }
   # Marker cache: /nix/store is a NETWORK filesystem on Replit — every glob
   # here costs minutes on a cold store (measured: one /*gcc-*-lib/ pass =
-  # 70s). The marker makes repeat runs instant — but ONLY valid while the
-  # lib itself still resolves: a marker without a live libatomic.so.1 (e.g.
-  # $HOME-wipe, hand-copied pool, GC'd symlink) must fall through and heal,
-  # otherwise setup prints "✓ already staged" while node dies at the loader.
+  # 70s). The marker makes repeat runs instant — but ONLY as EVIDENCE, not
+  # attestation: at stage time it records the sha256 of the staged lib, and
+  # the fast path re-verifies the hash (and the x86-64 ELF class), so a
+  # swapped/tampered libatomic.so.1 or a stale 0-byte pre-4.5.2 marker falls
+  # through to a re-scan instead of printing "✓ already staged" while node
+  # dies at the loader. Empty marker = pre-hash era: accept the lib only
+  # after the ELF check, then backfill the hash.
   marker="$target_dir/.libatomic-ok"
-  [[ -f "$marker" && -e "$target_dir/libatomic.so.1" ]] && \
-    { ok "libatomic already staged (marker: $marker)"; _ldpool_prepend "$target_dir"; return 0; }
+  if [[ -f "$marker" && -e "$target_dir/libatomic.so.1" ]] && _la_is_x86_64 "$target_dir/libatomic.so.1"; then
+    local _rec _now
+    _rec="$(cat "$marker" 2>/dev/null | tr -d '[:space:]')"
+    _now="$(sha256sum "$(readlink -f "$target_dir/libatomic.so.1")" 2>/dev/null | cut -d' ' -f1)"
+    if [[ -z "$_rec" ]]; then          # pre-hash marker: ELF-verified, backfill
+      [[ -n "$_now" ]] && printf '%s\n' "$_now" > "$marker"
+      ok "libatomic already staged (marker backfilled: $marker)"
+      _ldpool_prepend "$target_dir"
+      return 0
+    fi
+    if [[ "$_rec" == "$_now" ]]; then
+      ok "libatomic already staged (hash verified: $marker)"
+      _ldpool_prepend "$target_dir"
+      return 0
+    fi
+    warn "staged libatomic.so.1 does not match recorded hash — re-staging"
+  fi
   if command -v ldconfig &>/dev/null \
      && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
-    return 0  # plain distro / NixOS: the system loader already resolves it
+    # System loader resolves it — still prepend the pool: it holds more than
+    # libatomic (libpool.sh links GTK/ALSA/X11 there for every consumer).
+    _ldpool_prepend "$target_dir"
+    return 0
   fi
   mkdir -p "$target_dir" 2>/dev/null || { warn "cannot create $target_dir — libatomic not staged"; return 0; }
   # -e (not compgen -G): a DANGLING symlink matches a glob but satisfies no
-  # loader — demand the real file and re-stage otherwise.
-  if [[ -e "$target_dir/libatomic.so.1" ]]; then
-    touch "$marker"; ok "libatomic for official Node tarballs already present: $target_dir"
+  # loader — demand a real, x86-64 file and re-stage otherwise.
+  if [[ -e "$target_dir/libatomic.so.1" ]] && _la_is_x86_64 "$target_dir/libatomic.so.1"; then
+    sha256sum "$(readlink -f "$target_dir/libatomic.so.1")" 2>/dev/null | cut -d' ' -f1 > "$marker" || touch "$marker"
+    ok "libatomic for official Node tarballs already present: $target_dir"
     _ldpool_prepend "$target_dir"
     return 0
   fi
   # ONE store pass, gcc-lib dir only — libatomic always ships there. Never
   # glob all of /nix/store/*/* (each pass costs minutes on a cold store).
+  # Negative cache: a FAILED scan is also expensive to repeat — every --fix
+  # on a still-cold image would re-pay the ~70s glob. Skip rescans for 15m;
+  # a successful stage removes the miss marker above.
+  if [[ -f "$target_dir/.libatomic-miss" ]] \
+     && (( $(date +%s) - $(stat -c %Y "$target_dir/.libatomic-miss" 2>/dev/null || echo 0) < 900 )); then
+    warn "libatomic scan previously failed (<15m ago) — rerun setup.sh --fix once the image is warm"
+    return 0
+  fi
   echo "  scanning /nix/store for libatomic (first run only; cold store: up to a few minutes)..."
   for src in /nix/store/*gcc-*-lib/lib/libatomic.so.1.*; do
     [[ -f "$src" ]] || continue
     found=1
-    file "$src" 2>/dev/null | grep -q 'ELF 64-bit' || continue
-    cp -f "$src" "$target_dir/" 2>/dev/null || continue
+    _la_is_x86_64 "$src" || continue
+    # cp to temp + mv (rename(2) is atomic): cp -f over a lib currently
+    # mmapped by a running node falls back to unlink+recreate and opens a
+    # demand-load failure window for live consumers.
+    cp -f "$src" "$target_dir/.la.tmp.$$" 2>/dev/null || { warn "copy failed from $src"; continue; }
+    mv -f "$target_dir/.la.tmp.$$" "$target_dir/$(basename -- "$src")" 2>/dev/null || { warn "rename failed into $target_dir"; rm -f "$target_dir/.la.tmp.$$"; continue; }
     ln -sf "$(basename -- "$src")" "$target_dir/libatomic.so.1"
-    touch "$marker"
+    sha256sum "$target_dir/$(basename -- "$src")" 2>/dev/null | cut -d' ' -f1 > "$marker" || touch "$marker"
+    rm -f "$target_dir/.libatomic-miss"
     ok "libatomic staged: $target_dir/libatomic.so.1 (from $(basename "$(dirname "$(dirname "$src")")"))"
     _ldpool_prepend "$target_dir"
     return 0
   done
-  $found && warn "only non-x86-64 libatomic in store — every candidate failed the ELF 64-bit check" \
-          || warn "no gcc-*-lib dirs in /nix/store yet (store cold?) — rerun setup.sh once the image is warm"
+  if [[ "$found" == 1 ]]; then
+    warn "no usable libatomic staged — candidates failed the x86-64 ELF check or the copy (see messages above)"
+  else
+    # No usable lib found: cache the miss for 15 min so --fix/next run does
+    # not re-pay the 70s network-store glob while the image is still cold.
+    touch "$target_dir/.libatomic-miss"
+    warn "no gcc-*-lib dirs in /nix/store yet (store cold?) — rerun setup.sh once the image is warm"
+  fi
 }
 
 emit_managed_block() {
@@ -1659,8 +1708,20 @@ doctor() {
   check_tool() {
     name="$1"; cmd="$2"
     if command -v "$cmd" &>/dev/null; then
-      ver="$("$cmd" --version 2>&1 | grep -v '^Picked up' | head -1)"
-      ok "$name: $ver"
+      # Gate on the tool's OWN exit status: a pipe under pipefail reports the
+      # pipeline (a loader-failed binary exits nonzero but the exit-141 of a
+      # short 'head' is noise, and 'grep -q' masks the real code). Capture
+      # raw output + rc, then filter. Loader failures (libatomic.so.1) used
+      # to print as '✓ Node: error while loading shared libraries...'.
+      local _raw _rc=0
+      _raw="$("$cmd" --version 2>&1)" || _rc=$?
+      _raw="$(printf '%s\n' "$_raw" | grep -v '^Picked up' | head -1)"
+      if (( _rc == 0 )); then
+        ok "$name: $_raw"
+      else
+        warn "$name: found but FAILED to run (exit $_rc): ${_raw:-no output} (check ldd / LD_LIBRARY_PATH wiring; 'bash scripts/setup.sh --fix' heals the pool+rc wiring — some tools like ffmpeg's static builds exit nonzero on --version by design)"
+        fail=1
+      fi
     else
       # NOT FOUND is an INSTALLATION state, not a wiring failure — --fix
       # cannot make a never-installed tool appear. Tracked separately from
@@ -1711,6 +1772,18 @@ doctor() {
     ok "managed toolchain block in $BASHRC"
   else
     warn "no managed toolchain block in $BASHRC — run: bash scripts/setup.sh --fix"
+    wfail=1
+  fi
+  # libatomic pool: the exact v4.5.1 failure class ('✓ staged' while node
+  # dies) is invisible to every other wiring check — verify the durable copy
+  # itself. Skip on boxes where the system loader already resolves it.
+  if command -v ldconfig &>/dev/null && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
+    ok "libatomic resolved by the system loader"
+  elif [[ -e "$WORKSPACE/.local/lib/libatomic.so.1" ]] \
+     && file -L "$WORKSPACE/.local/lib/libatomic.so.1" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'; then
+    ok "libatomic in pool ($WORKSPACE/.local/lib)"
+  else
+    warn "libatomic missing/not x86-64 in $WORKSPACE/.local/lib — node will fail to load; run: bash scripts/setup.sh --fix"
     wfail=1
   fi
   if [[ -d "$HERMES_HOME/tools" ]]; then
@@ -2043,7 +2116,14 @@ install_node() {
   rm -rf "$tmp" "$extracted"
 
   symlink_bins "$NODE_DIR/bin" node npm npx
-  ok "Node.js installed: $NODE_DIR ($("$NODE_DIR/bin/node" --version))"
+  # A failed $(node --version) inside an ok line does NOT trip set -e — on
+  # this exact bug class it printed '✓ Node.js installed: ( )' with an empty
+  # version while the binary could not load. Probe explicitly and die.
+  local node_ver
+  if ! node_ver="$("$NODE_DIR/bin/node" --version 2>&1)"; then
+    die "node staged at $NODE_DIR but cannot load: $node_ver (ensure_libatomic output above? rerun: bash scripts/setup.sh --fix)"
+  fi
+  ok "Node.js installed: $NODE_DIR ($node_ver)"
   record_tool_env_vars NODE_DIR npm_config_prefix
   record_tool_path_dirs "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   wire_tool node NODE_DIR npm_config_prefix -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
@@ -3049,6 +3129,8 @@ main() {
   # --node installs, and what Camofox needs) are linked against
   # libatomic.so.1 — needed even when neither Hermes nor Node is reinstalled
   # this run (a prior $HOME-wipe may have orphaned the pool).
+  # INVARIANT: must run BEFORE install_node — its version probe execs the
+  # fresh binary and relies on _ldpool_prepend's env on this process.
   ensure_libatomic
 
   $INSTALL_ANDROID  && install_android_tools

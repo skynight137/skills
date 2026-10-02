@@ -31,10 +31,13 @@ ELFCLASS32` behind the generic "staged entry failed verification … exited
    `ensure_libatomic` (run by `--node`, `--fix`, and every install), which
    stages the copy AND prepends the pool to the current process's
    LD_LIBRARY_PATH. A `✓ already staged` on a machine where node still fails
-   = stale setup.sh (pre-4.5.1 marker-only check). Store
-   copies exist under `gcc-*-lib`/`gfortran`/`julia` dirs but some are
-   **32-bit** — `file` before exporting (references/nix.md §2), and keep the durable
-   copy in the workspace (`$REPL_HOME/.local/lib`), not `$HOME` (wiped) or
+   = stale setup.sh (pre-4.5.x marker-only check). The script scans
+   `gcc-*-lib` dirs ONLY (one store pass — libatomic always ships there,
+   references/nix.md §2); gfortran/julia copies exist in the store but are
+   NOT used — hand-copy from those only as a last resort, after the
+   `file -L ... 'ELF 64-bit LSB shared object, x86-64'` check (some copies
+   are **32-bit**), into the workspace pool (`$REPL_HOME/.local/lib`), never
+   `$HOME` (wiped) or
    `/nix/store` (GC'd).
 
 ## One-shot unblock (no persistence)
@@ -58,9 +61,12 @@ the repo. Don't rerun on a silent timeout alone.
   `unset UV_INDEX_URL UV_INSECURE_HOST` (fires ONLY when they are the
   redundant pypi-over-plain-https values — a real mirror value must pass
   through); `LD_LIBRARY_PATH=$REPL_HOME/.local/lib` prepended idempotently.
-- `.replit [userenv.shared]`: slash-free `PIP_INDEX_URL` +
-  `LD_LIBRARY_PATH = "<workspace>/.local/lib"` (write via
-  `scripts/replit_userenv.py`). Reaches every **newly spawned** process — a
+- `.replit [userenv.shared]`: slash-free `PIP_INDEX_URL` (written by
+  `setup.sh`). `LD_LIBRARY_PATH` is **NOT managed** — the rc block only
+  reaches rc-sourcing shells; processes launched outside bash (Deployments,
+  app-run, daemons started pre-fix) never see the pool unless you pin
+  `LD_LIBRARY_PATH = "<workspace>/.local/lib:<platform nix dirs>"` by hand.
+  Reaches every **newly spawned** process — a
   gateway already running keeps its old env; prove it with
   `tr '\0' '\n' < /proc/<pid>/environ` (live-process-forensics). Verify after
   restart with `hermes pm doctor` — expect `✓ node ✓ npm ✓ python ✓ ripgrep

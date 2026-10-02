@@ -213,7 +213,8 @@ The closure/loader mechanics *why* each step exists: `references/nix.md`. Env ov
 `CAMOUFOX_INSTALL_DIR`, `CAMOFOX_STATE_DIR`, `CAMOFOX_PORT` (default
 9377), `CAMOFOX_API_KEY` (cookie-import-only gate),
 **`CAMOFOX_ACCESS_KEY`** (global superkey — required on every route except
-`/health`/`/stop` once set; `lib/config.js:137`, `accessKeyMiddleware`
+`/health`, plus `/stop` and cookie/auth-session import when their dedicated
+keys are set; `lib/config.js:137`, `accessKeyMiddleware`
 `server.js:188`), `CAMOFOX_BIND_HOST`, `CAMOFOX_ENV_FILE` (optional env file —
 see below).
 
@@ -222,8 +223,11 @@ other tool. An env file is only *optional* convenience: both
 `start-camofox.sh` and `camofox.py` load the first existing of
 `$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env`, then fall back to plain
 environment variables. No implicit home dirs are searched. No key
-at all is fine — it just means unauthenticated mode (only an issue when the
-server runs `NODE_ENV=production`, where cookie import then 403s).
+at all is fine on a **guaranteed-loopback** server — it just means
+unauthenticated mode (loopback is trusted only outside `NODE_ENV=production`,
+and on Replit the proxy spoofs loopback, so ANY bound port is public and
+"no key" = open tabs routes for the whole world — see §"Exposing Camofox
+beyond localhost": `CAMOFOX_ACCESS_KEY` is mandatory there).
 
 The file is not key-only: it is loaded *before* any setting is read, so it can
 carry every variable below (`CAMOFOX_URL`, `CAMOFOX_ROOT`, `CAMOFOX_STATE_DIR`,
@@ -640,10 +644,12 @@ The adapter forwards the access key automatically (tool-contracts declare
 - `scripts/camofox_mcp_check.sh` — one-shot MCP handshake probe (the `.replit`
   "camofox mcp" workflow runs this; the stdio adapter alone idles forever).
 - `scripts/libpool.sh` — materializes the closure into the host-wide pool
-  `$REPL_HOME/.local/lib` (the dir pinned as `LD_LIBRARY_PATH` in
-  `.replit [userenv.shared]`) as symlinks, so EVERY consumer — camofox,
+  `$REPL_HOME/.local/lib` (the dir the setup.sh rc block prepends to
+  `LD_LIBRARY_PATH`; commonly *also* pinned by hand in
+  `.replit [userenv.shared]` — setup.sh does not write that key) as symlinks, so EVERY consumer — camofox,
   Hermes' staged node, any native addon — can dlopen GTK/ALSA/etc, not just
-  the server. Called automatically by start-camofox.sh (step 4b); run it
+  the server. Called automatically by start-camofox.sh (step 3, with TXT/POOL
+  passed in); run it
   standalone only to refresh the pool without starting the server. First-wins
   on collisions, real files in the pool are never touched.
 - `camofox.env.example` — every tunable with its Camofox default.
