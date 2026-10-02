@@ -586,6 +586,86 @@ verify_sha256() {
   ok "$label verified (SHA256)"
 }
 
+# Hermes tool dirs on the user PATH (appended by write_bashrc AFTER the
+# managed block, only when hermes was installed this run) ─────────────────────
+# Hermes stages its own tool binaries under $HERMES_HOME/tools/<name-ver>-
+# linux-x64[/bin] and injects those exact dirs into the agent process PATH.
+# Interactive shells saw a DIFFERENT node (Replit's nix nodejs-24 module)
+# than the one Hermes runs, which made `npm i -g` and version checks
+# confusing. This hook mirrors the agent's PATH set into the user rc so
+# shells and Hermes share one toolset.
+#
+# .replit is deliberately NOT touched: nodejs-24 / python3.13 keep installing
+# (the nix profile + pnpm/bun/yarn stay available as fallback). The block is
+# appended AFTER the managed toolchain block so its PREPENDS win PATH order
+# over both XDG_BIN_HOME (managed block prepends first) and the nix dirs.
+#
+# OUTSIDE the # >>> toolchain >>> markers on purpose: the managed block is
+# stripped+rewritten on every setup.sh run and rescue_tool_lines/
+# strip_tool_wiring only understand the guarded-line grammar — a lazy-glob
+# block inside it would be eaten or unrescued. With its own marker the block
+# is idempotent (grep guard) and survives every other rewrite; --clean hermes
+# drops it explicitly.
+write_hermes_tools_block() {
+  local TOOLS_DIR="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}/tools"
+  local HERMES_ROOT="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}"
+  local MARK='# >>> hermes-tools >>>'
+  [[ -d "$TOOLS_DIR" ]] || { skip "no $TOOLS_DIR — PM tools not staged, PATH hook not written"; return 0; }
+  mkdir -p "$(dirname "$BASHRC")"; [[ -f "$BASHRC" ]] || : > "$BASHRC"
+  grep -qF "$MARK" "$BASHRC" && { ok "hermes-tools PATH block already in $BASHRC"; return 0; }
+  local rc_tmp; rc_tmp="$(mktemp)"
+  cat "$BASHRC" > "$rc_tmp"
+  cat >> "$rc_tmp" <<RC
+
+$MARK
+# Hermes tool dirs — appended by scripts/setup.sh (--hermes). Mirrors the
+# agent process PATH into interactive shells: same node/npm/gh/ffmpeg/rg/
+# uv/tirith/python 3.14 + the hermes launcher, so user and Hermes run ONE
+# toolset. .replit stays as-is (nodejs-24 / python3.13 modules remain
+# installed as the nix-profile fallback); these dirs are PREPENDED after the
+# toolchain block so they win PATH order.
+# Globbing is LAZY: every dir is re-resolved (newest version via sort -V) on
+# each shell start, so 'hermes update' swapping versions needs no rc rewrite
+# and a stale pinned path can never break an existing PATH.
+# Prepend order reproduces the agent's own PATH (agent-browser ... node ...
+# venv, .hermes/bin first): visit in reverse, prepend each. Duplication is
+# bounded (once per shell start). Remove hermes: 'setup.sh --clean hermes'
+# or delete this block (between the markers).
+for sub in \\
+    'agent-browser-*/bin' 'bws-*' 'cua-driver-*' 'ffmpeg-*/bin' 'gh-*/bin' \\
+    'node-*/bin' 'npm-*/bin' 'python-*/bin' 'ripgrep-*' 'tirith-*' 'uv-*'; do
+  d="\$(ls -d "$TOOLS_DIR"/\$sub 2>/dev/null | sort -V | tail -1)"
+  [[ -n "\$d" && -d "\$d" ]] || continue
+  export PATH="\$d:\$PATH"
+done
+[[ -d "$HERMES_ROOT/hermes-agent/.hermes/bin" ]] && export PATH="$HERMES_ROOT/hermes-agent/.hermes/bin:\$PATH"
+hvenv="\$(ls -d "$HERMES_ROOT"/hermes-agent/venv/bin "$HERMES_ROOT"/installs/*/environments/*/venv/bin 2>/dev/null | head -1)"
+[[ -n "\$hvenv" ]] && export PATH="\$hvenv:\$PATH"
+# <<< hermes-tools <<<
+RC
+  if ! bash -n "$rc_tmp" 2>/dev/null; then
+    rm -f "$rc_tmp"
+    warn "hermes-tools block failed 'bash -n' — $BASHRC left untouched"
+    return 0
+  fi
+  cat "$rc_tmp" > "$BASHRC"
+  rm -f "$rc_tmp"
+  ok "hermes-tools PATH block appended to $BASHRC"
+}
+
+# Drop the hermes-tools rc block. Marker-balanced strip (same awk idiom as
+# strip_rc_block, own markers); safe when the block is absent.
+strip_hermes_tools() {
+  local f="$1"
+  [[ -f "$f" ]] || return 0
+  grep -qF '# >>> hermes-tools >>>' "$f" || return 0
+  local tmp; tmp="$(mktemp)"
+  awk '/^# >>> hermes-tools >>>/{s=1} s{ if(/^# <<< hermes-tools <<</) s=0; next } {print}' "$f" > "$tmp"
+  cat "$tmp" > "$f"
+  rm -f "$tmp"
+  ok "hermes-tools PATH block stripped from $f"
+}
+
 usage() {
   cat <<USAGE
 Usage: bash scripts/setup.sh [options]
@@ -611,6 +691,9 @@ Options:
   -ol, --ollama         Install Ollama (LLM runtime) into XDG_DATA_HOME/ollama
   -cl, --claude         Install Claude Code coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
   -ha, --hermes         Install Hermes Agent assistant (curl -fsSL \$HERMES_INSTALL_URL, into \$HERMES_HOME)
+                        Also mirrors \$HERMES_HOME/tools onto the shell PATH
+                        (hermes-tools rc block) so user shells run the same
+                        node/python/gh/... as the Hermes agent
   -ori, --openrouterai  Install ORI coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
   --rclone              Install rclone (static binary from downloads.rclone.org into XDG_BIN_HOME)
   --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
@@ -944,6 +1027,14 @@ write_bashrc() {
     ok "shell rc updated: $BASHRC (toolchain block appended at bottom)"
   else
     ok "shell rc updated: $BASHRC (minimal PATH block appended at bottom)"
+  fi
+
+  # Hermes-only hook: mirror $HERMES_HOME/tools onto the user PATH, OUTSIDE
+  # and AFTER the managed block (own markers — see the function comment).
+  # Runs only when hermes was (re)installed this run; idempotent via its
+  # marker grep, so repeat installs don't stack blocks.
+  if $INSTALL_HERMES; then
+    write_hermes_tools_block
   fi
 }
 
@@ -2433,6 +2524,7 @@ clean() {
       if [[ -f "$BASHRC" ]]; then
         strip_rc_block "$BASHRC"
         ok "Stripped managed block from $BASHRC"
+        strip_hermes_tools "$BASHRC"
       fi
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       # Only replit mode ever wrote a userenv block — don't touch .replit
@@ -2467,6 +2559,9 @@ clean() {
         oc) wire_label=opencode ;;
       esac
       [[ -f "$BASHRC" ]] && strip_tool_wiring "$wire_label" "$BASHRC"
+      # The hermes-tools rc block lives OUTSIDE the managed block (own
+      # markers), so strip_tool_wiring can't see it — drop it explicitly.
+      [[ "$wire_label" == hermes ]] && strip_hermes_tools "$BASHRC"
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       [[ "$REPLIT_MODE" == true && -f "$replit_file" ]] && strip_userenv_keys "$wire_label" "$replit_file"
       case "$CLEAN_TARGET" in
@@ -2498,6 +2593,7 @@ clean() {
       # interpreter; clean_uv deletes uv, the fallback source), then remove
       # the ticked binaries + payload.
       [[ -f "$BASHRC" ]] && strip_tool_wiring "${CLEAN_TOOLS[*]}" "$BASHRC"
+      [[ " ${CLEAN_TOOLS[*]} " == *" hermes "* ]] && strip_hermes_tools "$BASHRC" || true
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       [[ "$REPLIT_MODE" == true && -f "$replit_file" ]] && strip_userenv_keys "${CLEAN_TOOLS[*]}" "$replit_file"
       local label
