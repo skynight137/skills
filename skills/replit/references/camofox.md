@@ -637,6 +637,8 @@ The adapter forwards the access key automatically (tool-contracts declare
 - `scripts/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
   (called by start-camofox.sh; usable standalone with an output path).
 - `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
+- `scripts/camofox_mcp_check.sh` — one-shot MCP handshake probe (the `.replit`
+  "camofox mcp" workflow runs this; the stdio adapter alone idles forever).
 - `scripts/libpool.sh` — materializes the closure into the host-wide pool
   `$REPL_HOME/.local/lib` (the dir pinned as `LD_LIBRARY_PATH` in
   `.replit [userenv.shared]`) as symlinks, so EVERY consumer — camofox,
@@ -660,6 +662,13 @@ Edit the repo copy, `cp` the changed files into the deployed copy, then verify
 with `diff -q` per file — a copy that silently no-ops looks identical to a
 successful one. Commit in the repo, and bump the `version:` in the frontmatter
 when behaviour changes.
+
+`$REPL_HOME/scripts/` is a **pure symlink farm** into this skill's `scripts/`
+(one symlink per script, absolute) — `.replit` workflows invoke
+`bash scripts/<name>` from there, so any edit here is instantly live for the
+workflows; no copy step. Re-sync after adding/removing scripts:
+`rm -rf $REPL_HOME/scripts && mkdir $REPL_HOME/scripts && for f in $HERMES_HOME/skills/replit/scripts/*; do ln -s "$f" $REPL_HOME/scripts/; done`
+(non-skill local scripts live in `$REPL_HOME/.local/scripts/`, never mixed in).
 
 Running any script in this skill writes `scripts/__pycache__/`; the repo has no
 `.gitignore`, so `git status` shows it as untracked noise. It is not tracked —

@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.4.0
+version: 4.5.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -61,6 +61,10 @@ PM-staged node needing libatomic): `references/hermes-on-replit.md`.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
 - `generate-closure.sh` / `libpool.sh` — transitive lib closure + shared pool.
+- `camofox_mcp_check.sh` — one-shot MCP health probe (waits for REST, runs a
+  real stdio handshake, asserts the 11 `camofox_*` tools; exit 0 = live). Used
+  by the `.replit` "camofox mcp" workflow — the adapter itself is stdio-only,
+  running it standalone just idles forever.
 - `ensure_browser.sh` — idempotent CDP launcher for the bundled Chromium.
 - `monitor.sh` / `browser_monitor.py` — opt-in :5000 screenshot relay.
 
