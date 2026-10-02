@@ -272,6 +272,7 @@ INSTALL_ARIA2=false
 INSTALL_FFMPEG=false
 INSTALL_ALL=false
 DOCTOR=false
+FIX=false
 CLEAN=false
 LIST_STATE=false
 YES=false
@@ -604,17 +605,25 @@ verify_sha256() {
 # stripped+rewritten on every setup.sh run and rescue_tool_lines/
 # strip_tool_wiring only understand the guarded-line grammar — a lazy-glob
 # block inside it would be eaten or unrescued. With its own marker the block
-# is idempotent (grep guard) and survives every other rewrite; --clean hermes
-# drops it explicitly.
+# survives every other rewrite; --clean hermes drops it explicitly.
+# The block is REGENERATED in place (strip + append) rather than skipped when
+# present: write_bashrc always appends the managed block at the END, so a
+# stale guard would leave this block ABOVE the toolchain block and silently
+# flip PATH precedence (later prepends win). Regenerating keeps it last and
+# lets manual marker edits (e.g. dropping a tool dir from the glob list)
+# survive exactly one run — documented behavior: edit setup.sh, don't
+# hand-edit between the markers.
 write_hermes_tools_block() {
   local TOOLS_DIR="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}/tools"
   local HERMES_ROOT="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}"
   local MARK='# >>> hermes-tools >>>'
   [[ -d "$TOOLS_DIR" ]] || { skip "no $TOOLS_DIR — PM tools not staged, PATH hook not written"; return 0; }
   mkdir -p "$(dirname "$BASHRC")"; [[ -f "$BASHRC" ]] || : > "$BASHRC"
-  grep -qF "$MARK" "$BASHRC" && { ok "hermes-tools PATH block already in $BASHRC"; return 0; }
   local rc_tmp; rc_tmp="$(mktemp)"
-  cat "$BASHRC" > "$rc_tmp"
+  # copy of current rc minus any existing marker block (awk swallows the
+  # block INCLUDING both marker lines; outer file otherwise untouched)
+  awk '/^# >>> hermes-tools >>>/{s=1} s{ if(/^# <<< hermes-tools <<</) s=0; next } {print}' \
+    "$BASHRC" > "$rc_tmp"
   cat >> "$rc_tmp" <<RC
 
 $MARK
@@ -643,13 +652,19 @@ hvenv="\$(ls -d "$HERMES_ROOT"/hermes-agent/venv/bin "$HERMES_ROOT"/installs/*/e
 [[ -n "\$hvenv" ]] && export PATH="\$hvenv:\$PATH"
 # <<< hermes-tools <<<
 RC
-  if ! bash -n "$rc_tmp" 2>/dev/null; then
-    rm -f "$rc_tmp"
+  # Squeeze blank runs to one: every rewriter above (write_bashrc's strip +
+  # append, this function's strip + append) leaves a separator at its seam,
+  # and un-squeezed those blanks accumulate two per run forever. Collapsing
+  # runs makes the rc a fixed point: re-running --fix changes nothing.
+  local rc_sq; rc_sq="$(mktemp)"
+  awk 'BEGIN{b=0} /^$/{b++; next} {if(b>0) print ""; b=0; print} END{if(b>0) print ""}' "$rc_tmp" > "$rc_sq"
+  if ! bash -n "$rc_sq" 2>/dev/null; then
+    rm -f "$rc_tmp" "$rc_sq"
     warn "hermes-tools block failed 'bash -n' — $BASHRC left untouched"
     return 0
   fi
-  cat "$rc_tmp" > "$BASHRC"
-  rm -f "$rc_tmp"
+  cat "$rc_sq" > "$BASHRC"
+  rm -f "$rc_tmp" "$rc_sq"
   ok "hermes-tools PATH block appended to $BASHRC"
 }
 
@@ -664,6 +679,183 @@ strip_hermes_tools() {
   cat "$tmp" > "$f"
   rm -f "$tmp"
   ok "hermes-tools PATH block stripped from $f"
+}
+
+# Repair mode: re-apply wiring without reinstalling tools (--fix) ────────────
+# Normal flow is delete+reinstall (write_bashrc regenerates the managed
+# block from what installers register). --fix instead DERIVES the same
+# registrations from the payloads already on disk, then calls the regular
+# writers — so it repairs exactly what the user cares about without touching
+# a single binary:
+#   - $BASHRC managed toolchain block (PATH dirs + tool vars, rescue merge
+#     preserves operator edits and unrelated tool lines),
+#   - the hermes-tools PATH block (only when $HERMES_HOME/tools exists),
+#   - .replit [userenv.shared] keys (existing keys re-set to canonical
+#     values; keys of tools NOT installed are left alone — never resurrected),
+#   - the workflow shim + REPLIT_BASHRC pin (unconditional in replit mode),
+#   - $HOME/.profile (ephemeral dir — Replit's own template is recreated +
+#     toolchain PATH lines appended; makes login/ssh shells self-contained),
+#   - hermes config terminal.shell_init_files (~/.profile + $REPLIT_BASHRC —
+#     makes Hermes terminal/cron shells source the same chain),
+#   - durable libatomic (cheap no-op once in place).
+# Bare --fix also prints the doctor report after repairing; --doctor --fix
+# reports first, then repairs.
+fix_derive_wiring() {
+  # PATH dirs must mirror the installer registrations exactly (same order),
+  # because write_bashrc rewrites the whole block and rescue re-adds existing
+  # lines after them — any deviation duplicates entries in every shell.
+  if [[ -d "$SDK" ]]; then
+    record_tool_env_vars JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS
+    record_tool_path_dirs "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
+  fi
+  if [[ -d "$XDG_DATA_HOME/uv" ]]; then
+    record_tool_env_vars UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH
+    record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
+  # node payload marker: install_node extracts the official tarball, whose
+  # bin/node is the load-bearing artifact (no VERSION file is written).
+  # Do NOT gate on an inherited npm_config_prefix — Replit's platform sets
+  # it on EVERY repl, so it would resurrect node wiring where our payload
+  # never landed.
+  if [[ -x "$NODE_DIR/bin/node" ]]; then
+    record_tool_env_vars NODE_DIR npm_config_prefix
+    record_tool_path_dirs "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
+  fi
+  if [[ -x "$XDG_BIN_HOME/opencode" ]]; then
+    record_tool_env_vars OPENCODE_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
+  if [[ -x "$XDG_BIN_HOME/ollama" ]]; then
+    record_tool_env_vars OLLAMA_INSTALL_DIR OLLAMA_MODELS; record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
+  if [[ -x "$XDG_BIN_HOME/claude" ]]; then
+    record_tool_env_vars CLAUDE_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
+  # Mirror install_hermes' registration exactly (XDG_BIN_HOME only — the
+  # seed's REPL_HOME entry is an ownership label, not an emitted PATH dir).
+  if [[ -d "$HERMES_HOME" ]]; then
+    record_tool_env_vars HERMES_HOME; record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
+  if [[ -x "$XDG_BIN_HOME/ori" ]]; then
+    record_tool_env_vars ORI_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
+  local b
+  for b in rclone qbittorrent-nox aria2c ffmpeg; do
+    [[ -x "$XDG_BIN_HOME/$b" ]] && record_tool_path_dirs "$XDG_BIN_HOME"
+  done
+  return 0
+}
+
+# Merge helper: keep existing keys, but correct values of keys ALREADY
+# present (a drifted REPLIT_BASHRC pin / stale HERMES_HOME path gets
+# rewritten; absent keys of uninstalled tools are NOT added).
+fix_reanchor_existing_keys() {
+  local replit_file="$REPL_HOME/.replit"
+  [[ "$REPLIT_MODE" == true && -f "$replit_file" && -w "$replit_file" ]] || return 0
+  local var
+  for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"}; do
+    if grep -qE "^${var}[[:space:]]*=" "$replit_file"; then
+      _PRESET_ENV["$var"]="${!var}"
+    fi
+  done
+}
+
+fix_profile() {
+  local p="$HOME/.profile"
+  [[ -f "$p" ]] || cat > "$p" <<'EOF'
+# ~/.profile: executed by the command interpreter for login shells.
+# Recreated by scripts/setup.sh (--fix) — Replit's /etc/skel template lives
+# on ephemeral $HOME; the toolchain lines below are the managed part.
+
+if [ -n "$BASH_VERSION" ]; then
+    if [ -f "$HOME/.bashrc" ]; then
+	. "$HOME/.bashrc"
+    fi
+fi
+EOF
+  grep -qF '>>> toolchain-profile >>>' "$p" && { ok "toolchain lines already in $p"; return 0; }
+  local tmp; tmp="$(mktemp)"
+  cat "$p" > "$tmp"
+  {
+    echo ""
+    echo "# >>> toolchain-profile >>> (managed by scripts/setup.sh --fix)"
+    echo "export WORKSPACE=\"$WORKSPACE\""
+    local vars=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_BIN_HOME HERMES_HOME JAVA_HOME ANDROID_HOME)
+    local v
+    for v in "${vars[@]}"; do printf 'export %s="%s"\n' "$v" "${!v}"; done
+    echo "export PATH=\"$XDG_BIN_HOME:\$PATH\""
+    local dirs=() d
+    [[ -d "$SDK" ]] && dirs+=("$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools")
+    [[ -x "$NODE_DIR/bin/node" ]] && dirs+=("$NODE_DIR/bin")
+    for d in "${dirs[@]+"${dirs[@]}"}"; do
+      printf 'case ":$PATH:" in *":%s:"*) ;; *) export PATH="%s:$PATH" ;; esac\n' "$d" "$d"
+    done
+    echo "# <<< toolchain-profile <<<"
+  } >> "$tmp"
+  if bash -n "$tmp" 2>/dev/null; then
+    cat "$tmp" > "$p"
+    ok "toolchain lines appended to $p"
+  else
+    warn "$p failed bash -n — left untouched"
+  fi
+  rm -f "$tmp"
+}
+
+fix_hermes_config() {
+  local cfg="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}/config.yaml"
+  # Parse the RAW yaml (hermes config get EXPANDS ${REPLIT_BASHRC} to its
+  # value, so a resolved-read can't prove the literal is stored). Accept
+  # either order of the two entries.
+  local raw=""
+  [[ -f "$cfg" ]] && raw="$(awk '
+    /^[[:space:]]*shell_init_files:/ {f=1; print; next}
+    f && /^[[:space:]]*-/             {print; next}
+    f                                 {exit}
+  ' "$cfg")"
+  if [[ "$raw" == *~/.profile* && "$raw" == *REPLIT_BASHRC* ]]; then
+    ok "hermes config terminal.shell_init_files already chained"
+    return 0
+  fi
+  if ! command -v hermes &>/dev/null; then
+    warn "hermes launcher not on PATH — set it by hand in $cfg: shell_init_files: [~/.profile, \${REPLIT_BASHRC}]"
+    return 0
+  fi
+  hermes config set terminal.shell_init_files '["~/.profile", "${REPLIT_BASHRC}"]' \
+    && ok "hermes config terminal.shell_init_files -> [~/.profile, \${REPLIT_BASHRC}]" \
+    || warn "hermes config set failed — edit $cfg by hand"
+}
+
+run_fix() {
+  step "Wiring repair (no tools deleted or reinstalled)"
+  local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
+
+  # --- 1. shell rc (managed toolchain block) ---
+  fix_derive_wiring
+  write_bashrc
+  # hermes-tools block: independent of installer registration; only when the
+  # PM staged tools (write_... itself is marker-idempotent).
+  [[ -d "$HERMES_HOME/tools" ]] && write_hermes_tools_block
+
+  # --- 2. .replit [userenv.shared] ---
+  if [[ "$REPLIT_MODE" == true && -f "$replit_file" && -w "$replit_file" ]]; then
+    local before after; before="$(md5sum "$replit_file")"
+    rescue_userenv_keys "$replit_file"
+    fix_reanchor_existing_keys
+    write_replit_env
+    after="$(md5sum "$replit_file")"
+    [[ "$before" == "$after" ]] && ok ".replit userenv already canonical (unchanged)"
+  fi
+
+  # --- 3. workflow shim + pin (unconditional in replit mode) ---
+  write_replit_bashrc
+
+  # --- 4. login-shell profile + hermes config chain ---
+  fix_profile
+  fix_hermes_config
+
+  # --- 5. durable libatomic (Hermes PM node needs it regardless) ---
+  ensure_libatomic
+
+  ok "wiring repair complete — open a new shell (or 'source $BASHRC') to load"
 }
 
 usage() {
@@ -700,10 +892,19 @@ Options:
   --aria2               Install aria2c (static musl binary from GitHub releases)
   --ffmpeg              Install FFmpeg (BtbN static GPL build: ffmpeg/ffprobe/ffplay)
   --doctor              Verify the toolchain (no install) — prints versions and flags
+  --fix                 Rewrite ALL wiring without deleting/reinstalling any
+                        tool: shell rc (toolchain block + hermes-tools block,
+                        when $HERMES_HOME/tools exists), .replit userenv keys,
+                        the workflow shim + REPLIT_BASHRC pin, ~/.profile,
+                        hermes config terminal.shell_init_files, and the
+                        durable libatomic. Reads installed payloads to
+                        resolve per-tool values; a tool that is NOT installed
+                        is not resurrected. Combine: --doctor --fix (report,
+                        then repair), or bare --fix (repair + report).
   --clean [target]      Remove installed toolchain artifacts.
                         Bare --clean / -c opens the CLEAN PICK-MENU (tick the
                         tools to remove). An explicit target skips the menu:
-                        `--clean all` (or `--clean --all`) removes everything;
+                        \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
                         claude|hermes|ori|rclone|qbt|aria2|ffmpeg removes one
                         tool. Flag-driven cleanup prompts for confirmation
@@ -746,6 +947,7 @@ parse_args() {
       --aria2)                  INSTALL_ARIA2=true ;;
       --ffmpeg)                 INSTALL_FFMPEG=true ;;
       --doctor)                  DOCTOR=true ;;
+      --fix)                     FIX=true ;;
       --list|--show)             LIST_STATE=true ;;
       -c|--clean)
         CLEAN=true
@@ -783,7 +985,7 @@ parse_args() {
      && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
-     && ! $DOCTOR && ! $LIST_STATE; then
+     && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi
 
@@ -994,8 +1196,8 @@ write_bashrc() {
   awk '
     $0 ~ /^# >>> toolchain >>>/ { inskip=1 }
     inskip { if ($0 ~ /^# <<< toolchain <<</) { inskip=0 }; next }
-    { lines[NR]=$0 }
-    END { n=NR; while (n>0 && lines[n]=="") n--; for (i=1;i<=n;i++) if (i in lines) print lines[i] }
+    /^$/ { blank++; next }
+    { if (NR>1 && blank>0) print ""; blank=0; print }
   ' "$BASHRC" > "$rc_trim"
   cat "$rc_trim" > "$BASHRC"
   rm -f "$rc_trim"
@@ -1373,7 +1575,7 @@ write_replit_env() {
 # Doctor (no-install self-check) ──────────────────────────────────────────────
 doctor() {
   step "Environment doctor"
-  local fail=0
+  local fail=0 wfail=0
   local name cmd ver
 
   check_tool() {
@@ -1382,7 +1584,11 @@ doctor() {
       ver="$("$cmd" --version 2>&1 | grep -v '^Picked up' | head -1)"
       ok "$name: $ver"
     else
-      warn "$name: NOT FOUND ($cmd)"
+      # NOT FOUND is an INSTALLATION state, not a wiring failure — --fix
+      # cannot make a never-installed tool appear. Tracked separately from
+      # the wiring checks below so the summary doesn't point at --fix for
+      # tools the operator deliberately skipped.
+      warn "$name: NOT FOUND ($cmd) — install it, or ignore if not used"
       fail=1
     fi
   }
@@ -1414,11 +1620,52 @@ doctor() {
     *) warn "XDG_BIN_HOME NOT on PATH (open a new shell)"; fail=1 ;;
   esac
 
-  if (( fail == 0 )); then
+  # --- wiring integrity (repairs: bash scripts/setup.sh --fix) ---
+  if [[ "$REPLIT_MODE" == true ]]; then
+    if [[ -f "${REPLIT_BASHRC_FILE:-}" ]]; then
+      ok "workflow shim: $REPLIT_BASHRC_FILE"
+    else
+      warn "workflow shim missing ($REPLIT_BASHRC_FILE) — run: bash scripts/setup.sh --fix"
+      wfail=1
+    fi
+  fi
+  if [[ -f "$BASHRC" ]] && grep -q '# >>> toolchain >>>' "$BASHRC"; then
+    ok "managed toolchain block in $BASHRC"
+  else
+    warn "no managed toolchain block in $BASHRC — run: bash scripts/setup.sh --fix"
+    wfail=1
+  fi
+  if [[ -d "$HERMES_HOME/tools" ]]; then
+    if [[ -f "$BASHRC" ]] && grep -qF '# >>> hermes-tools >>>' "$BASHRC"; then
+      ok "hermes-tools PATH block in $BASHRC"
+    else
+      warn "hermes-tools PATH block missing — run: bash scripts/setup.sh --fix"
+      wfail=1
+    fi
+  fi
+  if [[ -f "$HOME/.profile" ]] && grep -qF 'toolchain-profile' "$HOME/.profile"; then
+    ok "toolchain lines in ~/.profile"
+  else
+    warn "no toolchain lines in ~/.profile (login/ssh shells lack PATH) — run: bash scripts/setup.sh --fix"
+    wfail=1
+  fi
+  if [[ -f "${HERMES_HOME}/config.yaml" ]] \
+     && grep -A3 'shell_init_files:' "${HERMES_HOME}/config.yaml" | grep -q 'REPLIT_BASHRC'; then
+    ok "hermes config shell_init_files chained"
+  else
+    warn "hermes terminal shells don't source ~/.profile/\$REPLIT_BASHRC — run: bash scripts/setup.sh --fix"
+    wfail=1
+  fi
+
+  # Summary: installation gaps (missing tools) and wiring gaps get separate
+  # advice — --fix repairs wiring, only an install run brings back binaries.
+  if (( fail == 0 && wfail == 0 )); then
     ok "All checks passed"
   else
-    warn "Some checks failed — re-run: bash scripts/setup.sh"
+    (( wfail )) && warn "Wiring incomplete — repair with: bash scripts/setup.sh --fix"
+    (( fail )) && warn "Some tools missing — install them (or ignore if never installed)"
   fi
+  (( wfail )) && return 2
   return $fail
 }
 
@@ -2690,6 +2937,16 @@ main() {
 
   if $LIST_STATE; then
     list_state
+    exit 0
+  fi
+
+  # --fix: repair wiring WITHOUT deleting/reinstalling tools. --doctor --fix
+  # reports first then repairs; bare --fix repairs then reports. The doctor
+  # ALWAYS runs after run_fix as the post-repair verification pass.
+  if $FIX; then
+    if $DOCTOR; then doctor || true; fi
+    run_fix
+    doctor || true
     exit 0
   fi
 
