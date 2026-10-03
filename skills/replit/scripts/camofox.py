@@ -159,12 +159,30 @@ def convert(c):
     return out
 
 
+def ensure_shot_dir(out_dir):
+    """Create the --screenshot target dir, healing blockers: a wiped dir
+    (re-create), a broken SYMLINK or regular FILE at the path (makedirs
+    exist_ok=True raises on both — unlink/remove them first)."""
+    if os.path.islink(out_dir) and not os.path.isdir(out_dir):
+        os.unlink(out_dir)
+    elif os.path.exists(out_dir) and not os.path.isdir(out_dir):
+        os.remove(out_dir)
+    os.makedirs(out_dir, exist_ok=True)
+
+
 def import_cookies(key, user, cookie_path):
     cookies = json.load(open(cookie_path))
     r = req(key, "POST", f"/sessions/{user}/cookies",
-            {"cookies": [convert(c) for c in cookies]})
+            {"cookies": [convert(c) for c in cookies]}, timeout=60)
     if "_http_error" in r or "_error" in r:
-        print(f"import failed: {r}", file=sys.stderr)
+        # A timeout here is almost always the SERVER side: getSession()
+        # blocks on a browser whose juggler pipe is dead (health still says
+        # browserConnected:true while /tabs-style calls stall). The CLI
+        # cannot restart the server; say what to do instead of a bare dict.
+        hint = (" — server likely wedged (dead browser): check "
+                "`curl -s $CAMOFOX_URL/health` then restart start-camofox.sh"
+                if r.get("_error") == "timed out" else "")
+        print(f"import failed: {r}{hint}", file=sys.stderr)
         sys.exit(1)
     print(f"imported {r.get('count')} cookies -> user {user}")
 
@@ -238,11 +256,7 @@ def tool_screenshot(key, user, session, out_dir, full_page=True):
     # after a $HOME-wipe / scratch prune removes it mid-session. Note
     # exist_ok=True does NOT heal a broken SYMLINK (path 'exists', isdir
     # false) — unlink whatever blocks the dir path first.
-    if os.path.islink(out_dir) and not os.path.isdir(out_dir):
-        os.unlink(out_dir)
-    elif os.path.exists(out_dir) and not os.path.isdir(out_dir):
-        os.remove(out_dir)
-    os.makedirs(out_dir, exist_ok=True)
+    ensure_shot_dir(out_dir)
     tabs = cast(list, req(key, "GET", f"/tabs?userId={user}").get("tabs", []))
     if session:
         tabs = cast(list, [t for t in tabs if t.get("listItemId") == session])
@@ -337,6 +351,15 @@ def main():
     a = ap.parse_args()
 
     key = load_key(a.env)
+
+    # Create the screenshot target NOW, before cookie import / first open:
+    # those steps can fail (403) or hang (wedged server) and exit() before
+    # tool_screenshot() ever runs — the loop's per-call makedirs (4.6.2) only
+    # helps once screenshots are actually reached. A `ls shots/` in the
+    # failing run would otherwise say NoSuchFileOrDir even though the
+    # screenshot code is correct.
+    if a.screenshot:
+        ensure_shot_dir(a.screenshot)
 
     # listing sentinels: probe briefly so live-tab counts work if server is
     # up, but don't block list output on a slow/hung server.

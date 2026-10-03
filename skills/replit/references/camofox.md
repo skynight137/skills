@@ -577,6 +577,12 @@ Pitfalls found while wiring this (all verified live):
   `@askjo/camofox-browser-mcp` npx version still defaults to :9000, so set
   `CAMOFOX_BASE_URL` or `CAMOFOX_PORT` explicitly when the server lives
   elsewhere).
+- ⚠️ **Two dial variables, one per client — they are NOT interchangeable:**
+  the Python CLI (`camofox.py`) reads **`CAMOFOX_URL`**
+  (default `http://127.0.0.1:9377`, `camofox.py:80`); the MCP adapter reads
+  **`CAMOFOX_BASE_URL`** (`server.mjs:46`). Setting the wrong one is silent:
+  the client just talks to its own default. Remote-URL setups usually want
+  BOTH (CLI jar management on one side, agent tools on the other).
 - `/browser connect` + `browser.cdp_url` do NOT help: Camofox is
   Firefox/Juggler, not CDP. Don't point the CDP override at :9377/:9000.
 - Google search macro falls back to DuckDuckGo automatically
