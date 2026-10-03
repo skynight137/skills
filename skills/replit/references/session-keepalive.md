@@ -23,12 +23,15 @@ Two verified causes of that 500 on this box (Sep 2026):
    launches WITHOUT gtk-3. Camoufox dies with
    `XPCOMGlueLoad error ... libgtk-3.so.0: cannot open shared object file`, the
    lazy launch fails, and every session-creating call (incl. cookie import)
-   returns the masked 500 (classified `browser_launch_timeout`). Fix, in two
-   layers: (a) `scripts/libpool.sh` symlinks the whole closure into the pinned
-   pool dir `.local/lib` — host-wide, so Hermes' node and any other consumer get
-   the libs too; (b) start-camofox.sh now APPENDS the closure to a pre-set
-   `LD_LIBRARY_PATH` instead of skipping it, so hosts without the pool convention
-   still work (idempotent via a substring guard).
+   returns the masked 500 (classified `browser_launch_timeout`). Fix (v4.6.0):
+   start-camofox.sh APPENDS the closure to any pre-set `LD_LIBRARY_PATH`
+   (per-dir idempotent), so the server process always carries the GTK stack
+   regardless of what the pinned pool contains. (An earlier layer (a) —
+   libpool.sh symlinking the whole closure host-wide — was REMOVED:
+   LD_LIBRARY_PATH outranks RUNPATH, so pooled openssl-3.4.1/libcurl-8.14
+   copies shadowed the platform builds and broke curl with
+   `version OPENSSL_3.5.0 not found`; the pool is strictly additive now —
+   staged libatomic only. See libpool.sh header.)
 2. **Missing `camofox/.env`.** Cookie import is key-gated: with no
    `CAMOFOX_API_KEY` in the SERVER env it answers 403 in production (not 500) —
    write `$CAMOFOX_ROOT/.env` with the secret from `/run/replit/env/latest.json`

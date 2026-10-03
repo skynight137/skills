@@ -150,16 +150,18 @@ if ! closure_ok "$REPO/LD_LIBRARY_PATH.txt"; then
     echo "[provision] generating lib closure -> $REPO/LD_LIBRARY_PATH.txt"
     bash "$SKILL_DIR/scripts/generate-closure.sh" "$REPO/LD_LIBRARY_PATH.txt"
 fi
-# Also materialize the closure into the host-wide lib pool ($REPL_HOME/.local/lib,
-# the dir Replit users commonly pin as LD_LIBRARY_PATH in [userenv.shared]) so
-# EVERY consumer — other shells, Hermes' staged node, native addons — sees
-# GTK/ALSA too, not just this server's env. Idempotent + heals dangling links
-# after a store rebuild; cheap (symlinks only). Safe to skip via LIBPOOL_SKIP=1.
+# Also heal the host-wide lib pool ($REPL_HOME/.local/lib — the dir Replit
+# users commonly pin as LD_LIBRARY_PATH in [userenv.shared], and the rc block
+# always prepends): libpool.sh sweeps stale closure symlinks left by pre-4.6
+# versions and re-creates the staged lib's SONAME link after store GC. It no
+# longer materializes the closure host-wide — LD_LIBRARY_PATH outranks every
+# binary's RUNPATH, so pooled copies shadow platform builds (openssl/libcurl
+# breakage — see libpool.sh header). Idempotent, cheap. Skip via LIBPOOL_SKIP=1.
 if [[ "${LIBPOOL_SKIP:-0}" != "1" ]]; then
-    # Caller owns path truth (CAMOFOX_ROOT/CAMOFOX_REPO_DIR overrides): pass
-    # the resolved closure file + pool so libpool never re-derives defaults.
-    TXT="$REPO/LD_LIBRARY_PATH.txt" POOL="$CAMOFOX_HOME/.local/lib" \
-        bash "$SCRIPT_DIR/libpool.sh" || echo "[libpool] WARNING: pool refresh failed — server still gets the closure via LD_LIBRARY_PATH below" >&2
+    # Caller passes its resolved pool dir (CAMOFOX_HOME-derived); libpool
+    # sweeps + self-heals only, so the closure file is no longer its input.
+    POOL="$CAMOFOX_HOME/.local/lib" \
+        bash "$SCRIPT_DIR/libpool.sh" || echo "[libpool] WARNING: pool heal failed — server still gets the closure via LD_LIBRARY_PATH below" >&2
 fi
 # The closure is NOT optional even when the caller pinned LD_LIBRARY_PATH
 # (e.g. Replit `.replit [userenv.shared]`): Camoufox cannot start without

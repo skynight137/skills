@@ -1155,8 +1155,8 @@ ensure_libatomic() {
   fi
   if command -v ldconfig &>/dev/null \
      && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
-    # System loader resolves it — still prepend the pool: it holds more than
-    # libatomic (libpool.sh links GTK/ALSA/X11 there for every consumer).
+    # System loader resolves it — still prepend the pool dir: it is this
+    # function's staging target, and a lib staged there earlier must win.
     _ldpool_prepend "$target_dir"
     return 0
   fi

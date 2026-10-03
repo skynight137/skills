@@ -643,15 +643,15 @@ The adapter forwards the access key automatically (tool-contracts declare
 - `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
 - `scripts/camofox_mcp_check.sh` — one-shot MCP handshake probe (the `.replit`
   "camofox mcp" workflow runs this; the stdio adapter alone idles forever).
-- `scripts/libpool.sh` — materializes the closure into the host-wide pool
-  `$REPL_HOME/.local/lib` (the dir the setup.sh rc block prepends to
-  `LD_LIBRARY_PATH`; commonly *also* pinned by hand in
-  `.replit [userenv.shared]` — setup.sh does not write that key) as symlinks, so EVERY consumer — camofox,
-  Hermes' staged node, any native addon — can dlopen GTK/ALSA/etc, not just
-  the server. Called automatically by start-camofox.sh (step 3, with TXT/POOL
-  passed in); run it
-  standalone only to refresh the pool without starting the server. First-wins
-  on collisions, real files in the pool are never touched.
+- `scripts/libpool.sh` — heals the host-wide pool `$REPL_HOME/.local/lib`
+  (the dir the setup.sh rc block prepends to `LD_LIBRARY_PATH`; commonly
+  *also* pinned by hand in `.replit [userenv.shared]` — setup.sh does not
+  write that key). Since v4.6.0 it NO LONGER materializes the closure there:
+  LD_LIBRARY_PATH outranks RUNPATH, so pooled copies shadow platform builds
+  (the openssl/libcurl curl breakage — header has the story). It sweeps
+  stale closure symlinks left by older versions and recreates the staged
+  libatomic SONAME link after store GC. Called by start-camofox.sh step 3;
+  the camofox server gets the closure per-process via LD_LIBRARY_PATH.
 - `camofox.env.example` — every tunable with its Camofox default.
 - `references/session-keepalive.md`, `references/web-content-lanes.md`.
 
