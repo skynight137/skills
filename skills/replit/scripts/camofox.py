@@ -172,19 +172,49 @@ def ensure_shot_dir(out_dir):
     os.makedirs(out_dir, exist_ok=True)
 
 
+def diagnose_timeout():
+    """Probe /health and report what a hung request actually means, so the
+    user reads a conclusion instead of running curl themselves. Three states:
+      refused  -> server not running at all
+      /health also hangs -> whole server stuck (event loop blocked)
+      /health answers fast -> server alive but browser ops wedge (dead
+                              juggler; /health lies: browserConnected is a
+                              cached playwright flag, verified live)"""
+    try:
+        t0 = time.time()
+        with urllib.request.urlopen(CAMOFOX_URL + "/health", timeout=5) as resp:
+            h = json.loads(resp.read())
+        ms = int((time.time() - t0) * 1000)
+        return (f"[camofox] diagnosis: server {CAMOFOX_URL} answers /health in {ms}ms "
+                f"(browserRunning={h.get('browserRunning')}, "
+                f"activeSessions={h.get('activeSessions')}) but this request hung "
+                f"-> the browser's page channel is wedged (/health's flags are "
+                f"cached, not a real probe). Fix: restart the server — kill the "
+                f"'node server.js' process and re-run start-camofox.sh (or Stop/"
+                f"re-run its workflow).")
+    except urllib.error.HTTPError:
+        return (f"[camofox] diagnosis: server {CAMOFOX_URL} is up but /health "
+                f"returned an HTTP error.")
+    except (ConnectionRefusedError, OSError) as e:
+        if isinstance(e, ConnectionRefusedError) or "refused" in str(e).lower():
+            return (f"[camofox] diagnosis: connection refused on {CAMOFOX_URL} "
+                    f"-> the server is NOT running. Start it: bash scripts/start-camofox.sh")
+        return (f"[camofox] diagnosis: {CAMOFOX_URL} did not answer /health "
+                f"({e}) -> the server process is alive but its event loop is "
+                f"blocked; restart it (kill node server.js, re-run start-camofox.sh).")
+
+
 def import_cookies(key, user, cookie_path):
     cookies = json.load(open(cookie_path))
     r = req(key, "POST", f"/sessions/{user}/cookies",
             {"cookies": [convert(c) for c in cookies]}, timeout=60)
     if "_http_error" in r or "_error" in r:
-        # A timeout here is almost always the SERVER side: getSession()
-        # blocks on a browser whose juggler pipe is dead (health still says
-        # browserConnected:true while /tabs-style calls stall). The CLI
-        # cannot restart the server; say what to do instead of a bare dict.
-        hint = (" — server likely wedged (dead browser): check "
-                "`curl -s $CAMOFOX_BASE_URL/health` then restart start-camofox.sh"
-                if r.get("_error") == "timed out" else "")
-        print(f"import failed: {r}{hint}", file=sys.stderr)
+        print(f"import failed: {r}", file=sys.stderr)
+        # A timeout here is almost always server-side: the cookies handler
+        # opens a session and a wedged browser stalls it forever. Diagnose
+        # automatically rather than telling the user to go check.
+        if r.get("_error") == "timed out":
+            print(diagnose_timeout(), file=sys.stderr)
         sys.exit(1)
     print(f"imported {r.get('count')} cookies -> user {user}")
 
