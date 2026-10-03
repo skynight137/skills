@@ -18,7 +18,7 @@ Auth/config: the env file is loaded into the environment at import, BEFORE any
 setting is read, so EVERY Camofox variable can live in it — CAMOFOX_BASE_URL,
 CAMOFOX_ROOT, CAMOFOX_STATE_DIR, CAMOFOX_API_KEY, … not just the key. No agent
 framework required: only $CAMOFOX_ENV_FILE and $CAMOFOX_ROOT/.env are consulted
-(see default_env). CAMOFOX_URL is the legacy name for CAMOFOX_BASE_URL.
+(see default_env). The server URL is dialed via CAMOFOX_BASE_URL only.
 """
 import argparse, glob, json, os, sys, time, urllib.error, urllib.request
 from typing import cast
@@ -77,14 +77,9 @@ if ENV_FILE:
         os.environ.setdefault(_k, _v)
     del _k, _v
 
-# Canonical dial var is CAMOFOX_BASE_URL — same name the MCP adapter uses
-# (server.mjs). CAMOFOX_URL is the legacy alias, still honored, warns on use.
-CAMOFOX_URL = (os.environ.get("CAMOFOX_BASE_URL")
-               or os.environ.get("CAMOFOX_URL")
-               or "http://127.0.0.1:9377").rstrip("/")
-if "CAMOFOX_BASE_URL" not in os.environ and "CAMOFOX_URL" in os.environ:
-    print("camofox.py: WARNING: CAMOFOX_URL is deprecated, rename to "
-          "CAMOFOX_BASE_URL (matches the MCP adapter)", file=sys.stderr)
+# Canonical dial var (official MCP-adapter name, server.mjs:46). One name for
+# both clients; no legacy fallback — a wrong var just means the default.
+CAMOFOX_URL = os.environ.get("CAMOFOX_BASE_URL", "http://127.0.0.1:9377").rstrip("/")
 SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
             "unspecified": "Lax", "none": "None"}
 
@@ -187,7 +182,7 @@ def import_cookies(key, user, cookie_path):
         # browserConnected:true while /tabs-style calls stall). The CLI
         # cannot restart the server; say what to do instead of a bare dict.
         hint = (" — server likely wedged (dead browser): check "
-                "`curl -s $CAMOFOX_URL/health` then restart start-camofox.sh"
+                "`curl -s $CAMOFOX_BASE_URL/health` then restart start-camofox.sh"
                 if r.get("_error") == "timed out" else "")
         print(f"import failed: {r}{hint}", file=sys.stderr)
         sys.exit(1)

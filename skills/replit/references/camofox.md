@@ -577,13 +577,11 @@ Pitfalls found while wiring this (all verified live):
   `@askjo/camofox-browser-mcp` npx version still defaults to :9000, so set
   `CAMOFOX_BASE_URL` or `CAMOFOX_PORT` explicitly when the server lives
   elsewhere).
-- ✅ **Unified dial name (v4.7.0):** `CAMOFOX_BASE_URL` is canonical for BOTH
-  clients — the MCP adapter reads it natively (`server.mjs:46`), and
-  `camofox.py` now accepts it (`camofox.py` legacy fallback: `CAMOFOX_URL`
-  still works but prints a deprecation warning on stderr). Old trap —
-  `CAMOFOX_URL` (CLI) vs `CAMOFOX_BASE_URL` (MCP) being different names with
-  silent wrong-default fallbacks — no longer exists; set
-  `CAMOFOX_BASE_URL` everywhere.
+- ✅ **One dial name (v4.7.1):** `CAMOFOX_BASE_URL` for BOTH clients — the MCP
+  adapter reads it natively (`server.mjs:46`), `camofox.py` reads it directly
+  (`camofox.py:82`). No alias, no fallback: a stray `CAMOFOX_URL` is simply
+  ignored and the client dials its default — if something "won't work", check
+  the var name first.
 - `/browser connect` + `browser.cdp_url` do NOT help: Camofox is
   Firefox/Juggler, not CDP. Don't point the CDP override at :9377/:9000.
 - Google search macro falls back to DuckDuckGo automatically
