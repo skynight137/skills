@@ -1153,12 +1153,17 @@ ensure_libatomic() {
     fi
     warn "staged libatomic.so.1 does not match recorded hash — re-staging"
   fi
-  if command -v ldconfig &>/dev/null \
-     && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
-    # System loader resolves it — still prepend the pool dir: it is this
-    # function's staging target, and a lib staged there earlier must win.
-    _ldpool_prepend "$target_dir"
-    return 0
+  if command -v ldconfig &>/dev/null; then
+    # Trust but verify: a stale ldconfig cache or an i386-only entry also
+    # GREP positive while node's loader still fails ('cannot open shared
+    # object file' — measured on a repl where setup printed nothing here).
+    # Require the cached path to exist AND be an x86-64 ELF.
+    local _sys_la
+    _sys_la="$(ldconfig -p 2>/dev/null | grep 'libatomic\.so\.1' | head -1)"; _sys_la="${_sys_la##*=> }"
+    if [[ -n "$_sys_la" && -e "$_sys_la" ]] && _la_is_x86_64 "$_sys_la"; then
+      _ldpool_prepend "$target_dir"
+      return 0  # plain distro / NixOS: the system loader really resolves it
+    fi
   fi
   mkdir -p "$target_dir" 2>/dev/null || { warn "cannot create $target_dir — libatomic not staged"; return 0; }
   # -e (not compgen -G): a DANGLING symlink matches a glob but satisfies no
@@ -1774,10 +1779,12 @@ doctor() {
     warn "no managed toolchain block in $BASHRC — run: bash scripts/setup.sh --fix"
     wfail=1
   fi
-  # libatomic pool: the exact v4.5.1 failure class ('✓ staged' while node
+  # libatomic pool: the exact v4.5.x failure class ('✓ staged' while node
   # dies) is invisible to every other wiring check — verify the durable copy
-  # itself. Skip on boxes where the system loader already resolves it.
-  if command -v ldconfig &>/dev/null && ldconfig -p 2>/dev/null | grep -q 'libatomic\.so\.1'; then
+  # itself. Skip on boxes where the system loader really resolves it (same
+  # trust-but-verify as ensure_libatomic: cached path must exist + be x86-64).
+  _doc_la="$(command -v ldconfig &>/dev/null && ldconfig -p 2>/dev/null | grep 'libatomic\.so\.1' | head -1)"; _doc_la="${_doc_la##*=> }"
+  if [[ -n "$_doc_la" && -e "$_doc_la" ]] && file -L "$_doc_la" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'; then
     ok "libatomic resolved by the system loader"
   elif [[ -e "$WORKSPACE/.local/lib/libatomic.so.1" ]] \
      && file -L "$WORKSPACE/.local/lib/libatomic.so.1" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'; then
