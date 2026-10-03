@@ -91,6 +91,16 @@ export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"  # Camofox default: 6
 # down.
 export BROWSER_IDLE_TIMEOUT_MS="${BROWSER_IDLE_TIMEOUT_MS:-0}"  # Camofox default: 300000
 
+# RAM ceilings. Camofox defaults (MAX_SESSIONS=50, MAX_TABS_PER_SESSION=10,
+# MAX_TABS_GLOBAL=50, lib/config.js:150-152) are cloud-machine numbers; one
+# camoufox context costs ~100-300MB, so a handful of sessions OOM a small
+# repl (this fleet: 8G cgroups). Cap them; the server's own watchdog still
+# restarts the browser when native memory crosses NATIVE_MEM_RESTART_THRESHOLD_MB
+# (default 300, server-side guard — leave it). Raise these on a bigger box.
+export MAX_SESSIONS="${MAX_SESSIONS:-4}"                    # Camofox default: 50
+export MAX_TABS_PER_SESSION="${MAX_TABS_PER_SESSION:-3}"    # Camofox default: 10
+export MAX_TABS_GLOBAL="${MAX_TABS_GLOBAL:-8}"              # Camofox default: 50
+
 # Load secrets/config from an env file IF one exists. OPTIONAL — no agent
 # framework is involved. Resolution order, first existing wins:
 #   1. $CAMOFOX_ENV_FILE     explicit path
@@ -202,6 +212,27 @@ export LD_LIBRARY_PATH
 export CAMOFOX_ROOT
 export CAMOFOX_SKIP_DOWNLOAD=1
 (cd "$REPO" && npm_config_loglevel=error npm install --no-audit --no-fund --registry="https://registry.npmjs.org/")
+
+# 4b) guarantee the newPage timeout floor in camofox.config.json. The value is
+# file-only (lib/config.js:121 reads camofox.config.json, NO env override),
+# and a fresh clone resets it to the upstream 10000ms — too tight for Nix
+# repls where the first page after launch legitimately takes >10s cold
+# (geoip/fonts), turning healthy launches into 'new page retry timed out'.
+# Idempotent: only RAISES a lower value; an operator's higher number survives.
+_NEWPAGE_FLOOR="${NEW_PAGE_TIMEOUT_FLOOR:-30000}"
+(cd "$REPO" && NEW_PAGE_TIMEOUT_FLOOR="$_NEWPAGE_FLOOR" node -e '
+const fs=require("fs"),p="camofox.config.json";
+const j=JSON.parse(fs.readFileSync(p,"utf8"));
+const floor=Number(process.env.NEW_PAGE_TIMEOUT_FLOOR)||30000;
+const cur=Number(j.newPageTimeoutMs);
+if(!Number.isFinite(cur)||cur<floor){
+  j.newPageTimeoutMs=floor;
+  fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");
+  console.log("[start-camofox] camofox.config.json newPageTimeoutMs "+cur+" -> "+floor);
+} else {
+  console.log("[start-camofox] newPageTimeoutMs "+cur+" >= floor "+floor+" (untouched)");
+}')
+unset _NEWPAGE_FLOOR
 
 # 5) engine — ALWAYS run `npm run fetch-bin` (fixed step, no skip-guessing).
 # It is self-verifying: `camoufox-js fetch` compares the installed version
