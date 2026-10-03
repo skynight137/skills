@@ -234,6 +234,14 @@ def list_sessions(state, key):
 def tool_screenshot(key, user, session, out_dir, full_page=True):
     """Screenshot live tab(s) for user (optionally a specific session/group).
     Saves PNGs to out_dir as <user>__<session>[_<n>].png. Returns list of paths."""
+    # Re-assert the target dir on EVERY call: a --tools loop keeps running
+    # after a $HOME-wipe / scratch prune removes it mid-session. Note
+    # exist_ok=True does NOT heal a broken SYMLINK (path 'exists', isdir
+    # false) — unlink whatever blocks the dir path first.
+    if os.path.islink(out_dir) and not os.path.isdir(out_dir):
+        os.unlink(out_dir)
+    elif os.path.exists(out_dir) and not os.path.isdir(out_dir):
+        os.remove(out_dir)
     os.makedirs(out_dir, exist_ok=True)
     tabs = cast(list, req(key, "GET", f"/tabs?userId={user}").get("tabs", []))
     if session:
