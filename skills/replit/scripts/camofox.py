@@ -15,10 +15,10 @@ Modes (sentinel values):
 Cookies otherwise persist per --user on disk and auto-reload — omit to reuse.
 
 Auth/config: the env file is loaded into the environment at import, BEFORE any
-setting is read, so EVERY Camofox variable can live in it — CAMOFOX_URL,
+setting is read, so EVERY Camofox variable can live in it — CAMOFOX_BASE_URL,
 CAMOFOX_ROOT, CAMOFOX_STATE_DIR, CAMOFOX_API_KEY, … not just the key. No agent
 framework required: only $CAMOFOX_ENV_FILE and $CAMOFOX_ROOT/.env are consulted
-(see default_env).
+(see default_env). CAMOFOX_URL is the legacy name for CAMOFOX_BASE_URL.
 """
 import argparse, glob, json, os, sys, time, urllib.error, urllib.request
 from typing import cast
@@ -27,7 +27,7 @@ from typing import cast
 # --- config, resolved at import in dependency order ---------------------------
 # Order matters: the env file path can only be found from the AMBIENT env, so
 # that happens first; then the file is applied to os.environ; only then is the
-# server URL read. Otherwise a CAMOFOX_URL / CAMOFOX_ROOT set in the env file
+# server URL read. Otherwise a CAMOFOX_BASE_URL / CAMOFOX_ROOT set in the env file
 # would be ignored (the module constant would already hold the fallback).
 def _read_env_file(path):
     """Parse KEY=VALUE lines. Blank lines, comments, `export ` prefixes, and
@@ -77,7 +77,14 @@ if ENV_FILE:
         os.environ.setdefault(_k, _v)
     del _k, _v
 
-CAMOFOX_URL = os.environ.get("CAMOFOX_URL", "http://127.0.0.1:9377").rstrip("/")
+# Canonical dial var is CAMOFOX_BASE_URL — same name the MCP adapter uses
+# (server.mjs). CAMOFOX_URL is the legacy alias, still honored, warns on use.
+CAMOFOX_URL = (os.environ.get("CAMOFOX_BASE_URL")
+               or os.environ.get("CAMOFOX_URL")
+               or "http://127.0.0.1:9377").rstrip("/")
+if "CAMOFOX_BASE_URL" not in os.environ and "CAMOFOX_URL" in os.environ:
+    print("camofox.py: WARNING: CAMOFOX_URL is deprecated, rename to "
+          "CAMOFOX_BASE_URL (matches the MCP adapter)", file=sys.stderr)
 SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
             "unspecified": "Lax", "none": "None"}
 

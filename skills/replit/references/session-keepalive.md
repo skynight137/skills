@@ -38,10 +38,11 @@ Two verified causes of that 500 on this box (Sep 2026):
    (chmod 600; `camofox/` is gitignored) so both server and `camofox.py` find it
    without relying on platform env.
 
-Also note: this repl's server runs on **`:9000`** (Secret `CAMOFOX_PORT`), not the
-`:9377` default — the platform env snapshot carries `CAMOFOX_URL`, but a shell
-without it (or a probe hardcoding 9377) gets connection refused, which `camofox.py`
-reports as `_error`, not `_http_error`.
+Also note: this repl's workflow server runs on **`:9000`** (workflow env
+`CAMOFOX_PORT`), not the `:9377` default — clients dial `CAMOFOX_BASE_URL`
+(legacy name `CAMOFOX_URL`), and a shell without it (or a probe hardcoding
+9377) gets connection refused, which `camofox.py` reports as `_error`, not
+`_http_error`.
 
 ## The two reapers
 

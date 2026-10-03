@@ -230,7 +230,7 @@ and on Replit the proxy spoofs loopback, so ANY bound port is public and
 beyond localhost": `CAMOFOX_ACCESS_KEY` is mandatory there).
 
 The file is not key-only: it is loaded *before* any setting is read, so it can
-carry every variable below (`CAMOFOX_URL`, `CAMOFOX_ROOT`, `CAMOFOX_STATE_DIR`,
+carry every variable below (`CAMOFOX_BASE_URL`, `CAMOFOX_ROOT`, `CAMOFOX_STATE_DIR`,
 …). Note the two tools resolve precedence differently — see the config block
 further down before relying on an exported override.
 
@@ -383,19 +383,19 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   CLI exits with an actionable message instead of guessing a path.
   `start-camofox.sh` exports it, so the normal path always has it; a bare
   standalone invocation needs `CAMOFOX_ROOT` exported first.
-- ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_URL` (client dials) must
+- ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_BASE_URL` (client dials) must
   agree** — both default to `9377`, but setting only one silently splits them
   and every request fails with a connection error. If you move the port, set
   both (the env file is the right place — see `camofox.env.example`).
 - **The env file is loaded at import, before any setting is read**, so it can
-  carry *any* Camofox variable — `CAMOFOX_URL`, `CAMOFOX_ROOT`,
+  carry *any* Camofox variable — `CAMOFOX_BASE_URL`, `CAMOFOX_ROOT`,
   `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key. See
   `camofox.env.example` for a template.
   Python does not expand `$VAR` in strings — resolve with
   `os.environ.get("CAMOFOX_ENV_FILE")`, never a literal `$CAMOFOX_ENV_FILE`.
 - ⚠️ **Precedence differs between the two tools — verified, don't assume:**
   - `camofox.py` — **ambient env wins** over the file (`setdefault` merge), so
-    an exported `CAMOFOX_URL` overrides the file's value.
+    an exported `CAMOFOX_BASE_URL` overrides the file's value.
   - `start-camofox.sh` — **the file wins** over the ambient env: the script
     exports its own defaults *first* (`CAMOFOX_ROOT=…`, `CAMOFOX_PORT=…`,
     lines ~45-86), then sources the file with `set -a` (line ~97), which
@@ -577,12 +577,13 @@ Pitfalls found while wiring this (all verified live):
   `@askjo/camofox-browser-mcp` npx version still defaults to :9000, so set
   `CAMOFOX_BASE_URL` or `CAMOFOX_PORT` explicitly when the server lives
   elsewhere).
-- ⚠️ **Two dial variables, one per client — they are NOT interchangeable:**
-  the Python CLI (`camofox.py`) reads **`CAMOFOX_URL`**
-  (default `http://127.0.0.1:9377`, `camofox.py:80`); the MCP adapter reads
-  **`CAMOFOX_BASE_URL`** (`server.mjs:46`). Setting the wrong one is silent:
-  the client just talks to its own default. Remote-URL setups usually want
-  BOTH (CLI jar management on one side, agent tools on the other).
+- ✅ **Unified dial name (v4.7.0):** `CAMOFOX_BASE_URL` is canonical for BOTH
+  clients — the MCP adapter reads it natively (`server.mjs:46`), and
+  `camofox.py` now accepts it (`camofox.py` legacy fallback: `CAMOFOX_URL`
+  still works but prints a deprecation warning on stderr). Old trap —
+  `CAMOFOX_URL` (CLI) vs `CAMOFOX_BASE_URL` (MCP) being different names with
+  silent wrong-default fallbacks — no longer exists; set
+  `CAMOFOX_BASE_URL` everywhere.
 - `/browser connect` + `browser.cdp_url` do NOT help: Camofox is
   Firefox/Juggler, not CDP. Don't point the CDP override at :9377/:9000.
 - Google search macro falls back to DuckDuckGo automatically
