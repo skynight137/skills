@@ -14,7 +14,7 @@
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${2:-5000}"
 SCRIPT="$SCRIPT_DIR/browser_monitor.py"
-DATA_DIR="${CHROME_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/chromium/default}"
+DATA_DIR="${CHROME_DATA_DIR:-${XDG_DATA_HOME:-${REPL_HOME:-$HOME}/.local/share}/chromium/default}"
 PIDFILE="${MONITOR_PIDFILE:-$DATA_DIR/monitor.pid}"
 PY="${MONITOR_PYTHON:-python3}"
 

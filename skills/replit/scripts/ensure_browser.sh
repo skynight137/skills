@@ -18,7 +18,7 @@ set -euo pipefail
 
 # Defaults; override with env.
 PORT="${CHROME_PORT:-9222}"
-DATA_DIR="${CHROME_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/chromium/default}"
+DATA_DIR="${CHROME_DATA_DIR:-${XDG_DATA_HOME:-${REPL_HOME:-$HOME}/.local/share}/chromium/default}"
 LOG="${CHROME_LOG:-$DATA_DIR/chrome-boot.log}"
 
 # If the CDP port already answers, nothing to do.

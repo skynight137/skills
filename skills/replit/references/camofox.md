@@ -379,10 +379,11 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   with neither it uses plain environment variables. No implicit home dirs, no
   agent framework. No file and no key just means unauthenticated mode (fine
   unless `NODE_ENV=production`, which then 403s).
-- ⚠️ **`camofox.py` has NO fallback for `CAMOFOX_ROOT`** — if it is unset the
-  CLI exits with an actionable message instead of guessing a path.
-  `start-camofox.sh` exports it, so the normal path always has it; a bare
-  standalone invocation needs `CAMOFOX_ROOT` exported first.
+- ✅ **`camofox.py` falls back to the Replit-persistent root (v4.8.0):** with
+  `CAMOFOX_ROOT` unset it uses `${REPL_HOME:-$HOME}/camofox` — the exact rule
+  `start-camofox.sh` uses — so a bare invocation finds the provisioned tree
+  (state, cookies, `.env`) with zero exports. The old "exit with a message,
+  no guessing" behaviour forced every consumer to export the var first.
 - ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_BASE_URL` (client dials) must
   agree** — both default to `9377`, but setting only one silently splits them
   and every request fails with a connection error. If you move the port, set
@@ -404,9 +405,9 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   which tool reads it. Keep the file as the single source of truth and export
   overrides in the shell only when you intend them for `camofox.py` alone.
 - `--state DIR` default `$CAMOFOX_ROOT/state`: on-disk data dir
-  (cookies/profiles/traces); only list modes read it. `$CAMOFOX_ROOT` comes
-  from the environment (`start-camofox.sh` exports it); there is no built-in
-  fallback — if it is unset the CLI exits with a message rather than guessing.
+  (cookies/profiles/traces); only list modes read it. `$CAMOFOX_ROOT` resolves
+  from the environment, else the `${REPL_HOME:-$HOME}/camofox` fallback — never
+  a relative or guessed-wrong path.
 - Full flag set: `--cookies --user --session --tools --url --interval` +
   `--screenshot --full-page --wait --env --state`. `--user list` /
   `--session list` are listing sentinels; a bare invocation prints both.

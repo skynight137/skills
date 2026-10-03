@@ -41,8 +41,8 @@ SKILL_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 # unconditionally, so an unset var kills them mid-install. Replit always sets the
 # XDG_* vars itself; these fallbacks cover other machines. Independent of
 # CAMOFOX_ROOT — the root no longer lives under XDG.
-export XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-${REPL_HOME:-$HOME}/.local/share}"
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-${REPL_HOME:-$HOME}/.config}"
 
 # Replit: REPL_HOME is the persistent workspace dir (/home/runner/workspace).
 # $HOME (/home/runner) is NOT persistent — it is wiped on restart, so anything

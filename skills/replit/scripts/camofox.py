@@ -48,18 +48,19 @@ def _read_env_file(path):
 def default_env():
     """First EXISTING candidate wins, else None. The env file is OPTIONAL and
     no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop it
-    at $CAMOFOX_ROOT/.env. With neither, plain environment variables are used,
-    and no key at all just means unauthenticated mode.
+    at $CAMOFOX_ROOT/.env (with no CAMOFOX_ROOT exported, the same
+    ${REPL_HOME:-$HOME}/camofox default as default_root()/start-camofox.sh —
+    so a bare invocation on Replit auto-discovers the env file). With neither,
+    plain environment variables are used, and no key at all just means
+    unauthenticated mode.
 
-    Reads CAMOFOX_ROOT from the AMBIENT env only — it runs before the env file
-    is applied, and the file cannot point at itself. Guarded: with
-    CAMOFOX_ROOT unset, os.path.join('', '.env') is the RELATIVE path '.env',
-    which would silently load any .env in the current working directory.
-    """
-    root = os.environ.get("CAMOFOX_ROOT")
-    candidates = [os.environ.get("CAMOFOX_ENV_FILE")]
-    if root:
-        candidates.append(os.path.join(root, ".env"))
+    The root here is resolved from the AMBIENT env only — this runs before the
+    env file is applied, and the file cannot point at itself. The fallback is
+    an ABSOLUTE path, so no .env in an arbitrary CWD can be loaded."""
+    root = (os.environ.get("CAMOFOX_ROOT")
+            or os.path.join(os.environ.get("REPL_HOME") or os.path.expanduser("~"),
+                            "camofox"))
+    candidates = [os.environ.get("CAMOFOX_ENV_FILE"), os.path.join(root, ".env")]
     for p in candidates:
         if p and os.path.exists(p):
             return p
@@ -86,22 +87,20 @@ SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
 
 # --- path discovery (mirror start-camofox.sh) --------------------------------
 def default_root():
-    """$CAMOFOX_ROOT, or None when unset — no guessing. start-camofox.sh
-    computes it from $REPL_HOME (persistent) and exports it, so on Replit it is
-    always present; the None case is a real misconfiguration, and callers turn
-    it into an actionable error rather than inventing a path."""
-    return os.environ.get("CAMOFOX_ROOT") or None
+    """$CAMOFOX_ROOT, else the Replit-persistent default
+    ${REPL_HOME:-$HOME}/camofox — the exact rule start-camofox.sh uses, so a
+    bare invocation finds the provisioned tree without any exported vars.
+    On Replit $REPL_HOME (/home/runner/workspace) survives recreates; $HOME is
+    wiped, so it is only the off-Replit fallback."""
+    return (os.environ.get("CAMOFOX_ROOT")
+            or os.path.join(os.environ.get("REPL_HOME") or os.path.expanduser("~"),
+                            "camofox"))
 
 
 def default_state():
     if os.environ.get("CAMOFOX_STATE_DIR"):
         return os.environ["CAMOFOX_STATE_DIR"]
-    root = default_root()
-    if not root:
-        sys.exit("[camofox] CAMOFOX_ROOT is not set. Export it (e.g. "
-                 "CAMOFOX_ROOT=$REPL_HOME/camofox) or run start-camofox.sh, "
-                 "which sets it for you.")
-    return os.path.join(root, "state")
+    return os.path.join(default_root(), "state")
 
 
 # --- HTTP --------------------------------------------------------------------
