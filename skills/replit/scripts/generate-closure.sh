@@ -22,6 +22,10 @@
 #   keep every store path that ships a `lib/` dir, and EXCLUDE the
 #   base-image-provided families (glibc/gcc/libgcc/ncurses/readline/binutils) —
 #   stale nix copies shadow the base's newer libs and break Node itself.
+#   2026-10-05 regression proof: a hand-built closure that INCLUDED the nix
+#   glibc lib64 dir made `node -e "console.log('ok')"` die instantly with
+#   "*** stack smashing detected ***" (any node build, v26.7/v26.10). The
+#   exclusion list below is load-bearing, not cosmetic — keep it.
 #
 # Usage: generate-closure.sh <output-file>
 # Requirements: nix (nix-env or replit.nix rebuild), nixpkgs channel.

@@ -8,8 +8,10 @@
 #   3. lib closure             (fail loudly if the nix store has no GTK)
 #   4. npm install             (always runs; lockfile-pinned no-op when correct)
 #   5. fetch engine            (always runs; fetch-bin self-verifies —
-#                                up-to-date = no re-download, broken = repairs)
-#   6. exec node server.js     (port 8008)
+#                                up-to-date = no re-download, broken = repairs;
+#                                --no-fetch-bin / CAMOFOX_SKIP_FETCH=1 skips
+#                                it when the engine is present-verified)
+#   6. exec node server.js     (port 9377 unless CAMOFOX_PORT overrides)
 #
 # ONE directory holds everything (uv-style, under $REPL_HOME on Replit):
 #   ${REPL_HOME:-$HOME}/camofox/
@@ -36,6 +38,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SKILL_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+
+# --- flags -------------------------------------------------------------------
+# --no-fetch-bin: skip step 5 (engine fetch) when the engine is already
+# provisioned. The fetch self-verifies and normally no-ops on binaries, but
+# it ALWAYS re-downloads the 63.9MB GeoIP DB (~10s), which the server never
+# uses at geoip:false launches. Skipping is guarded: a missing/partial
+# engine still fails fast. Env equivalent: CAMOFOX_SKIP_FETCH=1.
+SKIP_FETCH_BIN="${CAMOFOX_SKIP_FETCH:-0}"
+for _arg in "$@"; do
+    case "$_arg" in
+        --no-fetch-bin) SKIP_FETCH_BIN=1 ;;
+        -h|--help) echo "usage: start-camofox.sh [--no-fetch-bin]  (env: CAMOFOX_SKIP_FETCH=1)"; exit 0 ;;
+        *) echo "[start-camofox] NOTE: ignoring unknown arg '$_arg' (env overrides still apply)" >&2 ;;
+    esac
+done
+unset _arg
 
 # nix-wrapped tools (npx) run `set -o nounset` and dereference ${XDG_CONFIG_HOME}
 # unconditionally, so an unset var kills them mid-install. Replit always sets the
@@ -218,12 +236,15 @@ export CAMOFOX_SKIP_DOWNLOAD=1
 # and a fresh clone resets it to the upstream 10000ms — too tight for Nix
 # repls where the first page after launch legitimately takes >10s cold
 # (geoip/fonts), turning healthy launches into 'new page retry timed out'.
+# 2026-10-05: floor raised 30000 -> 60000 after a live incident where 30000-
+# class budgets still timed out on a cold Nix repl (proven: with 60000 the
+# identical stack served open/evaluate/snapshot/close end-to-end in ~5s/tab).
 # Idempotent: only RAISES a lower value; an operator's higher number survives.
-_NEWPAGE_FLOOR="${NEW_PAGE_TIMEOUT_FLOOR:-30000}"
+_NEWPAGE_FLOOR="${NEW_PAGE_TIMEOUT_FLOOR:-60000}"
 (cd "$REPO" && NEW_PAGE_TIMEOUT_FLOOR="$_NEWPAGE_FLOOR" node -e '
 const fs=require("fs"),p="camofox.config.json";
 const j=JSON.parse(fs.readFileSync(p,"utf8"));
-const floor=Number(process.env.NEW_PAGE_TIMEOUT_FLOOR)||30000;
+const floor=Number(process.env.NEW_PAGE_TIMEOUT_FLOOR)||60000;
 const cur=Number(j.newPageTimeoutMs);
 if(!Number.isFinite(cur)||cur<floor){
   j.newPageTimeoutMs=floor;
@@ -234,19 +255,36 @@ if(!Number.isFinite(cur)||cur<floor){
 }')
 unset _NEWPAGE_FLOOR
 
-# 5) engine — ALWAYS run `npm run fetch-bin` (fixed step, no skip-guessing).
-# It is self-verifying: `camoufox-js fetch` compares the installed version
-# against the pinned one and prints "Camoufox binaries up to date!" without
-# re-downloading (~2s), re-fetches only on a version bump, and repairs a
-# partial/broken engine dir. Never guard it on marker files — a partial
-# engine passes any marker check but still fails to launch.
+# 5) engine — ALWAYS run `npm run fetch-bin` (fixed step, no skip-guessing),
+# unless --no-fetch-bin / CAMOFOX_SKIP_FETCH=1. It is self-verifying:
+# `camoufox-js fetch` compares the installed version against the pinned one
+# and prints "Camoufox binaries up to date!" without re-downloading (~2s),
+# re-fetches only on a version bump, and repairs a partial/broken engine dir.
+# Never guard it on marker files — a partial engine passes any marker check
+# but still fails to launch. NOTE: even when the binaries are current, fetch
+# re-downloads the 63.9MB GeoIP DB every run (~10s here) — and the server
+# launches with geoip:false anyway. The skip flag is therefore safe ONLY with
+# a presence-verified engine; a missing/partial one still fetches (or dies
+# if skipping would boot a broken stack).
 export CAMOUFOX_INSTALL_DIR="$ENGINE"
 # camoufox-js honors playwright's skip flag by convention; a stray
 # PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD in the shell would leave the engine empty
 # and crash the server with "Version information not found".
 unset PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
 mkdir -p "$ENGINE"
-(cd "$REPO" && npm run fetch-bin)
+if [[ -x "$ENGINE/camoufox-bin" && -d "$ENGINE/browser" ]]; then
+    ENGINE_PRESENT=1
+else
+    ENGINE_PRESENT=0
+fi
+if [[ "$SKIP_FETCH_BIN" == 1 && "$ENGINE_PRESENT" == 1 ]]; then
+    echo "[start-camofox] engine present ($ENGINE) — skipping fetch-bin (--no-fetch-bin)"
+elif [[ "$SKIP_FETCH_BIN" == 1 ]]; then
+    echo "[error] --no-fetch-bin but engine is missing/partial: $ENGINE/camoufox-bin — run without the flag once to provision" >&2
+    exit 1
+else
+    (cd "$REPO" && npm run fetch-bin)
+fi
 
 # 6) server state + launch ----------------------------------------------------------
 # Upstream defaults live under $HOME/.camofox/ (wiped on recreate); anchor them
