@@ -3377,7 +3377,11 @@ SUMMARY
   fi
 }
 
-if ! bash -n "$0"; then
+# Syntax gate: resolve against SCRIPT_DIR, NOT "$0" — a top-level `cd "$WORKSPACE"`
+# runs above this, so a RELATIVE invocation (`bash setup.sh` from the scripts dir)
+# leaves "$0" unresolvable and the check false-positives 'syntax errors' on a
+# perfectly valid file. SCRIPT_DIR was captured before any cd.
+if ! bash -n "$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")"; then
   die "Script has syntax errors — refusing to run"
 fi
 
