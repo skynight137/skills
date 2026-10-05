@@ -105,8 +105,8 @@ done
 if [[ $SKIP_FETCH == 0 ]]; then
     echo "camofox.sh: installing @askjo/camofox-browser@latest"
     npm i -g --registry=https://registry.npmjs.org @askjo/camofox-browser@latest
-    echo "camofox.sh: fetching engine -> $CAMOUFOX_INSTALL_DIR"
-    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npx -y camoufox-js fetch
+    echo "camofox.sh: fetching engine (pkg-pinned release) -> $CAMOUFOX_INSTALL_DIR"
+    (cd "$PKG_DIR" && node lib/camoufox-download.js)
 fi
 
 # engine presence check for --skip-fetch-bin
