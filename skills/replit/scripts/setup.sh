@@ -45,6 +45,13 @@ ARIA2_RELEASE_BASE="https://github.com/abcfy2/aria2-static-build/releases/latest
 # ffmpeg: BtbN static GPL builds (newer than the Replit Nix-built ffmpeg 6.1.2).
 FFMPEG_RELEASE_BASE="https://github.com/BtbN/FFmpeg-Builds/releases/latest/download"
 
+# CLIProxyAPI (router-for-me) — OAuth CLI-subscription bridge (Claude Code /
+# Codex / Antigravity / Gemini CLI / Kimi / xAI → OpenAI+Claude+Gemini APIs).
+# Release asset name embeds the version (CLIProxyAPI_<N>_linux_amd64.tar.gz),
+# so the tarball URL comes from a resolved tag (see cliproxy_asset_name).
+CLIPROXY_REPO="router-for-me/CLIProxyAPI"
+CLIPROXY_RELEASE_BASE="https://github.com/router-for-me/CLIProxyAPI/releases"
+
 # AI agent
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 
@@ -185,6 +192,11 @@ OPENCODE_CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
 
 HERMES_HOME="${REPL_HOME:-$HOME}/.hermes"
 
+# CLIProxyAPI — persistent app dir under the workspace (its own config.yaml +
+# server.log live here). Matches the manual install layout at
+# $REPL_HOME/cli-proxy, so a pre-existing manual setup keeps working.
+CLIPROXY_HOME="${REPL_HOME:-$HOME}/cli-proxy"
+
 OLLAMA_INSTALL_DIR="$XDG_DATA_HOME/ollama"
 OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
 
@@ -259,6 +271,7 @@ seed_tool_wiring(){
   wire_tool qbt -- "$XDG_BIN_HOME"
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
+  wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
 }
 
 # State flags ───────────────────────────────────────────────────────────────
@@ -274,6 +287,7 @@ INSTALL_RCLONE=false
 INSTALL_QBT=false
 INSTALL_ARIA2=false
 INSTALL_FFMPEG=false
+INSTALL_CLIPROXY=false
 INSTALL_ALL=false
 DOCTOR=false
 FIX=false
@@ -333,6 +347,7 @@ _MENU_ITEMS=(
   "claude|Claude Code (AI Coding)"
   "hermes|Hermes (AI Agent)"
   "ori|ORI (AI Coding)"
+  "cliproxy|CLIProxyAPI (CLI OAuth → API: Codex/Claude/Antigravity)"
   "rclone|rclone (cloud storage sync)"
   "qbt|qBittorrent-nox (headless BitTorrent)"
   "aria2|aria2c (download utility)"
@@ -380,6 +395,7 @@ _status_init() {
     "qbt-nox|qbittorrent-nox"
     "aria2c|aria2c"
     "ffmpeg|ffmpeg"
+    "cliproxy|cli-proxy-api"
   )
   _STATUS_LINES=()
   for entry in "${TOOLS[@]}"; do
@@ -515,6 +531,7 @@ _menu_apply() {
       claude)   INSTALL_CLAUDE=true ;;
       hermes)   INSTALL_HERMES=true ;;
       ori)      INSTALL_ORI=true ;;
+      cliproxy) INSTALL_CLIPROXY=true ;;
       rclone)   INSTALL_RCLONE=true ;;
       qbt)      INSTALL_QBT=true ;;
       aria2)    INSTALL_ARIA2=true ;;
@@ -742,6 +759,12 @@ fix_derive_wiring() {
   if [[ -x "$XDG_BIN_HOME/ori" ]]; then
     record_tool_env_vars ORI_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
   fi
+  # CLIProxyAPI: the app dir is baked as an env var so login flags and the
+  # serve command can be run without repeating --config. The rc block prepends
+  # the dir too (the binary itself is symlinked into XDG_BIN_HOME).
+  if [[ -x "$CLIPROXY_HOME/cli-proxy-api" ]]; then
+    record_tool_env_vars CLIPROXY_HOME; record_tool_path_dirs "$XDG_BIN_HOME" "$CLIPROXY_HOME"
+  fi
   local b
   for b in rclone qbittorrent-nox aria2c ffmpeg; do
     [[ -x "$XDG_BIN_HOME/$b" ]] && record_tool_path_dirs "$XDG_BIN_HOME"
@@ -943,6 +966,15 @@ Options:
                         (hermes-tools rc block) so user shells run the same
                         node/python/gh/... as the Hermes agent
   -ori, --openrouterai  Install ORI coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
+  -cp, --cliproxy       Install CLIProxyAPI (CLIProxyAPI_<ver>_linux_<arch> release
+                        tarball, SHA256-verified against checksums.txt) into
+                        $CLIPROXY_HOME + 'cli-proxy-api' symlink on PATH.
+                        Bridges CLI OAuth subscriptions (Codex/Claude/Antigravity/
+                        Gemini CLI/Kimi/xAI) into OpenAI/Claude/Gemini APIs on
+                        port 8317. Existing config.yaml is NEVER overwritten.
+                        After install, log in accounts with:
+                          cli-proxy-api --config $CLIPROXY_HOME/config.yaml
+                          cli-proxy-api -codex-login -no-browser   # remote-safe
   --rclone              Install rclone (static binary from downloads.rclone.org into XDG_BIN_HOME)
   --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
   --aria2               Install aria2c (static musl binary from GitHub releases)
@@ -962,7 +994,7 @@ Options:
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
-                        claude|hermes|ori|rclone|qbt|aria2|ffmpeg removes one
+                        claude|hermes|ori|cliproxy|rclone|qbt|aria2|ffmpeg removes one
                         tool. Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
   --list, --show        Show current toolchain state (wired tools, binaries, env vars)
@@ -997,7 +1029,8 @@ parse_args() {
       -ol|--ollama)              INSTALL_OLLAMA=true ;;
       -cl|--claude)              INSTALL_CLAUDE=true ;;
       -ha|--hermes) 						 INSTALL_HERMES=true ;;
-      -ori|--openrouterai) 			 INSTALL_ORI=true ;;
+      -ori|--openrouterai) 		 INSTALL_ORI=true ;;
+      -cp|--cliproxy)           INSTALL_CLIPROXY=true ;;
       --rclone)                 INSTALL_RCLONE=true ;;
       --qbt)                    INSTALL_QBT=true ;;
       --aria2)                  INSTALL_ARIA2=true ;;
@@ -1040,7 +1073,7 @@ parse_args() {
   if ! $CLEAN && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
      && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
-     && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
+     && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi
@@ -1058,6 +1091,7 @@ parse_args() {
     INSTALL_QBT=true
     INSTALL_ARIA2=true
     INSTALL_FFMPEG=true
+    INSTALL_CLIPROXY=true
   fi
 }
 
@@ -1751,6 +1785,17 @@ doctor() {
   check_tool "qBittorrent-nox" "$XDG_BIN_HOME/qbittorrent-nox"
   check_tool "aria2c" "$XDG_BIN_HOME/aria2c"
   check_tool "FFmpeg" "$XDG_BIN_HOME/ffmpeg"
+  # CLIProxyAPI has NO --version flag: any unknown flag prints the version
+  # banner and exits 2, so the generic check_tool would report a false
+  # 'FAILED to run'. Probe the banner text instead of the exit code.
+  if [[ -x "$XDG_BIN_HOME/cli-proxy-api" || -x "$CLIPROXY_HOME/cli-proxy-api" ]]; then
+    local _cpa_bin="$XDG_BIN_HOME/cli-proxy-api"; [[ -x "$_cpa_bin" ]] || _cpa_bin="$CLIPROXY_HOME/cli-proxy-api"
+    local _cpa_out; _cpa_out="$("$_cpa_bin" --help 2>&1 | grep -m1 '^CLIProxyAPI Version' || true)"
+    if [[ -n "$_cpa_out" ]]; then ok "CLIProxyAPI: $_cpa_out"; else warn "CLIProxyAPI: present but did not print its version banner ($_cpa_bin)"; fail=1; fi
+  else
+    warn "CLIProxyAPI: NOT FOUND ($XDG_BIN_HOME/cli-proxy-api) — install with --cliproxy, or ignore if not used"
+    fail=1
+  fi
 
   if [[ -x "$WORKSPACE/gradlew" ]]; then
     ok "gradlew present"
@@ -2639,6 +2684,116 @@ install_ffmpeg() {
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
 }
 
+# ── CLIProxyAPI ──────────────────────────────────────────────────────────────
+# Bridges OAuth CLI subscriptions (Codex / Claude Code / Antigravity / Gemini
+# CLI / Kimi / xAI) into OpenAI + Claude + Gemini compatible APIs on :8317.
+# The release tarball's asset name embeds the version (no versionless
+# "latest" alias), so the tag is resolved from the GitHub API; checksums.txt
+# is published per release and the tarball is verified against it.
+# Layout: $CLIPROXY_HOME/<binary+config.example.yaml+README> with the binary
+# symlinked into XDG_BIN_HOME as 'cli-proxy-api'. A pre-existing config.yaml
+# is NEVER overwritten — the example is only copied when no config exists.
+cliproxy_arch() {
+  case "$(uname -m)" in
+    x86_64|amd64)   echo "amd64" ;;
+    aarch64|arm64)  echo "aarch64" ;;
+    *)              die "CLIProxyAPI: unsupported arch $(uname -m)" ;;
+  esac
+}
+
+install_cliproxy() {
+  step "CLIProxyAPI (CLI OAuth → API bridge)"
+  need_cmd curl
+  need_cmd tar
+  mkdir -p "$XDG_BIN_HOME" "$CLIPROXY_HOME"
+
+  # Resolve the latest tag (asset names are version-embedded, so 'latest/download'
+  # cannot be used). awk reads to EOF deliberately: `grep -m1` would close the
+  # pipe early and pipefail then turns curl's SIGPIPE (23) into a hard failure.
+  # Fallback: scrape the /releases/latest redirect if the API is rate-limited.
+  local tag=""
+  tag="$(curl -fsSL "https://api.github.com/repos/$CLIPROXY_REPO/releases/latest" 2>/dev/null \
+        | awk -F'"' '/"tag_name"/{t=$4} END{print t}')" || true
+  if [[ -z "$tag" ]]; then
+    tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$CLIPROXY_RELEASE_BASE/latest" 2>/dev/null | sed 's|.*/tag/||')" || true
+  fi
+  [[ "$tag" == v* ]] || die "CLIProxyAPI: could not resolve the latest release tag (got '$tag')"
+  local ver="${tag#v}"
+
+  local arch asset url
+  arch="$(cliproxy_arch)"
+  asset="CLIProxyAPI_${ver}_linux_${arch}.tar.gz"
+  url="$CLIPROXY_RELEASE_BASE/download/$tag/$asset"
+  local tmp="$XDG_DATA_HOME/_cliproxy.tar.gz"
+  local tmpdir="$XDG_DATA_HOME/_cliproxy-extract"
+
+  echo "  Downloading $asset"
+  curl -fsSL "$url" -o "$tmp" || die "CLIProxyAPI download failed: $url"
+
+  # Verify against the release's checksums.txt (format "<sha>  <asset>").
+  local sums="$XDG_DATA_HOME/_cliproxy-checksums" sha=""
+  if curl -fsSL "$CLIPROXY_RELEASE_BASE/download/$tag/checksums.txt" -o "$sums" 2>/dev/null; then
+    sha="$(awk -v a="$asset" '$2 == a {print $1}' "$sums")"
+    rm -f "$sums"
+  fi
+  verify_sha256 "$tmp" "$sha" "CLIProxyAPI ($asset)"
+
+  rm -rf "$tmpdir"; mkdir -p "$tmpdir"
+  tar -xzf "$tmp" -C "$tmpdir"
+  [[ -f "$tmpdir/cli-proxy-api" ]] || die "CLIProxyAPI archive is missing the 'cli-proxy-api' binary"
+
+  rm -f "$CLIPROXY_HOME/cli-proxy-api"
+  mv -f "$tmpdir/cli-proxy-api" "$CLIPROXY_HOME/cli-proxy-api"
+  chmod +x "$CLIPROXY_HOME/cli-proxy-api"
+  # Ship the example alongside the binary for reference, and generate a
+  # MINIMAL, SAFE config.yaml on first install. Copying config.example.yaml
+  # verbatim would be a footgun: its defaults bind every interface (host: "")
+  # and carry literal placeholder keys that look configured. A pre-existing
+  # config.yaml is NEVER touched (keys + OAuth logins live there).
+  [[ -f "$CLIPROXY_HOME/config.example.yaml" ]] || cp -f "$tmpdir/config.example.yaml" "$CLIPROXY_HOME/config.example.yaml" 2>/dev/null || true
+  if [[ ! -f "$CLIPROXY_HOME/config.yaml" ]]; then
+    local gen_key gen_secret
+    if command -v openssl >/dev/null 2>&1; then
+      gen_key="$(openssl rand -hex 24)"; gen_secret="$(openssl rand -hex 16)"
+    else
+      gen_key="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+      gen_secret="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    fi
+    cat > "$CLIPROXY_HOME/config.yaml" <<YAML
+# CLIProxyAPI config — generated by setup.sh (--cliproxy).
+# Full option reference: config.example.yaml next to this file.
+config-version: 8
+
+server:
+  host: "127.0.0.1"   # local-only; set "" to expose on all interfaces
+  port: 8317
+
+management:
+  allow-remote: false
+  secret-key: "$gen_secret"   # management API / control panel login
+  disable-control-panel: false
+
+access:
+  api-keys:                          # client auth for the proxy endpoints
+    - "$gen_key"
+
+oauth:
+  auth-dir: "~/.cli-proxy-api"       # OAuth credential JSONs land here
+YAML
+    chmod 600 "$CLIPROXY_HOME/config.yaml"
+    warn "config.yaml generated (client key + management secret set; keys in the file)"
+  fi
+  rm -rf "$tmpdir" "$tmp"
+
+  ln -sfn "$CLIPROXY_HOME/cli-proxy-api" "$XDG_BIN_HOME/cli-proxy-api"
+  ok "CLIProxyAPI installed: $CLIPROXY_HOME/cli-proxy-api ($("$CLIPROXY_HOME/cli-proxy-api" --help 2>&1 | head -1))"
+  ok "  CLI: cli-proxy-api --config $CLIPROXY_HOME/config.yaml   (API on http://127.0.0.1:8317)"
+  ok "  OAuth login (remote-safe): cli-proxy-api -codex-login -no-browser  |  -claude-login / -antigravity-login / -kimi-login / -xai-login"
+  record_tool_env_vars CLIPROXY_HOME
+  record_tool_path_dirs "$XDG_BIN_HOME" "$CLIPROXY_HOME"
+  wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
+}
+
 # Cleanup (removes installed toolchain artifacts) ─────────────────────────────
 rm_bin() { local b; for b in "$@"; do rm -f "$XDG_BIN_HOME/$b"; done; }
 rm_dir() { local d; for d in "$@"; do rm -rf "$d"; done; }
@@ -2806,6 +2961,18 @@ clean_ffmpeg() {
   ok "FFmpeg removed"
 }
 
+# CLIProxyAPI — removes the symlink + binary only. $CLIPROXY_HOME (config.yaml
+# with keys/OAuth logins, server.log, ~/.cli-proxy-api auth dir) is the user's
+# data and is deliberately PRESERVED; delete the dir by hand for a full wipe.
+clean_cliproxy() {
+  if ! _present "$XDG_BIN_HOME/cli-proxy-api" "$CLIPROXY_HOME/cli-proxy-api"; then
+    nothing_removed "CLIProxyAPI"; return 0
+  fi
+  step "Removing CLIProxyAPI (config + OAuth logins kept in $CLIPROXY_HOME)"
+  rm -f "$XDG_BIN_HOME/cli-proxy-api" "$CLIPROXY_HOME/cli-proxy-api"
+  ok "CLIProxyAPI removed (preserved: $CLIPROXY_HOME)"
+}
+
 # Strip the '# >>> toolchain >>>' … '# <<< toolchain <<<' managed block from a
 # file, writing the result back THROUGH the path (cat >) so a symlink target
 # is preserved — sed -i would replace the symlink with a plain file.
@@ -2922,7 +3089,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash scripts/setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|rclone|qbt|aria2|ffmpeg)
       hint="bash scripts/setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -2959,9 +3126,10 @@ clean() {
       clean_qbt
       clean_aria2
       clean_ffmpeg
+      clean_cliproxy
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|rclone|qbt|aria2|ffmpeg)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -2986,6 +3154,7 @@ clean() {
         claude)        clean_claude ;;
         hermes)        clean_hermes ;;
         ori)           clean_ori ;;
+        cliproxy)      clean_cliproxy ;;
         rclone)        clean_rclone ;;
         qbt)           clean_qbt ;;
         aria2)         clean_aria2 ;;
@@ -3020,6 +3189,7 @@ clean() {
           claude)   clean_claude ;;
           hermes)   clean_hermes ;;
           ori)      clean_ori ;;
+          cliproxy) clean_cliproxy ;;
           rclone)   clean_rclone ;;
           qbt)      clean_qbt ;;
           aria2)    clean_aria2 ;;
@@ -3029,7 +3199,7 @@ clean() {
       done
       ;;
     *)
-      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, rclone, qbt, aria2, ffmpeg"
+      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, rclone, qbt, aria2, ffmpeg"
       ;;
   esac
   cat <<CLEANMSG
@@ -3082,7 +3252,7 @@ main() {
       && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
       && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
-      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG; then
+      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY; then
       die "No tools selected. Aborting."
     fi
   else
@@ -3152,6 +3322,7 @@ main() {
   $INSTALL_QBT      && install_qbt
   $INSTALL_ARIA2    && install_aria2
   $INSTALL_FFMPEG   && install_ffmpeg
+  $INSTALL_CLIPROXY && install_cliproxy
 
   if $DOCTOR; then
     doctor || true
@@ -3181,6 +3352,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
+   cli-proxy-api
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   else
@@ -3199,6 +3371,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
+   cli-proxy-api
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi
