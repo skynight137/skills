@@ -49,7 +49,7 @@ def default_env():
     """First EXISTING candidate wins, else None. The env file is OPTIONAL and
     no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop it
     at $CAMOFOX_ROOT/.env (with no CAMOFOX_ROOT exported, the same
-    ${REPL_HOME:-$HOME}/camofox default as default_root()/start-camofox.sh —
+    ${REPL_HOME:-$HOME}/camofox default as default_root() —
     so a bare invocation on Replit auto-discovers the env file). With neither,
     plain environment variables are used, and no key at all just means
     unauthenticated mode.
@@ -69,7 +69,7 @@ def default_env():
 
 ENV_FILE = default_env()
 # setdefault semantics: the ambient environment WINS, the file only fills gaps.
-# NOTE this is the OPPOSITE of start-camofox.sh, which sources the file with
+# NOTE this is the OPPOSITE of the launcher, which sources the file with
 # `set -a` AFTER exporting its own defaults, so there the FILE wins. Verified
 # both ways. Harmless in practice (the file is the config, and the script only
 # exports the same names), but do not "unify" them by assumption.
@@ -85,10 +85,10 @@ SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
             "unspecified": "Lax", "none": "None"}
 
 
-# --- path discovery (mirror start-camofox.sh) --------------------------------
+# --- path discovery (mirror the launcher) --------------------------------
 def default_root():
     """$CAMOFOX_ROOT, else the Replit-persistent default
-    ${REPL_HOME:-$HOME}/camofox — the exact rule start-camofox.sh uses, so a
+    ${REPL_HOME:-$HOME}/camofox — the exact rule the launcher uses, so a
     bare invocation finds the provisioned tree without any exported vars.
     On Replit $REPL_HOME (/home/runner/workspace) survives recreates; $HOME is
     wiped, so it is only the off-Replit fallback."""
@@ -189,7 +189,7 @@ def diagnose_timeout():
                 f"activeSessions={h.get('activeSessions')}) but this request hung "
                 f"-> the browser's page channel is wedged (/health's flags are "
                 f"cached, not a real probe). Fix: restart the server — kill the "
-                f"'node server.js' process and re-run start-camofox.sh (or Stop/"
+                f"'node server.js' process and re-run the camofox launcher (or Stop/"
                 f"re-run its workflow).")
     except urllib.error.HTTPError:
         return (f"[camofox] diagnosis: server {CAMOFOX_URL} is up but /health "
@@ -197,10 +197,10 @@ def diagnose_timeout():
     except (ConnectionRefusedError, OSError) as e:
         if isinstance(e, ConnectionRefusedError) or "refused" in str(e).lower():
             return (f"[camofox] diagnosis: connection refused on {CAMOFOX_URL} "
-                    f"-> the server is NOT running. Start it: bash scripts/start-camofox.sh")
+                    f"-> the server is NOT running. Start it: camofox  (or: bash setup.sh --camofox)")
         return (f"[camofox] diagnosis: {CAMOFOX_URL} did not answer /health "
                 f"({e}) -> the server process is alive but its event loop is "
-                f"blocked; restart it (kill node server.js, re-run start-camofox.sh).")
+                f"blocked; restart it (kill the node server, re-run: camofox).")
 
 
 def import_cookies(key, user, cookie_path):
@@ -349,16 +349,16 @@ TOOLS = {"refresh-page": tool_refresh_page}
 def wait_for_server(key, timeout, interval=2.0):
     """Block until Camofox /health responds or `timeout` seconds elapse.
 
-    start-camofox.sh can take minutes (npm install + fetch engine + browser
+    the camofox launcher can take minutes on first run (engine download +
     boot) and Replit `waitForPort` only gates the *provision* workflow, not
-    parallel consumers. Callers that hit Errno 111 (refused) must wait here."""
+    parallel consumers; wait here on Errno 111 (refused)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         r = req(key, "GET", "/health", timeout=5)
         if "_error" not in r and "_http_error" not in r:
             return True
         time.sleep(interval)
-    print(f"camofox not ready after {timeout}s (is start-camofox.sh running?)",
+    print(f"camofox not ready after {timeout}s (is the camofox launcher running?)",
           file=sys.stderr)
     return False
 
@@ -412,7 +412,7 @@ def main():
               file=sys.stderr)
 
     # block until server is actually up (fixes Errno 111 Connection refused
-    # when this runs before start-camofox.sh finishes, e.g. parallel .replit)
+    # when this runs before the camofox launcher finishes, e.g. parallel .replit)
     if not wait_for_server(key, a.wait):
         sys.exit(1)
 

@@ -6,7 +6,7 @@
 # which holds the TOP-LEVEL lib dirs of the replit.nix-declared packages (~6).
 # Firefox's GTK3 runtime needs the TRANSITIVE X11 closure (~40+ dirs) — those
 # live in dependency stores the loader never sees. This script generates it.
-# The generated file is what start-camofox.sh auto-loads (when LD_LIBRARY_PATH
+# The generated file is what the camofox launcher consumes
 # is unset) from $REPO/LD_LIBRARY_PATH.txt.
 #
 # RESOLUTION (per package, so the INSTALLED version is always used):
@@ -37,7 +37,7 @@ if [[ -n "${1:-}" ]]; then
     OUT="$1"
 else
     echo "ERROR: generate-closure.sh needs an output path." >&2
-    echo "       start-camofox.sh calls it for you — prefer that entry point." >&2
+    echo "       setup.sh (--camofox) calls it for you — prefer that entry point." >&2
     exit 2
 fi
 

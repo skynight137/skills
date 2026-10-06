@@ -178,7 +178,7 @@ install_camofox() {
   if [[ ! -s "$CAMOFOX_CLOSURE_FILE" ]] \
      || [[ "$(tr ':' '\n' < "$CAMOFOX_CLOSURE_FILE" | while IFS= read -r d; do [[ -d "$d" ]] || echo gone; done)" != "" ]]; then
     echo "  generating GTK/X11 lib closure -> $CAMOFOX_CLOSURE_FILE"
-    bash "$SCRIPT_DIR/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE" \
+    bash "$SCRIPT_DIR/setup/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE" \
       || warn "closure generation failed — camofox will not start until the nix store has gtk3/alsa-lib/xorg.libXdamage"
   fi
 

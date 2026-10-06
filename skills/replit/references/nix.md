@@ -71,7 +71,7 @@ Symptom matrix (all observed):
 | store warm + generated closure | works |
 
 **The fix is always the same: generate the closure.** For GTK3 the
-This skill ships `scripts/generate-closure.sh` (verified,
+This skill ships `scripts/setup/generate-closure.sh` (verified,
 ~140 dirs). The generic recipe, for other stacks:
 
 ```bash

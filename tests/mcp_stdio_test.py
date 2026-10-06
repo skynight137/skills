@@ -2,20 +2,22 @@
 its real transport: initialize, tools/list, then create/evaluate/close a tab.
 Usage: python3 mcp_stdio_test.py <adapter.mjs> <keyfile> <port>
 Exits 0 only if all stages pass. Prints no secret values."""
-import json, os, select, subprocess, sys
+import json, os, select, shutil, subprocess, sys
 
 adapter, keyfile, port = sys.argv[1], sys.argv[2], sys.argv[3]
 key = open(keyfile).read().strip()
+node = shutil.which("node") or "node"
 
 env = dict(os.environ)
 env.update({
-    "LD_LIBRARY_PATH": "/home/runner/workspace/.local/lib",
     "CAMOFOX_BASE_URL": f"http://127.0.0.1:{port}",
     "CAMOFOX_ACCESS_KEY": key,
 })
+if os.environ.get("CAMOFOX_MCP_LD_LIBRARY_PATH"):
+    env["LD_LIBRARY_PATH"] = os.environ["CAMOFOX_MCP_LD_LIBRARY_PATH"]
 
 proc = subprocess.Popen(
-    ["/home/runner/workspace/.hermes/tools/node-26.7.0-linux-x64/bin/node", adapter],
+    [node, adapter],
     stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     text=True, env=env)
 

@@ -7,18 +7,22 @@
 # (initialize -> tools/list) through a piped stdin, assert the 11 camofox_*
 # tools come back, exit. Exit 0 = browser + adapter + wiring all alive.
 #
-# Env: CAMOFOX_PORT (9377), CAMOFOX_BASE_URL (http://localhost:$PORT),
-#      CAMOFOX_ROOT (${REPL_HOME:-$HOME}/camofox), CAMOFOX_ACCESS_KEY (forwarded).
 # Arg1: seconds to wait for the REST server (default 90).
 set -uo pipefail
 
 PORT="${CAMOFOX_PORT:-9377}"
 BASE="${CAMOFOX_BASE_URL:-http://localhost:${PORT}}"
-ROOT="${CAMOFOX_ROOT:-${REPL_HOME:-$HOME}/camofox}"
-MCP="$ROOT/camofox-browser/mcp/server.mjs"
 WAIT="${1:-90}"
 
-[ -f "$MCP" ] || { echo "FAIL: missing $MCP — run the 'camofox browser' workflow first"; exit 1; }
+# npm lane: the adapter is the `camofox-browser-mcp` binary on PATH. Fall back
+# to the git-clone layout's server.mjs if a CAMOFOX_ROOT checkout exists.
+MCP="$(command -v camofox-browser-mcp || true)"
+if [[ -z "$MCP" ]]; then
+  ROOT="${CAMOFOX_ROOT:-${REPL_HOME:-$HOME}/camofox}"
+  MCP="$ROOT/camofox-browser/mcp/server.mjs"
+fi
+
+[[ -f "$MCP" ]] || { echo "FAIL: no camofox-browser-mcp on PATH and none at $MCP — run: bash setup.sh --camofox"; exit 1; }
 command -v node >/dev/null || { echo "FAIL: node not on PATH"; exit 1; }
 
 echo "[check] waiting for camofox REST at $BASE (max ${WAIT}s)"
