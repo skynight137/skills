@@ -24,7 +24,7 @@ other lane assumes its persistence rules.
 | persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `replit_userenv.py` |
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `ensure_browser.sh`, `monitor.sh`, `browser_monitor.py` |
-| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox` launcher, `camofox.py` |
+| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
 | bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -65,9 +65,9 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
   `references/cliproxy.md`; `--clean cliproxy` keeps config + OAuth logins.
   `--camofox` installs the **npm-global** Camofox browser
   (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
-  `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + a GPU-less
-  WebGL-skip (auto-detected), and writes a `camofox` launcher. See
-  `references/camofox.md` §"npm-global lane".
+  `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + WebGL
+  auto-skip, and writes a runtime env snippet. Run it with
+  `camofox-browser`. See `references/camofox.md` §"npm-global lane".
 - `replit_userenv.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
@@ -83,14 +83,13 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
 
 There is no env-file template to ship — **the interface is exported vars**
 (`CAMOFOX_PORT`, `CAMOFOX_ACCESS_KEY`, `TAB_INACTIVITY_MS`, ...), read from the
-shell or passed straight to the launcher:
+shell (or exported before `camofox-browser`):
 
 ```bash
 CAMOFOX_PORT=9000 CAMOFOX_ACCESS_KEY="$(openssl rand -hex 32)" camofox
 ```
 
-The launcher documents every var it sets (with the Camofox default it
-overrides) in its header and in `references/camofox.md`.
+The Camofox tunables (with defaults) are documented in `references/camofox.md`.
 
 ## Installing this skill pack
 

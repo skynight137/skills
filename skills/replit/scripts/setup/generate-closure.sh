@@ -90,8 +90,19 @@ echo "closure paths: ${#paths[@]}" >&2
 
 {
     for p in "${!paths[@]}"; do
+        # Two exclusion families:
+        #  1) base-image-provided runtime (glibc/gcc/libgcc/ncurses/readline/
+        #     binutils) — stale nix copies shadow the base's newer libs.
+        #  2) NETWORK/TLS families — a nix libssl/libcurl on LD_LIBRARY_PATH
+        #     collides with the platform's openssl 3.5 (curl dies with
+        #     "symbol lookup error: curl_multi_notify_enable" / openssl version
+        #     mismatch) and can pull in stale systemd/krb5. Firefox needs none of
+        #     these here. Excluding them makes the closure GLOBALLY safe to put
+        #     on LD_LIBRARY_PATH (interactive shells + every tool), so camofox
+        #     can simply be `camofox-browser` with no per-process wrapper.
         case "$p" in
             *glibc*|*gcc*|*libgcc*|*ncurses*|*readline*|*binutils*) continue ;;
+            *-openssl-*|*-ngtcp2-*|*-libssh2-*|*-curl-*|*-libidn2-*|*-libpsl-*|*-krb5-*|*-gnutls-*|*-nettle-*|*-libtasn1-*|*-unbound-*|*-libgcrypt-*|*-libgpg-error-*|*-systemd-*|*-systemd-minimal*|*-libcap-*|*-audit-*) continue ;;
         esac
         [[ -d "$p/lib" ]] && printf '%s\n' "$p/lib"
     done

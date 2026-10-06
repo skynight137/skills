@@ -3,15 +3,15 @@
 # (`bash setup.sh --camofox`). Exercises the REST API the MCP adapter and
 # camofox.py speak, on a private port with a throwaway key.
 #
-# Runs against whatever is installed: `camofox-browser` on PATH (required);
-# if the `camofox` launcher is present it is used (it carries the lib closure
-# + camofox env), otherwise the server is started directly.
+# Runs against whatever is installed: `camofox-browser` on PATH (required),
+# started directly — no wrapper. The GTK/X11 closure (if generated at
+# $XDG_DATA_HOME/camofox/closure.txt) is prepended to LD_LIBRARY_PATH here.
 #
 # Nothing is hardcoded to one machine: node/npm come from PATH, the engine from
 # CAMOUFOX_INSTALL_DIR (default $XDG_CACHE_HOME/camoufox).
 #
-# Usage: bash test/camofox_e2e.sh
-# Env:   CAMOFOX_E2E_PORT (default 9400)  CAMOFOX_ACCESS_KEY (else generated)
+# Usage: bash tests/camofox_e2e.sh
+# Env:   CAMOFOX_E2E_PORT (default 9400)
 set -uo pipefail
 
 PORT="${CAMOFOX_E2E_PORT:-9400}"
@@ -28,6 +28,11 @@ trap cleanup EXIT
 
 command -v camofox-browser >/dev/null || { echo "FAIL: camofox-browser not on PATH — run: bash setup.sh --camofox"; exit 1; }
 
+# 0. apply the GTK/X11 closure (Firefox needs it). setup.sh writes env.sh;
+#    a live shell already sourced it via the rc, but a bare run has not.
+ENVSH="${XDG_DATA_HOME:-$HOME/.local/share}/camofox/env.sh"
+[[ -f "$ENVSH" ]] && . "$ENVSH"
+
 # 1. throwaway key (header-safe), never printed
 if [[ -n "${CAMOFOX_ACCESS_KEY:-}" ]]; then
   printf '%s' "$CAMOFOX_ACCESS_KEY" > "$KEYF"
@@ -37,15 +42,11 @@ fi
 chmod 600 "$KEYF"; KEY="$(cat "$KEYF")"
 printf 'header = "Authorization: Bearer %s"\n' "$KEY" > "$CFG"; chmod 600 "$CFG"
 
-# 2. start the server (launcher carries closure+env; else direct)
+# 2. start the server directly (npm binary). Uses an explicit randomized key
+#    for the privileged routes; loopback reads need none.
 export CAMOFOX_PORT="$PORT" CAMOFOX_BIND_HOST=127.0.0.1 CAMOFOX_API_KEY="$KEY"
-if [[ -x "${XDG_BIN_HOME:-$HOME/.local/bin}/camofox" ]]; then
-  nohup "${XDG_BIN_HOME:-$HOME/.local/bin}/camofox" > "$LOGF" 2>&1 &
-else
-  [[ -n "${CAMOUFOX_INSTALL_DIR:-}" ]] || export CAMOUFOX_INSTALL_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
-  [[ -n "${LD_LIBRARY_PATH:-}" ]] || export LD_LIBRARY_PATH="${REPL_HOME:-$HOME}/.local/lib"
-  nohup camofox-browser > "$LOGF" 2>&1 &
-fi
+[[ -n "${CAMOUFOX_INSTALL_DIR:-}" ]] || export CAMOUFOX_INSTALL_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
+nohup camofox-browser > "$LOGF" 2>&1 &
 echo $! > "$PIDF"
 
 ready=no

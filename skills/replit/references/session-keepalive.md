@@ -18,13 +18,13 @@ grep '"level":"error"' <that file> | tail
 Two verified causes of that 500 on this box (Sep 2026):
 
 1. **`LD_LIBRARY_PATH` clobbering.** `.replit [userenv.shared]` pins
-   `LD_LIBRARY_PATH=/home/runner/workspace/.local/lib`, and `camofox` launcher
+   `LD_LIBRARY_PATH=/home/runner/workspace/.local/lib`, and `setup.sh --camofox`
    only sets the GTK closure `if [[ -z "${LD_LIBRARY_PATH:-}" ]]` — so the server
    launches WITHOUT gtk-3. Camoufox dies with
    `XPCOMGlueLoad error ... libgtk-3.so.0: cannot open shared object file`, the
    lazy launch fails, and every session-creating call (incl. cookie import)
    returns the masked 500 (classified `browser_launch_timeout`). Fix (v4.6.0):
-   the camofox launcher APPENDS the closure to any pre-set `LD_LIBRARY_PATH`
+   setup.sh --camofox APPENDS the closure to any pre-set `LD_LIBRARY_PATH`
    (per-dir idempotent), so the server process always carries the GTK stack
    regardless of what the pinned pool contains. (An earlier layer (a) —
    libpool.sh symlinking the whole closure host-wide — was REMOVED:
@@ -49,13 +49,13 @@ and a shell without it (or a probe hardcoding
 Both are `setInterval(..., 60_000)` in `server.js`, so thresholds quantize to
 60s and the worst case is `threshold + 60s`.
 
-| reaper | env var | code default | set by `camofox` launcher | what it closes | code |
+| reaper | env var | code default | set by `setup.sh --camofox` | what it closes | code |
 |---|---|---|---|---|---|
 | tab | `TAB_INACTIVITY_MS` | `300000` (5min) | `900000` (15min) | the tab only | `server.js:6040`, `lib/config.js:149` |
 | session | `SESSION_TIMEOUT_MS` | `600000` (10min) | `1800000` (30min) | the session | `server.js:5978`, `lib/config.js:116` |
 | browser | `BROWSER_IDLE_TIMEOUT_MS` | `300000` | **`0` → disabled** | the whole browser | `server.js:698` |
 
-The **browser** timer is the one people wrongly blame: `the launcher (setup/camofox.sh)`
+The **browser** timer is the one people wrongly blame: `setup.sh --camofox`
 exports `BROWSER_IDLE_TIMEOUT_MS=0`, and `scheduleBrowserIdleShutdown` returns
 early on `BROWSER_IDLE_TIMEOUT_MS <= 0` (`server.js:698`). On this box it is
 **never armed**, so `closeSession` does *not* start a 5-minute browser countdown.
@@ -112,7 +112,7 @@ Only a request that *touches the session*:
 
 ## Correct configuration
 
-`camofox` launcher applies these **as overrides of Camofox's own defaults**
+`setup.sh --camofox` applies these **as overrides of Camofox's own defaults**
 (shown after each), so the script works out of the box:
 
 ```bash
@@ -121,7 +121,7 @@ export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"  # Camofox default: 6
 ```
 
 To take the Camofox default instead, comment the line out or set it yourself —
-in the shell (`export SESSION_TIMEOUT_MS=600000`) — every tunable with its default is in the launcher header.
+in the shell (`export SESSION_TIMEOUT_MS=600000`)  — tunables documented in references/camofox.md.
 
 Then the loop period only has to stay under 900s. `--interval 240` gives ~2min
 margin under the session threshold's 900s worst case.
@@ -131,7 +131,7 @@ that leaves the session reaper live, which is the one that drops the login.
 
 ## Pitfall: the env file load can clobber your exports
 
-`camofox` launcher loads an env file with `set -a` **after** setting
+`setup.sh --camofox` loads an env file with `set -a` **after** setting
 the defaults. Any `TAB_INACTIVITY_MS` / `SESSION_TIMEOUT_MS` in that file wins.
 Candidate order (first existing): `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`.
 Check the file it actually picked:

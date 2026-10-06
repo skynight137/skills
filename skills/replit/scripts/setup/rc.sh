@@ -45,8 +45,8 @@ Options:
   --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
                         Firefox server + MCP adapter). Provisions the package-pinned
                         Camoufox engine into the persistent cache, applies the Replit
-                        lib closure + WebGL-skip fix, and writes a 'camofox' launcher.
-                        Start with: camofox   (API on http://127.0.0.1:9377)
+                        lib closure + WebGL auto-skip, then run: camofox-browser
+                        (API on http://127.0.0.1:9377)
   --doctor              Verify the toolchain (no install) — prints versions and flags
   --fix                 Rewrite ALL wiring without deleting/reinstalling any
                         tool: shell rc (toolchain block + hermes-tools block,
@@ -343,6 +343,10 @@ if [[ -n "\${LD_LIBRARY_PATH:-}" ]]; then
 else
   export LD_LIBRARY_PATH="$WORKSPACE/.local/lib"
 fi
+
+# Camofox GTK/X11 lib closure: applied inline by the .replit camofox workflow /
+# any invocation (see references/camofox.md) — NOT in the rc, because the closure
+# is large and only the browser binary needs it.
 
 # Platform-level dirs only. Tool vars (JAVA_HOME, NODE_DIR, OLLAMA_MODELS,
 # config dirs) are NOT re-exported here: .replit [userenv.shared] is the single
