@@ -7,6 +7,66 @@ regularly load here. Server API on `:9377` (JSON; `GET /health`,
 `POST /tabs` with `{userId, sessionKey, url}`, CDP endpoints — see the
 repo's `openapi.json`).
 
+## Two install lanes — pick one
+
+| Lane | Install | Layout | Use when |
+|------|---------|--------|----------|
+| **npm-global (recommended)** | `bash setup.sh --camofox` | package in the npm prefix; engine in `$XDG_CACHE_HOME/camoufox` | the normal case — no git clone to manage, `npm update -g` keeps engine+client in step |
+
+There is **no wrapper script**: the npm binaries ARE the interface —
+`camofox-browser` (server) and `camofox-browser-mcp` (MCP adapter). A default
+loopback server needs **no key and no env file**.
+
+### npm-global lane (`setup.sh --camofox`)
+
+```bash
+bash setup.sh --camofox     # install (idempotent)
+camofox-browser             # run    (API on http://127.0.0.1:9377)
+camofox-browser-mcp         # the MCP adapter (stdio) — register with Hermes
+```
+
+`setup.sh --camofox` does, in order: `npm i -g @askjo/camofox-browser`; patches
+the installed `camoufox-js` with the GPU-less **WebGL auto-skip** (below); raises
+the package's `newPageTimeoutMs` to a 60000 floor; generates the GTK/X11 lib
+closure to `$XDG_DATA_HOME/camofox/closure.txt`; fetches the package-pinned
+Camoufox engine into `$XDG_CACHE_HOME/camoufox`; and writes
+`$XDG_DATA_HOME/camofox/env.sh` — a small runtime env snippet.
+
+**The closure must be on `LD_LIBRARY_PATH` for `camofox-browser` to run**, so
+launch it through the snippet (the `.replit` "camofox browser" workflow does
+exactly this):
+
+```bash
+bash -c '. "${XDG_DATA_HOME:-$HOME/.local/share}/camofox/env.sh"; exec camofox-browser'
+```
+
+`env.sh` sets three things — the **pruned** closure (it drops the openssl/
+curl/… store families, so it is safe even globally; an unpruned one shadows the
+platform openssl and breaks `curl`), `CAMOUFOX_INSTALL_DIR` (note the **U** —
+camoufox-js's spelling; a stale key in `[userenv.shared]` is a classic footgun),
+and it drops an inherited `CAMOFOX_ACCESS_KEY` on a loopback bind. It is **not**
+sourced by the interactive shell rc: a 7 KB env var on every shell is wasteful.
+
+**WebGL on GPU-less hosts.** camoufox-js seeds the WebGL fingerprint from a
+**live GPU sample** (`sampleWebGL`). On a box with no GPU (Replit has no
+`/dev/dri`) there is no GL context — WebGL is `null` — and the spoofer **hangs
+the Firefox content process**, so every tab times out (`new page timed out`)
+and even `block_webgl:true` hangs. The installer patches camoufox-js to
+**auto-detect** the missing GPU (checks `/dev/dri` at launch) and omit the
+WebGL keys; a GL-capable host keeps the **full** spoof, and no env var or
+wrapper is needed. Override with `CAMOFOX_SKIP_WEBGL_FP=0|1`. This trades the
+WebGL vector only where it cannot render — every other vector (UA, fonts,
+canvas seeds, screen, navigator, WebRTC) is untouched.
+
+Verified on this box (beta.30 engine, camoufox-js 0.11.5): open → `200`,
+cookie import → `{ok:true,count:1}`, `POST /tabs/<id>/refresh` → `{ok:true}`
+with the cookie still present, and it survives a server restart (persistence
+plugin restores `~/.camofox/profiles/<hash>/storage-state.json`).
+
+**Do not** confuse `REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` with Camoufox — that
+is Replit's bundled **Chromium** (for the Playwright lane); Camoufox is
+Firefox/Juggler and ignores it.
+
 This skill is **self-contained**: `SKILL.md` + `scripts/` in one folder,
 installs via `npx skills add`. Nix/closure mechanics live in the
 **`references/nix.md`** — platform facts (persistence, XDG
@@ -72,7 +132,7 @@ Everything (clone, lib closure, npm deps, 1.3GB engine, server) happens
 inside one script. Run:
 
 ```bash
-bash scripts/start-camofox.sh          # from this skill dir (no other setup)
+camofox          # from this skill dir (no other setup)
 ```
 
 Background the server (it never exits), then verify:
@@ -134,12 +194,12 @@ ${REPL_HOME:-$HOME}/camofox/
 ```
 
 - **Reset everything:** `rm -rf "${REPL_HOME:-$HOME}/camofox"` then re-run
-  `start-camofox.sh`. That's the whole cleanup story.
+  `setup.sh --camofox`. That's the whole cleanup story.
 - **Python:** a bare workspace PATH has no guaranteed `python3` (it only
   appears once some venv is activated). The script self-provisions a
   dedicated venv into `$CAMOFOX_ROOT/venv` via `uv` and puts it on `PATH` —
   so `source .venv/bin/activate` is no longer needed; the single command
-  `bash scripts/start-camofox.sh` is all you need, from any directory.
+  `camofox` is all you need, from any directory.
 - **Why state is NOT inside `camoufox/`:** `npx camoufox-js fetch`
   `rm -rf`s the engine dir whenever it (re)downloads a version — state
   there would vanish on an engine bump. Sibling dirs; same single root.
@@ -180,7 +240,7 @@ ${REPL_HOME:-$HOME}/camofox/
    top-level lib dirs of the declared packages (24 on this box); Firefox's X11 closure
    (libX11-xcb, libxcb, pango, cairo, … ~100+ dirs) is transitive and
    lives in stores the Replit loader never searches. That's what
-   `generate-closure.sh` builds into `LD_LIBRARY_PATH.txt` — the engine
+   `scripts/setup/generate-closure.sh` builds into `LD_LIBRARY_PATH.txt` — the engine
    loading fine and then dying on `libX11-xcb.so.1: cannot open shared
    object file` is the exact signature of using only those top-level dirs.
 3. **`$HOME` is wiped on container recreate; the workspace is not.**
@@ -196,7 +256,7 @@ fails or you're setting up a different Replit workload.
 
 ## Doing it by hand
 
-`start-camofox.sh` does the whole setup itself (same fixed paths, same
+`setup.sh --camofox` does the whole setup itself (same fixed paths, same
 fixed steps — see its header). To inspect or run individual steps by
 hand, each script works standalone with explicit arguments:
 
@@ -205,8 +265,8 @@ CAMOFOX_ROOT="${REPL_HOME:-$HOME}/camofox"
 git clone https://github.com/jo-inc/camofox-browser "$CAMOFOX_ROOT/camofox-browser"
 uv venv "$CAMOFOX_ROOT/venv"
 (cd "$CAMOFOX_ROOT/camofox-browser" && CAMOFOX_SKIP_DOWNLOAD=1 npm i --registry=https://registry.npmjs.org/ && npm run fetch-bin)
-bash scripts/generate-closure.sh "$CAMOFOX_ROOT/camofox-browser/LD_LIBRARY_PATH.txt"
-bash scripts/start-camofox.sh   # fast self-verification pass, then launches :9377
+bash scripts/setup/generate-closure.sh "$CAMOFOX_ROOT/camofox-browser/LD_LIBRARY_PATH.txt"
+camofox   # fast self-verification pass, then launches :9377
 ```
 
 The closure/loader mechanics *why* each step exists: `references/nix.md`. Env overrides: `CAMOFOX_ROOT`, `CAMOFOX_REPO_DIR`,
@@ -220,7 +280,7 @@ see below).
 
 **No agent framework required.** The skill never hard-requires Hermes or any
 other tool. An env file is only *optional* convenience: both
-`start-camofox.sh` and `camofox.py` load the first existing of
+`setup.sh --camofox` and `camofox.py` load the first existing of
 `$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env`, then fall back to plain
 environment variables. No implicit home dirs are searched. No key
 at all is fine on a **guaranteed-loopback** server — it just means
@@ -234,11 +294,12 @@ carry every variable below (`CAMOFOX_BASE_URL`, `CAMOFOX_ROOT`, `CAMOFOX_STATE_D
 …). Note the two tools resolve precedence differently — see the config block
 further down before relying on an exported override.
 
-Every tunable, with the Camofox default it overrides, is listed in
-[`camofox.env.example`](camofox.env.example). Copy it to `$CAMOFOX_ROOT/.env`
-(or point `$CAMOFOX_ENV_FILE` at it) and uncomment only what you want to
-change — the script's own values are the same recommendations, and commenting
-one out there accepts the Camofox default instead.
+Every tunable, with the Camofox default it overrides, is documented in the
+`references/camofox.md` (you are reading it). Set any of them by exporting it
+before launch (`CAMOFOX_PORT=9000 camofox`) — no env file needed.
+
+`CAMOFOX_ROOT/.env` and `$CAMOFOX_ENV_FILE` are still honored by the Camofox
+tools if you already keep one, but nothing in this skill ships a template.
 
 ## Cold store (brand-new container, GTK never installed there)
 
@@ -260,7 +321,7 @@ If that misses, pick ONE:
 nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
 ```
 
-Then re-run `start-camofox.sh`. The `references/nix.md` reference explains why each
+Then re-run `setup.sh --camofox`. The `references/nix.md` reference explains why each
 option behaves as it does (T0–T3 matrix).
 
 ## Troubleshooting
@@ -288,7 +349,7 @@ Useful greps:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `browserConnected:false` after start | lazy launch — normal | POST `/tabs` with `-m 90`; first launch ~60-90s |
-| `POST /tabs` → 500 `new page timed out after 60000ms` ×2, engine log shows `signal 11` in content processes | engine cannot init a page in time (or at all) on this host — check `LD_LIBRARY_PATH` first: a closure containing the nix **glibc/libgcc** dirs stack-smashes node AND a *missing* one (pool-only) dies at `XPCOMGlueLoad: libgtk-3.so.0` | regenerate the closure with `generate-closure.sh` (its glibc/gcc exclusion list is load-bearing); `newPageTimeoutMs` floor is 60000 in `start-camofox.sh` step 4b — verify with `grep newPageTimeoutMs camofox.config.json` inside the repo clone (an old 10000 there = the script never ran for this server) |
+| `POST /tabs` → 500 `new page timed out after 60000ms` ×2, engine log shows `signal 11` in content processes | engine cannot init a page in time (or at all) on this host — check `LD_LIBRARY_PATH` first: a closure containing the nix **glibc/libgcc** dirs stack-smashes node AND a *missing* one (pool-only) dies at `XPCOMGlueLoad: libgtk-3.so.0` | regenerate the closure with `scripts/setup/generate-closure.sh` (its glibc/gcc exclusion list is load-bearing); `newPageTimeoutMs` floor is 60000 in `setup.sh --camofox` step 4b — verify with `grep newPageTimeoutMs camofox.config.json` inside the repo clone (an old 10000 there = the script never ran for this server) |
 | `Tab no longer exists (browser was restarted)` | **not** idle-shutdown (`BROWSER_IDLE_TIMEOUT_MS=0` disables that) — the 60s active health probe failed and called `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, killing in-flight work | re-create the tab; see *Frozen vs dead browser* |
 | `POST /sessions/<u>/cookies` never returns (client dies at its own 300s timeout) | browser is **frozen**, not dead — the route awaits `getSession`/`addCookies` (`server.js:473-474`) with no server-side timeout | `pkill -9 -f camoufox-bin` (a *dead* browser 500s instantly), then re-import; see *Frozen vs dead browser* |
 | a failed run's log just **stops** at `listening on :9377`, error missing | client `print()`s are block-buffered when stdout is a pipe (no TTY); and `session:created` (`plugins/persistence/index.js:120`) awaits the state restore, so a wedged browser never reaches the route's `req` log line | run the CLI as `python3 -u` (or `PYTHONUNBUFFERED=1`) |
@@ -297,7 +358,7 @@ Useful greps:
 | `libX11-xcb.so.1: cannot open shared object file` | running with only `$REPLIT_LD_LIBRARY_PATH` (24 dirs on this box) | let the script load `LD_LIBRARY_PATH.txt` (don't hand-export the top-level dirs) |
 | `ERESOLVE` / `npm warn` during install | harmless peer warnings | ignore |
 | tarball 404s from npm | Replit package-firewall registry | `--registry=https://registry.npmjs.org/` (the script sets this) |
-| engine dir suddenly empty | engine version bump → `fetch-bin` re-extracted (it wipes first) | expected; re-run `start-camofox.sh` |
+| engine dir suddenly empty | engine version bump → `fetch-bin` re-extracted (it wipes first) | expected; re-run `setup.sh --camofox` |
 | `CAMOFOX_PORT=NNNN` ignored, server still on the built-in fallback (9377) | the var must reach `node server.js`; `lib/config.js:129` reads `process.env.CAMOFOX_PORT \|\| PORT \|\| '9377'`, so a shell-local assignment is invisible | the script `export`s it (fixed in v3.0.1) — if you set it yourself use `export CAMOFOX_PORT=NNNN` |
 
 ### Frozen vs dead browser — the 5-minute stall
@@ -371,7 +432,7 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
 ```
 
 - `--wait N` (default 180): polls `GET /health` until the server is up
-  before acting. **Required** — `start-camofox.sh` can take minutes (npm
+  before acting. **Required** — `setup.sh --camofox` can take minutes (npm
   install + engine fetch + browser boot), and Replit `waitForPort` only
   gates the *provision* task, not parallel consumers, so command-too-early
   → `Errno 111 Connection refused`. Run it even on first shell entry.
@@ -382,23 +443,22 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   unless `NODE_ENV=production`, which then 403s).
 - ✅ **`camofox.py` falls back to the Replit-persistent root (v4.8.0):** with
   `CAMOFOX_ROOT` unset it uses `${REPL_HOME:-$HOME}/camofox` — the exact rule
-  `start-camofox.sh` uses — so a bare invocation finds the provisioned tree
+  `setup.sh --camofox` uses — so a bare invocation finds the provisioned tree
   (state, cookies, `.env`) with zero exports. The old "exit with a message,
   no guessing" behaviour forced every consumer to export the var first.
 - ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_BASE_URL` (client dials) must
   agree** — both default to `9377`, but setting only one silently splits them
   and every request fails with a connection error. If you move the port, set
-  both (the env file is the right place — see `camofox.env.example`).
+  both (export both, or set them in a `$CAMOFOX_ROOT/.env` if you keep one).
 - **The env file is loaded at import, before any setting is read**, so it can
   carry *any* Camofox variable — `CAMOFOX_BASE_URL`, `CAMOFOX_ROOT`,
-  `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key. See
-  `camofox.env.example` for a template.
+  `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key.
   Python does not expand `$VAR` in strings — resolve with
   `os.environ.get("CAMOFOX_ENV_FILE")`, never a literal `$CAMOFOX_ENV_FILE`.
 - ⚠️ **Precedence differs between the two tools — verified, don't assume:**
   - `camofox.py` — **ambient env wins** over the file (`setdefault` merge), so
     an exported `CAMOFOX_BASE_URL` overrides the file's value.
-  - `start-camofox.sh` — **the file wins** over the ambient env: the script
+  - `setup.sh --camofox` — **the file wins** over the ambient env: the script
     exports its own defaults *first* (`CAMOFOX_ROOT=…`, `CAMOFOX_PORT=…`,
     lines ~45-86), then sources the file with `set -a` (line ~97), which
     overwrites them.
@@ -421,7 +481,7 @@ restarts, so one import per account is enough.
 - Endpoint: `POST /sessions/{userId}/cookies` with `{"cookies":[...]}`.
 - **`NODE_ENV=production` disables loopback import without a key** — set
   `CAMOFOX_API_KEY` in the env; the CLI sends `Authorization: Bearer <key>`.
-  403 means the *server* started without the key (`start-camofox.sh` loads an
+  403 means the *server* started without the key (`setup.sh --camofox` loads an
   env file on boot — `$CAMOFOX_ENV_FILE`, then `$CAMOFOX_ROOT/.env`, first
   existing wins — to prevent this).
 - `__Host-` cookies are host-only (no domain in the export) but the
@@ -431,7 +491,7 @@ restarts, so one import per account is enough.
 **Keep-alive** — the reapers (all `setInterval(..., 60_000)`, so thresholds
 quantize to 60s and worst case is `threshold + 60s`):
 
-| reaper | env | code default | `start-camofox.sh` | closes | evidence |
+| reaper | env | code default | `setup.sh --camofox` | closes | evidence |
 |---|---|---|---|---|---|
 | tab | `TAB_INACTIVITY_MS` | 300000 (5min) | 900000 (15min) | tab only | `server.js:6040`, `lib/config.js:149` |
 | session | `SESSION_TIMEOUT_MS` | 600000 (10min) | 1800000 (30min) | session → `context.close()` | `server.js:5978`, `lib/config.js:116` |
@@ -459,13 +519,13 @@ is dead or frozen, the import fails — see *Frozen vs dead browser* for the two
 distinct shapes (dead → instant `Target page, context or browser has been
 closed`; frozen → the request pends with no server-side timeout).
 
-**Do not blame the idle timers on this setup.** `start-camofox.sh:78` exports
+**Do not blame the idle timers on this setup.** `setup.sh --camofox` exports
 `BROWSER_IDLE_TIMEOUT_MS=0`, and `scheduleBrowserIdleShutdown` returns early on
 `BROWSER_IDLE_TIMEOUT_MS <= 0` (`server.js:698`) — so the browser idle timer is
 **never armed here**, and `closeSession` does *not* hand the browser to a
 countdown. The timers that remain live are the tab and session ones:
 
-| timer | env | code default | set by `start-camofox.sh` | effect |
+| timer | env | code default | set by `setup.sh --camofox` | effect |
 |---|---|---|---|---|
 | browser | `BROWSER_IDLE_TIMEOUT_MS` | 300000 | **0 → disabled** | closes the whole browser; only armed when `sessions.size === 0` (`server.js:698`) |
 | session | `SESSION_TIMEOUT_MS` | 600000 | 1800000 | closes the session; `0` genuinely disables (`server.js:5978`) |
@@ -476,7 +536,7 @@ it is the 60s active probe (`server.js:6978`) failing and calling
 `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, which kills
 in-flight requests. A restart under a live loop is always the probe.
 
-`start-camofox.sh` applies `TAB_INACTIVITY_MS=900000` and
+`setup.sh --camofox` applies `TAB_INACTIVITY_MS=900000` and
 `SESSION_TIMEOUT_MS=1800000` as **overrides of Camofox's own defaults** (300000
 and 600000). Re-checked after the env-file load — `$CAMOFOX_ENV_FILE` then
 `$CAMOFOX_ROOT/.env`, first existing wins — which can clobber them. With those
@@ -644,44 +704,56 @@ The adapter forwards the access key automatically (tool-contracts declare
 ## Files in this skill
 
 - `SKILL.md` — this file.
-- `scripts/start-camofox.sh` — the entry point (provision + launch).
-- `scripts/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
-  (called by start-camofox.sh; usable standalone with an output path).
+- `scripts/setup/camofox.sh` — the `setup.sh --camofox` module (install +
+  step), the entry point for the npm lane.
+- `scripts/setup/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
+  (called by the camofox installer; usable standalone with an output path).
 - `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
-- `scripts/camofox_mcp_check.sh` — one-shot MCP handshake probe (the `.replit`
-  "camofox mcp" workflow runs this; the stdio adapter alone idles forever).
-- `scripts/libpool.sh` — heals the host-wide pool `$REPL_HOME/.local/lib`
+- `scripts/setup/libpool.sh` — heals the host-wide pool `$REPL_HOME/.local/lib`
   (the dir the setup.sh rc block prepends to `LD_LIBRARY_PATH`; commonly
   *also* pinned by hand in `.replit [userenv.shared]` — setup.sh does not
   write that key). Since v4.6.0 it NO LONGER materializes the closure there:
   LD_LIBRARY_PATH outranks RUNPATH, so pooled copies shadow platform builds
   (the openssl/libcurl curl breakage — header has the story). It sweeps
   stale closure symlinks left by older versions and recreates the staged
-  libatomic SONAME link after store GC. Called by start-camofox.sh step 3;
+  libatomic SONAME link after store GC. Called by setup.sh --camofox step 3;
   the camofox server gets the closure per-process via LD_LIBRARY_PATH.
-- `camofox.env.example` — every tunable with its Camofox default.
 - `references/session-keepalive.md`, `references/web-content-lanes.md`.
 
-**Editing this skill: it exists in TWO live copies, and they are separate
-files, not symlinks.** Edit one and the other silently keeps serving the old
-behaviour:
+**Tests live in the repo's `tests/` dir** (not inside the skill — they exercise
+the installed box, not the skill's own scripts):
+- `tests/camofox_e2e.sh` — full REST + MCP end-to-end on a private port
+  (`bash tests/camofox_e2e.sh`).
+- `tests/camofox_mcp_check.sh` — one-shot MCP handshake probe for `.replit`
+  workflows (the stdio adapter alone just idles).
+- `tests/mcp_stdio_test.py` — the stdio driver used by both.
+
+**Editing this skill: there is ONE copy — the git repo.** Hermes loads it
+**in place** as an external skills dir (read-only), so an edit here is live
+immediately — no copy step, no `~/.hermes/skills/replit`, no symlinks:
 
 ```
 $HOME/workspace/skynight137-skills/skills/replit   <- git repo, source of truth
-$HOME/workspace/.hermes/skills/replit/                        <- what Hermes actually loads
+                                                    <- what Hermes loads (external_dir)
 ```
 
-Edit the repo copy, `cp` the changed files into the deployed copy, then verify
-with `diff -q` per file — a copy that silently no-ops looks identical to a
-successful one. Commit in the repo, and bump the `version:` in the frontmatter
-when behaviour changes.
+Wire it once (writes to `config.yaml`, never hand-edit it):
 
-`$REPL_HOME/scripts/` is a **pure symlink farm** into this skill's `scripts/`
-(one symlink per script, absolute) — `.replit` workflows invoke
-`bash scripts/<name>` from there, so any edit here is instantly live for the
-workflows; no copy step. Re-sync after adding/removing scripts:
-`rm -rf $REPL_HOME/scripts && mkdir $REPL_HOME/scripts && for f in $HERMES_HOME/skills/replit/scripts/*; do ln -s "$f" $REPL_HOME/scripts/; done`
-(non-skill local scripts live in `$REPL_HOME/.local/scripts/`, never mixed in).
+```bash
+hermes config set skills.external_dirs \
+  '["~/.agents/skills", "/home/runner/workspace/skynight137-skills/skills"]'
+```
+
+`hermes skills list` should show `replit … external … enabled`. External dirs
+are read-only: skill *creation* still writes to `~/.hermes/skills/`, and a
+local skill of the same name takes precedence — so do NOT also keep a copy at
+`$HOME/workspace/.hermes/skills/replit/` (a stale copy silently wins). Commit
+in the repo and bump the `version:` in the frontmatter when behaviour changes.
+
+`.replit` workflows invoke skill scripts by their **full repo path** rather
+than a `$REPL_HOME/scripts/` symlink farm (that farm is removed — call the
+script directly, e.g.
+`python3 skynight137-skills/skills/replit/scripts/camofox.py …`).
 
 Running any script in this skill writes `scripts/__pycache__/`; the repo has no
 `.gitignore`, so `git status` shows it as untracked noise. It is not tracked —

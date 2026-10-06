@@ -6,7 +6,7 @@
 # staged by setup.sh ensure_libatomic). Everything else a consumer needs is
 # already reachable by that consumer: nix binaries resolve their own deps via
 # RUNPATH, and camoufox's GTK stack arrives per-process via the closure dir
-# list that start-camofox.sh exports for the server.
+# list the camofox launcher exports for the server.
 #
 # Why host-wide closure pooling was REMOVED (pre-4.6.0 behavior): glibc's
 # search order puts LD_LIBRARY_PATH ABOVE RUNPATH, so any pooled SONAME
@@ -18,7 +18,7 @@
 # nowhere else may live there. (A dlopen-based filter does not save pooling:
 # resolvability is per-binary via RUNPATH, not global.)
 #
-# Usage: bash libpool.sh   (idempotent; start-camofox.sh calls it at step 3
+# Usage: bash libpool.sh   (idempotent; the camofox launcher calls it
 # so machines upgrading across the behavior change self-heal once.)
 #
 # Rules:

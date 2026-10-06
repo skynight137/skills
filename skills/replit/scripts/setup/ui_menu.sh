@@ -29,6 +29,7 @@ _MENU_ITEMS=(
   "hermes|Hermes (AI Agent)"
   "ori|ORI (AI Coding)"
   "cliproxy|CLIProxyAPI (CLI OAuth → API: Codex/Claude/Antigravity)"
+  "camofox|Camofox browser (anti-detection Firefox server)"
   "rclone|rclone (cloud storage sync)"
   "qbt|qBittorrent-nox (headless BitTorrent)"
   "aria2|aria2c (download utility)"
@@ -77,13 +78,25 @@ _status_init() {
     "aria2c|aria2c"
     "ffmpeg|ffmpeg"
     "cliproxy|cli-proxy-api"
+    "camofox|camofox-browser"
   )
+  local npm_root; npm_root="$(npm root -g 2>/dev/null || true)"
   _STATUS_LINES=()
   for entry in "${TOOLS[@]}"; do
     IFS='|' read -r name bin <<< "$entry"
     path="$XDG_BIN_HOME/$bin"
     [[ -x "$path" ]] || path="$(command -v "$bin" 2>/dev/null || true)"
-    ver="${path:+$("$path" --version 2>&1 | grep -v '^Picked up' | head -1 || true)}"
+    ver=""
+    if [[ "$bin" == "camofox-browser" ]]; then
+      # NEVER exec camofox-browser to probe a version: it has no --version flag
+      # and STARTS THE SERVER (binds the port, launches Firefox). Read the
+      # shipped package.json instead — fast and side-effect free.
+      ver="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' \
+        "$npm_root/@askjo/camofox-browser/package.json" 2>/dev/null | head -1 || true)"
+      [[ -n "$ver" ]] && ver="camofox-browser $ver"
+    elif [[ -n "$path" ]]; then
+      ver="$("$path" --version 2>&1 | grep -v '^Picked up' | head -1 || true)"
+    fi
     if [[ -n "$ver" ]]; then
       _STATUS_LINES+=("${COL_GREEN}[$(printf '%-8s' "$name")] $ver${COL_RESET} ${COL_CYAN}($path)${COL_RESET}")
     else
@@ -213,6 +226,7 @@ _menu_apply() {
       hermes)   INSTALL_HERMES=true ;;
       ori)      INSTALL_ORI=true ;;
       cliproxy) INSTALL_CLIPROXY=true ;;
+      camofox)  INSTALL_CAMOFOX=true ;;
       rclone)   INSTALL_RCLONE=true ;;
       qbt)      INSTALL_QBT=true ;;
       aria2)    INSTALL_ARIA2=true ;;

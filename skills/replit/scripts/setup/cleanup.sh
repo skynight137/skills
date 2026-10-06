@@ -295,7 +295,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -333,9 +333,10 @@ clean() {
       clean_aria2
       clean_ffmpeg
       clean_cliproxy
+      clean_camofox
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -361,6 +362,7 @@ clean() {
         hermes)        clean_hermes ;;
         ori)           clean_ori ;;
         cliproxy)      clean_cliproxy ;;
+        camofox)       clean_camofox ;;
         rclone)        clean_rclone ;;
         qbt)           clean_qbt ;;
         aria2)         clean_aria2 ;;
@@ -396,6 +398,7 @@ clean() {
           hermes)   clean_hermes ;;
           ori)      clean_ori ;;
           cliproxy) clean_cliproxy ;;
+          camofox)  clean_camofox ;;
           rclone)   clean_rclone ;;
           qbt)      clean_qbt ;;
           aria2)    clean_aria2 ;;
@@ -405,7 +408,7 @@ clean() {
       done
       ;;
     *)
-      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, rclone, qbt, aria2, ffmpeg"
+      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, camofox, rclone, qbt, aria2, ffmpeg"
       ;;
   esac
   cat <<CLEANMSG

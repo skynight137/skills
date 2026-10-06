@@ -47,6 +47,18 @@ doctor() {
   check_tool "qBittorrent-nox" "$XDG_BIN_HOME/qbittorrent-nox"
   check_tool "aria2c" "$XDG_BIN_HOME/aria2c"
   check_tool "FFmpeg" "$XDG_BIN_HOME/ffmpeg"
+  # Camofox: the npm binary on PATH + engine presence.
+  if command -v camofox-browser >/dev/null 2>&1; then
+    if [[ -f "$CAMOUFOX_INSTALL_DIR/version.json" ]]; then
+      ok "Camofox: camofox-browser + engine ($(cat "$CAMOUFOX_INSTALL_DIR/version.json" 2>/dev/null))"
+    else
+      warn "camofox-browser present but engine missing in $CAMOUFOX_INSTALL_DIR — run: bash setup.sh --camofox"
+      fail=1
+    fi
+  else
+    warn "Camofox: NOT FOUND (camofox-browser) — install with --camofox, or ignore if not used"
+    fail=1
+  fi
   # CLIProxyAPI has NO --version flag: any unknown flag prints the version
   # banner and exits 2, so the generic check_tool would report a false
   # 'FAILED to run'. Probe the banner text instead of the exit code.

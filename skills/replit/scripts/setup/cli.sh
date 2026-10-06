@@ -41,7 +41,8 @@ main() {
       && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
       && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
-      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY; then
+      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
+      && ! $INSTALL_CAMOFOX; then
       die "No tools selected. Aborting."
     fi
   else
@@ -112,6 +113,7 @@ main() {
   $INSTALL_ARIA2    && install_aria2
   $INSTALL_FFMPEG   && install_ffmpeg
   $INSTALL_CLIPROXY && install_cliproxy
+  $INSTALL_CAMOFOX  && install_camofox
 
   if $DOCTOR; then
     doctor || true
@@ -141,7 +143,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cli-proxy-api
+   cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   else
@@ -160,7 +162,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cli-proxy-api
+   cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi

@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.11.0
+version: 4.12.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -22,9 +22,9 @@ other lane assumes its persistence rules.
 | You want to… | Read | Scripts |
 |---|---|---|
 | persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `replit_userenv.py` |
-| get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `generate-closure.sh`, `libpool.sh` |
+| get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `ensure_browser.sh`, `monitor.sh`, `browser_monitor.py` |
-| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `start-camofox.sh`, `camofox.py` |
+| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
 | bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -40,7 +40,7 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    A path that worked yesterday may not exist today; long-lived things need a
    durable copy outside the store (see nix.md, hermes-on-replit.md).
 3. **`$REPLIT_LD_LIBRARY_PATH` is never enough** for GUI browsers — you need
-   the full transitive closure (nix.md §3; `generate-closure.sh`).
+   the full transitive closure (nix.md §3; `scripts/setup/generate-closure.sh`).
 4. **npm is behind a package firewall**; pin `--registry=https://registry.npmjs.org/`.
 5. **Replit ships a Playwright-managed Chromium** — `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`;
    never `playwright install`.
@@ -63,22 +63,33 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
   GB-scale runtime clone). config.yaml is edited textually + verified instead.
   `--cliproxy` installs CLIProxyAPI (CLI OAuth → API bridge) — see
   `references/cliproxy.md`; `--clean cliproxy` keeps config + OAuth logins.
+  `--camofox` installs the **npm-global** Camofox browser
+  (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
+  `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + WebGL
+  auto-skip, and writes a runtime env snippet. Run it with
+  `camofox-browser`. See `references/camofox.md` §"npm-global lane".
 - `replit_userenv.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
-- `start-camofox.sh` — one-command provision + launch of the Camoufox server.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
-- `generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
-- `camofox_mcp_check.sh` — one-shot MCP health probe (waits for REST, runs a
+- `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
+- `tests/camofox_mcp_check.sh` — one-shot MCP health probe (waits for REST, runs a
   real stdio handshake, asserts the 11 `camofox_*` tools; exit 0 = live). Used
   by the `.replit` "camofox mcp" workflow — the adapter itself is stdio-only,
   running it standalone just idles forever.
 - `ensure_browser.sh` — idempotent CDP launcher for the bundled Chromium.
 - `monitor.sh` / `browser_monitor.py` — opt-in :5000 screenshot relay.
 
-## camofox.env.example
+## Camofox tuning
 
-Every Camoufox-server tunable with its default; copy to `$CAMOFOX_ROOT/.env`
-(see camofox.md).
+There is no env-file template to ship — **the interface is exported vars**
+(`CAMOFOX_PORT`, `CAMOFOX_ACCESS_KEY`, `TAB_INACTIVITY_MS`, ...), read from the
+shell (or exported before `camofox-browser`):
+
+```bash
+CAMOFOX_PORT=9000 CAMOFOX_ACCESS_KEY="$(openssl rand -hex 32)" camofox
+```
+
+The Camofox tunables (with defaults) are documented in `references/camofox.md`.
 
 ## Installing this skill pack
 

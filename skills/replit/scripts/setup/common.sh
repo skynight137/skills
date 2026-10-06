@@ -111,6 +111,7 @@ seed_tool_wiring(){
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
   wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
+  wire_tool camofox CAMOUFOX_INSTALL_DIR -- "$XDG_BIN_HOME"
 }
 
 # State flags ───────────────────────────────────────────────────────────────
@@ -127,6 +128,7 @@ INSTALL_QBT=false
 INSTALL_ARIA2=false
 INSTALL_FFMPEG=false
 INSTALL_CLIPROXY=false
+INSTALL_CAMOFOX=false
 INSTALL_ALL=false
 DOCTOR=false
 FIX=false
