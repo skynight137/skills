@@ -143,7 +143,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cli-proxy-api  camofox
+   cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   else
@@ -162,7 +162,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cli-proxy-api  camofox
+   cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi
