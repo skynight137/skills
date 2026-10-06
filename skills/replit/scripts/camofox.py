@@ -100,17 +100,27 @@ def default_root():
 def default_state():
     if os.environ.get("CAMOFOX_STATE_DIR"):
         return os.environ["CAMOFOX_STATE_DIR"]
+    # npm-global lane: the server keeps state under $HOME/.camofox (profile
+    # persistence default). Prefer it when it exists so list/screenshot find
+    # the real jars; else the git-clone layout's <root>/state.
+    if os.path.isdir(os.path.expanduser("~/.camofox")):
+        return os.path.expanduser("~/.camofox")
     return os.path.join(default_root(), "state")
 
 
 # --- HTTP --------------------------------------------------------------------
 def load_key(env_path):
-    """Prefer the explicit/--env file, then the (already merged) environment."""
+    """Prefer the explicit/--env file, then the (already merged) environment.
+    CAMOFOX_API_KEY is the client token; ALSO accept the CAMOFOX_ACCESS_KEY
+    superkey so a box that only exports ACCESS_KEY (which gates every route)
+    still authenticates."""
     if env_path and os.path.exists(env_path):
-        v = _read_env_file(env_path).get("CAMOFOX_API_KEY")
+        f = _read_env_file(env_path)
+        v = f.get("CAMOFOX_API_KEY") or f.get("CAMOFOX_ACCESS_KEY")
         if v:
             return v
-    return os.environ.get("CAMOFOX_API_KEY") or None
+    return (os.environ.get("CAMOFOX_API_KEY")
+            or os.environ.get("CAMOFOX_ACCESS_KEY") or None)
 
 
 def req(key, method, path, body=None, timeout=300):

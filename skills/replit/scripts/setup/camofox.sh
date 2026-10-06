@@ -109,7 +109,8 @@ camofox_write_launcher() {
 set -euo pipefail
 if [[ "\${1:-}" == -h || "\${1:-}" == --help ]]; then
   echo "usage: camofox            # start camofox-browser on :\${CAMOFOX_PORT:-9377}"
-  echo "env: CAMOFOX_PORT CAMOFOX_BIND_HOST CAMOFOX_ACCESS_KEY CAMOFOX_API_KEY"
+  echo "env: CAMOFOX_PORT CAMOFOX_BIND_HOST CAMOFOX_API_KEY (client token)"
+  echo "     CAMOFOX_ACCESS_KEY (optional superkey — only for exposing beyond loopback)"
   exit 0
 fi
 CLOSURE_FILE="$CAMOFOX_CLOSURE_FILE"
@@ -142,8 +143,23 @@ fi
 export CAMOFOX_SKIP_WEBGL_FP
 export CAMOFOX_BIND_HOST="\${CAMOFOX_BIND_HOST:-127.0.0.1}"
 export CAMOFOX_PORT="\${CAMOFOX_PORT:-9377}"
-# Cookie import needs a key when NODE_ENV=production; harmless otherwise.
-export CAMOFOX_API_KEY="\${CAMOFOX_API_KEY:-\${CAMOFOX_ACCESS_KEY:-}}"
+# ACCESS superkey gates EVERY route — only needed to expose beyond loopback.
+# On the default loopback bind, DROP an inherited one so the server uses the
+# client token (CAMOFOX_API_KEY) alone. Keep it only when you opt into a
+# non-loopback bind (set CAMOFOX_BIND_HOST + CAMOFOX_ACCESS_KEY together).
+if [[ "\$CAMOFOX_BIND_HOST" == "127.0.0.1" ]]; then unset CAMOFOX_ACCESS_KEY; fi
+# Client token. CAMOFOX_API_KEY is the one the CLI (camofox.py) and cookie
+# import use. Generated once into \$CAMOFOX_ROOT/.env (chmod 600, NOT in git)
+# so later CLI runs reuse the same token.
+CAMOFOX_ROOT="\${CAMOFOX_ROOT:-\${REPL_HOME:-\$HOME}/camofox}"
+if [[ -z "\${CAMOFOX_API_KEY:-}" && -f "\$CAMOFOX_ROOT/.env" ]]; then
+  CAMOFOX_API_KEY="\$(sed -n 's/^CAMOFOX_API_KEY=//p' "\$CAMOFOX_ROOT/.env" | head -1)"
+fi
+if [[ -z "\${CAMOFOX_API_KEY:-}" ]]; then
+  CAMOFOX_API_KEY="\$(openssl rand -hex 32 2>/dev/null || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \\n')"
+  mkdir -p "\$CAMOFOX_ROOT" && umask 077 && printf 'CAMOFOX_API_KEY=%s\\n' "\$CAMOFOX_API_KEY" > "\$CAMOFOX_ROOT/.env"
+fi
+export CAMOFOX_API_KEY
 export TAB_INACTIVITY_MS="\${TAB_INACTIVITY_MS:-900000}"
 export SESSION_TIMEOUT_MS="\${SESSION_TIMEOUT_MS:-1800000}"
 export BROWSER_IDLE_TIMEOUT_MS="\${BROWSER_IDLE_TIMEOUT_MS:-0}"

@@ -55,9 +55,12 @@ for _ in $(seq 1 60); do
 done
 [[ "$ready" = yes ]] && ok "server up on :$PORT" || { bad "server not ready"; tail -20 "$LOGF"; exit 1; }
 
-# 3. auth: no key = rejected, key = accepted
-code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' "$BASE/tabs")
-[[ "$code" = 401 ]] && ok "no-key request -> 401 (auth enforced)" || bad "no-key request -> $code (expected 401)"
+# 3. auth model: loopback is trusted for reads, but privileged routes
+#    (cookie import) require the CAMOFOX_API_KEY. No-key read is allowed.
+curl -s -m 5 -o /dev/null "$BASE/tabs" && ok "no-key GET /tabs -> allowed on loopback" || bad "no-key GET /tabs failed"
+code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST "$BASE/sessions/e2e/cookies" \
+  -H 'Content-Type: application/json' -d '{"cookies":[]}')
+[[ "$code" = 403 ]] && ok "no-key cookie import -> 403 (privileged route gated)" || bad "no-key cookie import -> $code (expected 403)"
 
 # 4. open a tab (first launch can be slow — cold engine)
 tab=$(curl -s -m 120 -X POST "$BASE/tabs" --config "$CFG" -H 'Content-Type: application/json' \
