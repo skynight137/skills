@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.10.0
+version: 4.11.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -45,9 +45,13 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
 5. **Replit ships a Playwright-managed Chromium** — `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`;
    never `playwright install`.
 
-## Scripts (flat, all in `scripts/`)
+## Scripts (entry point in `scripts/`, modules in `scripts/setup/`)
 
-- `setup.sh` — idempotent toolchain/env provisioning (node/uv/python pins, LD
+- `setup.sh` — thin entry point: mode/path/version config, then `source`s the
+  modules in `scripts/setup/` (`common` → `ui_menu`/`bin`/`hermes_tools`/`fix`/
+  `rc`/`doctor`/installers/`cleanup` → `cli`). All wiring helpers resolve via
+  `$SCRIPT_DIR`, so every module and `setup/` must sit beside `setup.sh`.
+  It is idempotent toolchain/env provisioning (node/uv/python pins, LD
   paths, rc chain); run it after any recreate. `--doctor` verifies installs +
   wiring read-only (exit 2 = wiring gaps); `--fix` rewrites ALL wiring
   (rc block, userenv, shim, ~/.profile, hermes shell_init_files, libatomic)
