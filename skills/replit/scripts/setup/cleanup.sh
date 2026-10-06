@@ -24,6 +24,126 @@ _present() {
 # nothing_removed <label>: honest skip for an already-absent tool.
 nothing_removed() { skip "$1 not installed — nothing to remove"; }
 
+# ── User-data backup before destructive removal ──────────────────────────────
+# Some payload dirs are NOT pure install artifacts — they hold the operator's
+# data. `--clean` must not destroy that silently, so any tool that owns user
+# data goes through back_up_tool FIRST. The archive lives OUTSIDE the dir being
+# removed (a backup inside $HERMES_HOME would be deleted by the very rm it is
+# protecting against).
+#
+# hermes_backup: use the tool's OWN CLI (`hermes backup`) to produce the
+# archive, then COPY it to the destination OUTSIDE $HERMES_HOME. The CLI knows
+# what to include/exclude (skills, sessions, memory-provider state) and takes
+# SQLite-safe copies of state.db, producing an archive `hermes import` can
+# restore. A manual zip is only a fallback for a box where the CLI is missing
+# or fails — the guarantee that matters is: no deletion without a backup.
+HERMES_BACKUP_EXCLUDES=(
+  '*/cache/*' '*/installs/*' '*/hermes-agent/*' '*/tools/*' '*/logs/*'
+  '*/telemetry/*' '*/audio_cache/*' '*/image_cache/*' '*/node_modules/*'
+  '*/models_dev_cache.json' '*/provider_models_cache.json' '*.lock'
+)
+
+# Manual fallback archive (used only when the CLI is unavailable/failed).
+_hermes_backup_zip_fallback() {
+  local dest="$1"
+  command -v zip >/dev/null 2>&1 || return 1
+  rm -f "$dest"
+  ( cd "$(dirname "$HERMES_HOME")" \
+      && zip -q -r "$dest" "$(basename "$HERMES_HOME")" -x "${HERMES_BACKUP_EXCLUDES[@]}" )
+  [[ -s "$dest" ]]
+}
+
+hermes_backup() {
+  local dest_dir="$XDG_CONFIG_HOME/hermes"
+  local dest="$dest_dir/hermes-backup.zip"
+  [[ -d "$HERMES_HOME" ]] || return 0
+  mkdir -p "$dest_dir"
+
+  # 1. Preferred: the tool's own CLI, staged OUTSIDE $HERMES_HOME (scratch
+  #    TMPDIR), then copied in — a backup written inside the dir being removed
+  #    would be deleted by the very rm it protects against. `timeout` guards
+  #    against the launcher booting a source-update cycle (never block a
+  #    --clean on the network); HERMES_HOME is passed explicitly so the CLI
+  #    archives THIS home.
+  local staging_dir staging rc=1
+  staging_dir="$(mktemp -d)"; staging="$staging_dir/hermes-backup.zip"
+  if command -v hermes >/dev/null 2>&1; then
+    if HERMES_HOME="$HERMES_HOME" timeout "${HERMES_BACKUP_TIMEOUT:-900}" \
+         hermes backup -o "$staging" >/dev/null 2>&1 \
+       && [[ -s "$staging" ]]; then
+      rc=0
+    fi
+  fi
+
+  # 2. Fallback: manual zip when the CLI is absent or produced no archive.
+  if (( rc != 0 )); then
+    warn "hermes backup CLI unavailable or produced no archive — falling back to a manual zip"
+    _hermes_backup_zip_fallback "$staging" && rc=0
+  fi
+
+  if (( rc == 0 )) && cp -f "$staging" "$dest" && [[ -s "$dest" ]]; then
+    rm -rf "$staging_dir"
+    ok "Hermes user data backed up: $dest"
+    _BACKUPS_TAKEN+=("hermes->$dest")
+    return 0
+  fi
+
+  rm -rf "$staging_dir"
+  warn "Hermes backup produced no archive — refusing to delete $HERMES_HOME"
+  rm -f "$dest"
+  return 1
+}
+
+# Dispatcher: back up <tool>'s user data before removal. Returns 0 when there
+# is nothing to back up OR the backup succeeded; non-zero means the backup was
+# attempted and FAILED, in which case the caller must NOT delete the payload.
+back_up_tool() {
+  case "$1" in
+    hermes)  hermes_backup ;;
+    ollama)  : ;;  # models are preserved in place by clean_ollama (too big to archive)
+    camofox) : ;;  # ~/.camofox server state is preserved by clean_camofox
+    *)       : ;;  # nothing user-owned (binary-only tools)
+  esac
+}
+
+# Human-readable "what this tool owns" — used by the pre-flight summary.
+clean_paths_for() {
+  case "$1" in
+    android)       echo "$JAVA_HOME $SDK (binaries: java/adb/sdkmanager/…)" ;;
+    uv)            echo "uv/uvx binaries, $XDG_DATA_HOME/uv, uv cache" ;;
+    node)          echo "$NODE_DIR + node/npm/npx symlinks" ;;
+    opencode)      echo "$XDG_BIN_HOME/opencode, $OPENCODE_CONFIG_DIR" ;;
+    ollama)        echo "$OLLAMA_INSTALL_DIR binaries (MODELS PRESERVED)" ;;
+    claude)        echo "$XDG_BIN_HOME/claude" ;;
+    hermes)        echo "$HERMES_HOME (backed up via hermes CLI first), hermes launchers" ;;
+    ori)           echo "$XDG_BIN_HOME/ori" ;;
+    cliproxy)      echo "cli-proxy-api binary (config + OAuth logins PRESERVED)" ;;
+    camofox)       echo "npm package, $CAMOUFOX_INSTALL_DIR engine, closure (server state PRESERVED)" ;;
+    rclone)        echo "$XDG_BIN_HOME/rclone" ;;
+    qbt)           echo "$XDG_BIN_HOME/qbittorrent-nox" ;;
+    aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
+    ffmpeg)        echo "$XDG_BIN_HOME/ffmpeg ffprobe ffplay" ;;
+    *)             echo "$1" ;;
+  esac
+}
+
+# Pre-flight: print exactly what is about to be removed (and what is kept)
+# BEFORE anything is deleted. Purely informational — the y/N confirm in
+# confirm_clean is the actual gate.
+clean_preflight() {
+  local -a targets=("$@")
+  ((${#targets[@]})) || return 0
+  echo ""
+  echo "${COL_BOLD}The following will be REMOVED:${COL_RESET}"
+  local t
+  for t in "${targets[@]}"; do
+    printf '  %s- %-12s%s %s\n' "$COL_RED" "$t" "$COL_RESET" "$(clean_paths_for "$t")"
+  done
+  case " ${targets[*]} " in
+    *" hermes "*) echo "  ${COL_YELLOW}• hermes: backed up via 'hermes backup' CLI -> $XDG_CONFIG_HOME/hermes/hermes-backup.zip first${COL_RESET}" ;;
+  esac
+}
+
 # True when the given package is installed as a GLOBAL npm package (opencode-ai,
 # @anthropic-ai/claude-code). Those installs don't create an XDG_BIN_HOME binary,
 # so _present alone would skip them and leak the global package on clean.
@@ -116,6 +236,15 @@ clean_hermes() {
     nothing_removed "Hermes Agent"; return 0
   fi
   step "Removing Hermes Agent"
+  # User data (config.yaml, .env, auth.json, sessions, memories, cron, skills,
+  # state.db) lives in $HERMES_HOME — back it up BEFORE the rm. If the backup
+  # cannot be produced, do NOT delete: a silent loss of the whole agent config
+  # is exactly the failure this guards against.
+  if ! back_up_tool hermes; then
+    warn "Hermes NOT removed — backup failed; $HERMES_HOME left intact"
+    _CLEAN_SKIPPED+=("hermes")
+    return 0
+  fi
   rm_data hermes "$HERMES_HOME"
   rm_bin hermes hermes-agent hermes-acp
   ok "Hermes Agent removed"
@@ -287,6 +416,21 @@ clean() {
   unset _MENU_ITEMS _MENU_CURSOR _MENU_TOGGLE 2>/dev/null || true
   local summary hint
 
+  # Pre-flight: show what is about to go (and which tools keep user data)
+  # BEFORE any deletion. Label normalization: android-tools -> android,
+  # oc -> opencode, matching the wire labels used below.
+  local _pf=""
+  case "$CLEAN_TARGET" in
+    ""|all) _pf="" ;;
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg)
+      _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
+  esac
+  if [[ -n "$_pf" ]]; then
+    clean_preflight "$_pf"
+  elif [[ "$CLEAN_TARGET" == all || -z "$CLEAN_TARGET" ]]; then
+    (( ${#CLEAN_TOOLS[@]} )) && clean_preflight "${CLEAN_TOOLS[@]}" || clean_preflight all
+  fi
+
   # Dispatch order (explicit target / full wipe / misc state → wiring
   # strip; menu-selected tools → per-tool only). No set -e trap under us: the
   # function returns 0 only after real cleanup; an empty menu selection
@@ -418,4 +562,16 @@ clean() {
  Reinstall: $hint
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 CLEANMSG
+  if ((${#_BACKUPS_TAKEN[@]})); then
+    echo ""
+    for summary in "${_BACKUPS_TAKEN[@]}"; do
+      ok "Backup kept: ${summary#*->}"
+    done
+  fi
+  if ((${#_CLEAN_SKIPPED[@]})); then
+    echo ""
+    for summary in "${_CLEAN_SKIPPED[@]}"; do
+      warn "Not removed (backup failed, payload intact): $summary"
+    done
+  fi
 }

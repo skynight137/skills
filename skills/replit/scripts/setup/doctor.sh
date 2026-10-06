@@ -8,6 +8,10 @@ doctor() {
 
   check_tool() {
     name="$1"; cmd="$2"
+    # Optional 3rd arg: the version flag to probe with. Defaults to GNU
+    # --version; FFmpeg only accepts the single-dash -version and exits 8 on
+    # --version by design, which used to read as a broken install.
+    local vflag="${3:---version}"
     if command -v "$cmd" &>/dev/null; then
       # Gate on the tool's OWN exit status: a pipe under pipefail reports the
       # pipeline (a loader-failed binary exits nonzero but the exit-141 of a
@@ -15,7 +19,7 @@ doctor() {
       # raw output + rc, then filter. Loader failures (libatomic.so.1) used
       # to print as '✓ Node: error while loading shared libraries...'.
       local _raw _rc=0
-      _raw="$("$cmd" --version 2>&1)" || _rc=$?
+      _raw="$("$cmd" "$vflag" 2>&1)" || _rc=$?
       _raw="$(printf '%s\n' "$_raw" | grep -v '^Picked up' | head -1)"
       if (( _rc == 0 )); then
         ok "$name: $_raw"
@@ -46,7 +50,9 @@ doctor() {
   check_tool "rclone" "$XDG_BIN_HOME/rclone"
   check_tool "qBittorrent-nox" "$XDG_BIN_HOME/qbittorrent-nox"
   check_tool "aria2c" "$XDG_BIN_HOME/aria2c"
-  check_tool "FFmpeg" "$XDG_BIN_HOME/ffmpeg"
+  # FFmpeg probes with -version (single dash): --version prints the banner
+  # and exits 8 by design, so the generic --version probe false-fails.
+  check_tool "FFmpeg" "$XDG_BIN_HOME/ffmpeg" -version
   # Camofox: the npm binary on PATH + engine presence.
   if command -v camofox-browser >/dev/null 2>&1; then
     if [[ -f "$CAMOUFOX_INSTALL_DIR/version.json" ]]; then
@@ -68,13 +74,6 @@ doctor() {
     if [[ -n "$_cpa_out" ]]; then ok "CLIProxyAPI: $_cpa_out"; else warn "CLIProxyAPI: present but did not print its version banner ($_cpa_bin)"; fail=1; fi
   else
     warn "CLIProxyAPI: NOT FOUND ($XDG_BIN_HOME/cli-proxy-api) — install with --cliproxy, or ignore if not used"
-    fail=1
-  fi
-
-  if [[ -x "$WORKSPACE/gradlew" ]]; then
-    ok "gradlew present"
-  else
-    warn "gradlew missing in $WORKSPACE"
     fail=1
   fi
 

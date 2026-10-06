@@ -11,7 +11,9 @@ install_uv() {
   # Fresh-install contract: remove any stale target before installing, so a
   # re-run replaces (never merges with) the previous install.
   rm -f "$XDG_BIN_HOME/uv" "$XDG_BIN_HOME/uvx"
-  UV_INSTALL_DIR="$XDG_BIN_HOME" bash "$installer" --no-modify-path || die "uv install failed"
+  # UV_NO_MODIFY_PATH=1 replaces the deprecated --no-modify-path flag
+  # (astral's installer warns on the flag: "please set UV_NO_MODIFY_PATH=1").
+  UV_NO_MODIFY_PATH=1 UV_INSTALL_DIR="$XDG_BIN_HOME" bash "$installer" || die "uv install failed"
   rm -f "$installer"
   [[ -x "$XDG_BIN_HOME/uv" ]] || die "uv install did not produce $XDG_BIN_HOME/uv"
   ok "uv installed: $XDG_BIN_HOME/uv"

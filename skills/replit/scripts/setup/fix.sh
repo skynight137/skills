@@ -37,7 +37,7 @@ fix_derive_wiring() {
   # it on EVERY repl, so it would resurrect node wiring where our payload
   # never landed.
   if [[ -x "$NODE_DIR/bin/node" ]]; then
-    record_tool_env_vars NODE_DIR npm_config_prefix
+    record_tool_env_vars NODE_DIR npm_config_prefix npm_config_dangerously_allow_all_scripts "${_TLS_ENV_VARS[@]}"
     record_tool_path_dirs "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   fi
   if [[ -x "$XDG_BIN_HOME/opencode" ]]; then
@@ -168,7 +168,19 @@ fix_hermes_config() {
   [[ -w "$cfg" ]] || { warn "$cfg not writable — edit by hand: shell_init_files: [~/.profile, \${REPLIT_BASHRC}]"; return 0; }
   local backup; backup="$(mktemp)"
   cp "$cfg" "$backup"
-  if grep -qE '^[[:space:]]*shell_init_files:' "$cfg"; then
+  # Preferred edit: yq (mikefarah v4, on PATH as /repl/tools/bin/yq). It
+  # rewrites ONLY the targeted key and preserves comments — verified on this
+  # box's 254 KB config.yaml (comment count unchanged). The old awk fallback
+  # below stays for boxes without yq. The yq expression is SINGLE-quoted so
+  # ${REPLIT_BASHRC} is written literally into the YAML (it is expanded by
+  # the shell that sources the file, not by us).
+  local edited=0
+  if command -v yq >/dev/null 2>&1; then
+    if yq -i '.terminal.shell_init_files = ["~/.profile", "${REPLIT_BASHRC}"]' "$cfg" 2>/dev/null; then
+      edited=1
+    fi
+  fi
+  if (( ! edited )) && grep -qE '^[[:space:]]*shell_init_files:' "$cfg"; then
     awk '
       /^[[:space:]]*shell_init_files:/ && !done {
         indent = match($0, /[^ ]/) - 1
@@ -180,7 +192,7 @@ fix_hermes_config() {
       swallow && /^[[:space:]]*-/ { next }
       { swallow = 0; print }
     ' "$backup" > "$cfg"
-  elif grep -qE '^terminal:' "$cfg"; then
+  elif (( ! edited )) && grep -qE '^terminal:' "$cfg"; then
     awk '
       { print }
       /^terminal:/ && !done {
@@ -190,7 +202,7 @@ fix_hermes_config() {
         done = 1
       }
     ' "$backup" > "$cfg"
-  else
+  elif (( ! edited )); then
     rm -f "$backup"
     warn "no terminal: block in $cfg — edit by hand: terminal.shell_init_files: [~/.profile, \${REPLIT_BASHRC}]"
     return 0
@@ -198,7 +210,11 @@ fix_hermes_config() {
   local after; after="$(_parse_shell_init "$cfg")"
   if [[ "$after" == *~/.profile* && "$after" == *REPLIT_BASHRC* ]]; then
     rm -f "$backup"
-    ok "hermes config terminal.shell_init_files -> [~/.profile, \${REPLIT_BASHRC}] (direct edit)"
+    if (( edited )); then
+      ok "hermes config terminal.shell_init_files -> [~/.profile, \${REPLIT_BASHRC}] (yq)"
+    else
+      ok "hermes config terminal.shell_init_files -> [~/.profile, \${REPLIT_BASHRC}] (direct edit)"
+    fi
   else
     cat "$backup" > "$cfg"; rm -f "$backup"
     warn "shell_init_files edit failed verification — $cfg reverted; edit it by hand"

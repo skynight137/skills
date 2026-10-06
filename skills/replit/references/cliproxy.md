@@ -15,9 +15,11 @@ bash scripts/setup.sh --clean cliproxy   # remove binary+symlink, KEEP config/lo
 bash scripts/setup.sh --doctor       # verifies it (banner probe, not --version)
 ```
 
-Layout: binary + config in **`$REPL_HOME/cli-proxy`** (`$CLIPROXY_HOME`),
-symlinked to `$XDG_BIN_HOME/cli-proxy-api` so the CLI is on PATH. `CLIPROXY_HOME`
-is exported in the rc + `.replit [userenv.shared]`.
+Layout: binary + config in **`$CLIPROXY_HOME`** — `$XDG_CONFIG_HOME/cli-proxy`
+(the XDG rule every other tool follows), with a legacy manual install at
+`$REPL_HOME/cli-proxy` still honored when it already has a `config.yaml`) —
+symlinked to `$XDG_BIN_HOME/cli-proxy-api` so the CLI is on PATH.
+`CLIPROXY_HOME` is exported in the rc + `.replit [userenv.shared]`.
 
 - **First install generates a safe `config.yaml`** (openssl-random client key +
   management secret, `host: 127.0.0.1`, chmod 600). It does NOT copy

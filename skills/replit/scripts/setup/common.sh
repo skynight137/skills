@@ -21,6 +21,26 @@ UV_PYTHON_DOWNLOADS="auto"
 UV_PYTHON_PREFERENCE="managed"
 PYTHONPATH=""
 
+# Node 26 niceties (owned by the `node` tool — see seed_tool_wiring).
+# npm refuses lifecycle scripts by default now; the env form is read exactly
+# like the config file (verified) and, unlike `npm config set ... -g` writing
+# $HOME/.npmrc, it survives $HOME being wiped.
+npm_config_dangerously_allow_all_scripts="${npm_config_dangerously_allow_all_scripts:-true}"
+
+# TLS / CA bundle derived from the Nix cacert package. `pkgs.cacert` (declared
+# in .replit [nix] packages) exports SYSTEM_CERTIFICATE_PATH; these four are
+# the variables curl/npm/node consult. Empty on a box without that package, in
+# which case nothing is pinned and the platform defaults apply.
+_TLS_ENV_VARS=()
+if [[ -n "${SYSTEM_CERTIFICATE_PATH:-}" ]]; then
+  SSL_CERT_FILE="$SYSTEM_CERTIFICATE_PATH"
+  SSL_CERT_DIR="$(dirname "$SSL_CERT_FILE")"
+  NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
+  NODE_EXTRA_CA_CERTS="$SSL_CERT_FILE"
+  export SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS
+  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS)
+fi
+
 ORI_CONFIG_DIR="$XDG_CONFIG_HOME/ori"
 
 # Replit platform sets XDG_CONFIG_HOME=$REPL_HOME/.config, so this
@@ -31,10 +51,17 @@ OPENCODE_CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
 
 HERMES_HOME="${REPL_HOME:-$HOME}/.hermes"
 
-# CLIProxyAPI — persistent app dir under the workspace (its own config.yaml +
-# server.log live here). Matches the manual install layout at
-# $REPL_HOME/cli-proxy, so a pre-existing manual setup keeps working.
-CLIPROXY_HOME="${REPL_HOME:-$HOME}/cli-proxy"
+# CLIProxyAPI — persistent app dir. Follows the XDG rule every other tool
+# uses ($XDG_CONFIG_HOME/<tool>), so it does NOT scatter a dir in the
+# workspace root next to the user's repos. A pre-existing legacy manual
+# install at $REPL_HOME/cli-proxy is still honored (see install_cliproxy),
+# so nobody's config/ OAuth logins get orphaned by the move.
+CLIPROXY_LEGACY_HOME="${REPL_HOME:-$HOME}/cli-proxy"
+if [[ -f "$CLIPROXY_LEGACY_HOME/config.yaml" ]]; then
+  CLIPROXY_HOME="$CLIPROXY_LEGACY_HOME"
+else
+  CLIPROXY_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/cli-proxy"
+fi
 
 OLLAMA_INSTALL_DIR="$XDG_DATA_HOME/ollama"
 OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
@@ -100,7 +127,7 @@ seed_tool_wiring(){
   # running an installer. wire_tool is an idempotent map assignment.
   wire_tool uv UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH -- "$XDG_BIN_HOME"
   wire_tool android JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS -- "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
-  wire_tool node NODE_DIR npm_config_prefix -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
+  wire_tool node NODE_DIR npm_config_prefix npm_config_dangerously_allow_all_scripts "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   wire_tool opencode OPENCODE_CONFIG_DIR -- "$XDG_BIN_HOME"
   wire_tool ollama OLLAMA_INSTALL_DIR OLLAMA_MODELS -- "$XDG_BIN_HOME"
   wire_tool claude CLAUDE_CONFIG_DIR -- "$XDG_BIN_HOME"
@@ -135,6 +162,13 @@ FIX=false
 CLEAN=false
 LIST_STATE=false
 YES=false
+# Install failures accumulated by run_install_step (`--all` / multi-tool runs).
+# One broken tool must not abort the rest of the run — see run_install_step.
+_INSTALL_FAILURES=()
+# User-data backups taken by back_up_tool before a destructive clean (--clean).
+_BACKUPS_TAKEN=()
+# Tools whose removal was refused because their backup failed.
+_CLEAN_SKIPPED=()
 # Empty means BARE --clean (no target): main() opens the clean menu on a
 # terminal and defaults to 'all' when non-interactive. Set to a tool
 # name (or 'all') when the user gave an explicit target — skips the menu.
@@ -159,3 +193,38 @@ _run_exit_actions() {
   exit $rc
 }
 trap '_run_exit_actions' EXIT
+
+# Per-tool isolation ─────────────────────────────────────────────────────────
+# installers call `die` on failure, and `die` exits the whole script. Under
+# `--all` / multi-tool runs one broken tool (bad download, missing upstream
+# asset, …) must NOT abort the rest: run_install_step runs each installer in
+# its own errexit subshell, catches the failure and records it, then the run
+# carries on to the next tool. The summary + exit code reflect what failed.
+#
+# A subshell inherits the parent EXIT trap; the trap is cleared inside so a
+# failing installer's `exit 1` cannot run the parent's exit actions early.
+run_install_step() {
+  local label="$1"; shift
+  local rc=0
+  set +e
+  ( trap - EXIT; set -e; "$@" )
+  rc=$?
+  set -e
+  if (( rc != 0 )); then
+    warn "$label failed (exit $rc) — continuing with the remaining tools"
+    _INSTALL_FAILURES+=("$label")
+    return 0
+  fi
+  return 0
+}
+
+# Summary + exit status for a multi-tool install run. Reuses the same
+# wording doctor uses (missing tools are an install-scope fact, not a wiring
+# bug) and returns 1 when anything failed so scripts can gate on it.
+install_fail_summary() {
+  ((${#_INSTALL_FAILURES[@]})) || return 0
+  echo ""
+  warn "Some tools did NOT install: ${_INSTALL_FAILURES[*]}"
+  warn "Re-run just those, e.g.  bash setup.sh --${_INSTALL_FAILURES[0]}"
+  return 1
+}

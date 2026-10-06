@@ -57,7 +57,8 @@ Options:
                         resolve per-tool values; a tool that is NOT installed
                         is not resurrected. Combine: --doctor --fix (report,
                         then repair), or bare --fix (repair + report).
-  --clean [target]      Remove installed toolchain artifacts.
+  --clean [target]      Remove installed toolchain artifacts. A pre-flight
+                        summary lists exactly what will be removed first.
                         Bare --clean / -c opens the CLEAN PICK-MENU (tick the
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
@@ -65,6 +66,17 @@ Options:
                         claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg removes one
                         tool. Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
+                        USER DATA: tools that own it are handled safely —
+                        hermes is backed up with its OWN CLI (`hermes backup`,
+                        restorable via `hermes import`) and the archive copied
+                        to $XDG_CONFIG_HOME/hermes/hermes-backup.zip BEFORE its
+                        dir is removed (left intact if the backup fails);
+                        ollama models and
+                        camofox server state are preserved; cliproxy keeps
+                        config + OAuth logins.
+                        NON-INTERACTIVE: a bare \`--clean\` with no target is
+                        REFUSED (it would wipe everything, Hermes included).
+                        Use \`--clean all -y\` to confirm a full wipe.
   --list, --show        Show current toolchain state (wired tools, binaries, env vars)
   -y,  --yes            Skip the cleanup confirmation prompt
   -h,  --help           Show this help
@@ -329,6 +341,26 @@ export npm_config_registry="https://registry.npmjs.org"
 export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
 export GOPROXY="https://proxy.golang.org,direct"
 export PIP_TRUSTED_HOST="pypi.org"
+
+# npm lifecycle scripts. The literal form the docs suggest,
+#   npm config set dangerously-allow-all-scripts=true --location=user
+# writes $HOME/.npmrc — and on Replit $HOME is WIPED on recreate, so the
+# setting silently disappears. The env form is read by npm identically
+# (verified with npm config ls -l) and lives in this persistent block.
+export npm_config_dangerously_allow_all_scripts=true
+
+# TLS / CA bundle. The cacert package in .replit [nix] packages exports
+# SYSTEM_CERTIFICATE_PATH; wire it into the standard variables curl / npm /
+# node consult, so HTTPS fetches trust the Nix bundle instead of failing.
+# Escaped so the values resolve when the shell SOURCES this file (the
+# platform env is loaded before $BASHRC), not at write time — an unescaped
+# heredoc would bake in the writing shell's value and clobber an operator's.
+if [ -n "\${SYSTEM_CERTIFICATE_PATH:-}" ]; then
+  export SSL_CERT_FILE="\$SYSTEM_CERTIFICATE_PATH"
+  export SSL_CERT_DIR="\$(dirname "\$SSL_CERT_FILE")"
+  export NIX_SSL_CERT_FILE="\$SSL_CERT_FILE"
+  export NODE_EXTRA_CA_CERTS="\$SSL_CERT_FILE"
+fi
 
 # Hermes PM stages its own x64 Node tarball AND --node installs the official
 # x64 tarball: both link libatomic.so.1, which this Nix image only ships under

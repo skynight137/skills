@@ -211,9 +211,8 @@ ${REPL_HOME:-$HOME}/camofox/
 - **Xvfb.** server.js spawns Xvfb per browser (camoufox-js `virtdisplay.js`
   resolves it via `which Xvfb`). Missing → log line `xvfb not available,
   falling back to headless` and WebGL has no GLX context — a massive bot
-  signal, so the fallback is NOT cosmetic. Fix: `pkgs.xorg.xvfb` in
-  replit.nix (verified 2026-09-28: `xvfb virtual display started`, args carry
-  `+extension GLX`).
+  signal, so the fallback is NOT cosmetic. Fix: `pkgs.xorg.xvfb` in `.replit [nix] packages` (verified 2026-09-28:
+   `xvfb virtual display started`, args carry `+extension GLX`).
 - **yt-dlp** (youtube plugin transcripts). Provision with the plugin's own
   pinned installer, redirected to the durable PATH dir — its default
   `/usr/local/bin` is read-only on Replit, and that's what triggers
@@ -225,8 +224,9 @@ ${REPL_HOME:-$HOME}/camofox/
 ## Why this works on Replit (the three non-obvious facts)
 
 1. **Libs must exist in `/nix/store` — how they got there is
-   interchangeable.** `replit.nix` (recommended; auto-applies on every
-   rebuild), `nix-env -iA`, or a warm store from a prior build all work
+   interchangeable.** `.replit [nix] packages` (recommended; auto-applies on
+   every rebuild), a root `replit.nix`, `nix-env -iA`, or a warm store from a
+   prior build all work
    identically at runtime. `replit shutdown` + wiping `$HOME` does NOT
    clear `/nix/store`, which is why a "fresh" workspace usually still
    has GTK. Gate before anything else — resolve the store path, never glob the
@@ -249,7 +249,8 @@ ${REPL_HOME:-$HOME}/camofox/
    survives restarts. `$HOME/.local/share` would *look* fine and then
    vanish on the next restart. Off Replit, `$HOME` is the fallback.
 
-Full depth (the verified T0/T1/T2/T3 matrix, `replit.nix` vs `nix-env`,
+Full depth (the verified T0/T1/T2/T3 matrix, `.replit [nix] packages` vs
+`replit.nix` vs `nix-env`,
 npm package-firewall, `/nix/store` warm/cold mechanics, the `LD_AUDIT`
 loader) is in **`references/nix.md`** — read it when something here
 fails or you're setting up a different Replit workload.
@@ -314,8 +315,11 @@ If that misses, pick ONE:
 
 ```bash
 # Option A (recommended — persists across container recreates):
-# replit.nix at workspace root, then wait for the Replit rebuild:
-#   {pkgs}: { deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]; }
+# add the packages to .replit [nix] packages, then wait for the Replit rebuild:
+#   [nix]
+#   packages = ["gtk3", "alsa-lib", "xorg.libXdamage", "xorg.xvfb", "cacert"]
+# (a root replit.nix with deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]
+#  is the older alternate form and works identically)
 
 # Option B (works in the live container only; lost on recreate):
 nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
