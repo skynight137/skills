@@ -97,6 +97,20 @@ without ripgrep.
 - `ensure_browser.sh` — idempotent CDP launcher for the bundled Chromium.
 - `monitor.sh` / `browser_monitor.py` — opt-in :5000 screenshot relay.
 
+## Maintaining this skill (verify, don't trust the edit tool)
+
+When one batch touches many files or repeats an `old_string`, VERIFY the effect
+on disk before moving on:
+
+- `rg` the new text (a "failed"/"no match" line can be a benign duplicate-key
+  retry) and confirm it appears the expected number of times — twice means the
+  edit applied twice.
+- Pass **absolute** paths: a `cd` from a previous terminal call persists, so a
+  relative path can resolve against the wrong directory.
+- Trust base after any edit: `bash -n` on every module (the setup.sh syntax gate
+  runs the same check), `shellcheck -S warning` on changed files, and re-run the
+  module harness.
+
 ## Camofox tuning
 
 There is no env-file template to ship — **the interface is exported vars**
