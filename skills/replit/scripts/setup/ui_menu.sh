@@ -29,6 +29,7 @@ _MENU_ITEMS=(
   "hermes|Hermes (AI Agent)"
   "ori|ORI (AI Coding)"
   "cliproxy|CLIProxyAPI (CLI OAuth → API: Codex/Claude/Antigravity)"
+  "camofox|Camofox browser (anti-detection Firefox server)"
   "rclone|rclone (cloud storage sync)"
   "qbt|qBittorrent-nox (headless BitTorrent)"
   "aria2|aria2c (download utility)"
@@ -77,6 +78,7 @@ _status_init() {
     "aria2c|aria2c"
     "ffmpeg|ffmpeg"
     "cliproxy|cli-proxy-api"
+    "camofox|camofox-browser"
   )
   _STATUS_LINES=()
   for entry in "${TOOLS[@]}"; do
@@ -213,6 +215,7 @@ _menu_apply() {
       hermes)   INSTALL_HERMES=true ;;
       ori)      INSTALL_ORI=true ;;
       cliproxy) INSTALL_CLIPROXY=true ;;
+      camofox)  INSTALL_CAMOFOX=true ;;
       rclone)   INSTALL_RCLONE=true ;;
       qbt)      INSTALL_QBT=true ;;
       aria2)    INSTALL_ARIA2=true ;;

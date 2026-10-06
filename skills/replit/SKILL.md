@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.11.0
+version: 4.12.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -24,7 +24,7 @@ other lane assumes its persistence rules.
 | persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `replit_userenv.py` |
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `generate-closure.sh`, `libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `ensure_browser.sh`, `monitor.sh`, `browser_monitor.py` |
-| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `start-camofox.sh`, `camofox.py` |
+| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `start-camofox.sh`, `camofox.py` |
 | bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -63,6 +63,12 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
   GB-scale runtime clone). config.yaml is edited textually + verified instead.
   `--cliproxy` installs CLIProxyAPI (CLI OAuth → API bridge) — see
   `references/cliproxy.md`; `--clean cliproxy` keeps config + OAuth logins.
+  `--camofox` installs the **npm-global** Camofox browser
+  (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
+  `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + a GPU-less
+  WebGL-skip (auto-detected), and writes a `camofox` launcher — the
+  npm-lane alternative to the `start-camofox.sh` git-clone lane. See
+  `references/camofox.md` §"npm-global lane".
 - `replit_userenv.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
 - `start-camofox.sh` — one-command provision + launch of the Camoufox server.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,

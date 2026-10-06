@@ -42,6 +42,11 @@ Options:
   --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
   --aria2               Install aria2c (static musl binary from GitHub releases)
   --ffmpeg              Install FFmpeg (BtbN static GPL build: ffmpeg/ffprobe/ffplay)
+  --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
+                        Firefox server + MCP adapter). Provisions the package-pinned
+                        Camoufox engine into the persistent cache, applies the Replit
+                        lib closure + WebGL-skip fix, and writes a 'camofox' launcher.
+                        Start with: camofox   (API on http://127.0.0.1:9377)
   --doctor              Verify the toolchain (no install) — prints versions and flags
   --fix                 Rewrite ALL wiring without deleting/reinstalling any
                         tool: shell rc (toolchain block + hermes-tools block,
@@ -57,7 +62,7 @@ Options:
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
-                        claude|hermes|ori|cliproxy|rclone|qbt|aria2|ffmpeg removes one
+                        claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg removes one
                         tool. Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
   --list, --show        Show current toolchain state (wired tools, binaries, env vars)
@@ -98,6 +103,7 @@ parse_args() {
       --qbt)                    INSTALL_QBT=true ;;
       --aria2)                  INSTALL_ARIA2=true ;;
       --ffmpeg)                 INSTALL_FFMPEG=true ;;
+      --camofox)                INSTALL_CAMOFOX=true ;;
       --doctor)                  DOCTOR=true ;;
       --fix)                     FIX=true ;;
       --list|--show)             LIST_STATE=true ;;
@@ -137,6 +143,7 @@ parse_args() {
      && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
+     && ! $INSTALL_CAMOFOX \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi
@@ -155,6 +162,7 @@ parse_args() {
     INSTALL_ARIA2=true
     INSTALL_FFMPEG=true
     INSTALL_CLIPROXY=true
+    INSTALL_CAMOFOX=true
   fi
 }
 
@@ -376,7 +384,7 @@ alias gss='git status --short'
 ## hermes
 alias hu='hermes update --force'
 alias hce='hermes config edit'
-alias ht='hermes --tui'
+alias ht='hermes --tui-native'
 
 # <<< toolchain <<<
 EOF

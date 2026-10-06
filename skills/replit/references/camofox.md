@@ -7,6 +7,62 @@ regularly load here. Server API on `:9377` (JSON; `GET /health`,
 `POST /tabs` with `{userId, sessionKey, url}`, CDP endpoints — see the
 repo's `openapi.json`).
 
+## Two install lanes — pick one
+
+| Lane | Install | Layout | Use when |
+|------|---------|--------|----------|
+| **npm-global (recommended)** | `bash setup.sh --camofox` | package in the npm prefix; engine in `$XDG_CACHE_HOME/camoufox`; `camofox` launcher on PATH | the normal case — no git clone to manage, `npm update -g` keeps engine+client in step |
+| git-clone | `bash scripts/start-camofox.sh` | whole tree under `$REPL_HOME/camofox/` (`camofox-browser/`, `venv/`, `camoufox/`, `state/`) | you want the repo checkout (e.g. to patch server.js) |
+
+Both drive the same engine and REST API; `camofox.py` and the MCP adapter
+talk to either. The rest of this file documents the git-clone lane's deeper
+mechanics (closure, reapers) — they apply to the npm lane too.
+
+### npm-global lane (`setup.sh --camofox`)
+
+```bash
+bash setup.sh --camofox     # install (idempotent)
+camofox                     # launch  (API on http://127.0.0.1:9377)
+camofox-browser-mcp         # the MCP adapter (stdio) — register with Hermes
+```
+
+`setup.sh --camofox` does, in order: `npm i -g @askjo/camofox-browser`; patches
+the installed `camoufox-js` with the GPU-less **WebGL-skip** (below); raises the
+package's `newPageTimeoutMs` to a 60000 floor; generates the GTK/X11 lib closure
+to `$XDG_DATA_HOME/camofox/closure.txt`; fetches the package-pinned Camoufox
+engine into `$XDG_CACHE_HOME/camoufox`; and writes the `camofox` launcher.
+
+**The `camofox` launcher** is the whole runtime contract. It sets, for the server
+process only:
+- `LD_LIBRARY_PATH` = pool + closure (**never** globally — the closure shadows
+  platform libs and breaks `curl`/openssl on this box),
+- `CAMOUFOX_INSTALL_DIR=$XDG_CACHE_HOME/camoufox` (note the **U** — camoufox-js's
+  spelling; a stale no-U key in `[userenv.shared]` is a classic footgun and is
+  scrubbed by the installer),
+- `CAMOFOX_SKIP_WEBGL_FP` — **auto-detected** (below),
+- the keep-alive timers (`TAB_INACTIVITY_MS=900000`, `SESSION_TIMEOUT_MS=1800000`,
+  `BROWSER_IDLE_TIMEOUT_MS=0`) and RAM caps.
+
+**WebGL on GPU-less hosts.** camoufox-js seeds the WebGL fingerprint from a
+**live GPU sample** (`sampleWebGL`). On a box with no GPU (Replit has no
+`/dev/dri`) there is no GL context — WebGL is `null` — and the spoofer **hangs
+the Firefox content process**, so every tab times out (`new page timed out`)
+and even `block_webgl:true` hangs. The installer patches camoufox-js so
+`CAMOFOX_SKIP_WEBGL_FP=1` omits the WebGL keys; the launcher sets that **only
+when `/dev/dri/render*` is absent**, so a GL-capable host keeps the **full**
+spoof. Override with `CAMOFOX_SKIP_WEBGL_FP=0|1`. This trades the WebGL vector
+only where it cannot render — every other vector (UA, fonts, canvas seeds,
+screen, navigator, WebRTC) is untouched.
+
+Verified on this box (beta.30 engine, camoufox-js 0.11.5): open → `200`,
+cookie import → `{ok:true,count:1}`, `POST /tabs/<id>/refresh` → `{ok:true}`
+with the cookie still present, and it survives a server restart (persistence
+plugin restores `~/.camofox/profiles/<hash>/storage-state.json`).
+
+**Do not** confuse `REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` with Camoufox — that
+is Replit's bundled **Chromium** (for the Playwright lane); Camoufox is
+Firefox/Juggler and ignores it.
+
 This skill is **self-contained**: `SKILL.md` + `scripts/` in one folder,
 installs via `npx skills add`. Nix/closure mechanics live in the
 **`references/nix.md`** — platform facts (persistence, XDG

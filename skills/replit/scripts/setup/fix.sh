@@ -63,6 +63,11 @@ fix_derive_wiring() {
   if [[ -x "$CLIPROXY_HOME/cli-proxy-api" ]]; then
     record_tool_env_vars CLIPROXY_HOME; record_tool_path_dirs "$XDG_BIN_HOME" "$CLIPROXY_HOME"
   fi
+  # Camofox: the launcher is the marker (package installed globally); the
+  # engine dir is the registered env var.
+  if [[ -x "$XDG_BIN_HOME/camofox" ]]; then
+    record_tool_env_vars CAMOUFOX_INSTALL_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
   local b
   for b in rclone qbittorrent-nox aria2c ffmpeg; do
     [[ -x "$XDG_BIN_HOME/$b" ]] && record_tool_path_dirs "$XDG_BIN_HOME"
