@@ -1,7 +1,7 @@
 ---
 name: replit
-description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.12.0
+description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
+version: 4.13.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -45,6 +45,11 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
 5. **Replit ships a Playwright-managed Chromium** — `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`;
    never `playwright install`.
 
+Prefer **`rg`** over `grep` when searching the box or this repo (recursive,
+gitignore-aware, far faster); it is on PATH and also staged under
+`$HERMES_HOME/tools/ripgrep-*`. Use `grep` only in scripts that must run
+without ripgrep.
+
 ## Scripts (entry point in `scripts/`, modules in `scripts/setup/`)
 
 - `setup.sh` — thin entry point: mode/path/version config, then `source`s the
@@ -54,15 +59,28 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
   It is idempotent toolchain/env provisioning (node/uv/python pins, LD
   paths, rc chain); run it after any recreate. `--doctor` verifies installs +
   wiring read-only (exit 2 = wiring gaps); `--fix` rewrites ALL wiring
-  (rc block, userenv, shim, ~/.profile, hermes shell_init_files, libatomic)
   with zero downloads/reinstalls — safe after a $HOME wipe or a partial
   recreate. `--doctor --fix` = report then repair. Re-running `--fix` is a
   byte-identical fixed point.
+  - **Install isolation:** each tool installs in its own step
+    (`run_install_step`); one failing tool warns and the run CONTINUES to the
+    rest, then lists the failures and exits non-zero. `--all` no longer aborts
+    at the first broken installer.
+  - **Clean safety:** `--clean` prints a pre-flight list of exactly what will
+    be removed; tools that own user data are protected — `hermes` is backed up
+    with its own CLI (`hermes backup`, restorable via `hermes import`), the
+    archive copied to `$XDG_CONFIG_HOME/hermes/hermes-backup.zip` (OUTSIDE the
+    removed dir) first and left intact if the backup fails (manual-zip
+    fallback when the CLI is unavailable); ollama models + camofox server state
+    are preserved; cliproxy keeps config/OAuth logins. A bare non-interactive
+    `--clean` is REFUSED (use `--clean all -y`).
   Pitfall encoded in the script: `--fix` never execs the `hermes` launcher —
   any subcommand can boot the full source-update cycle (venv sync, npm build,
-  GB-scale runtime clone). config.yaml is edited textually + verified instead.
-  `--cliproxy` installs CLIProxyAPI (CLI OAuth → API bridge) — see
-  `references/cliproxy.md`; `--clean cliproxy` keeps config + OAuth logins.
+  GB-scale runtime clone). config.yaml is edited with `yq -i` when available
+  (awk fallback), then verified. `--cliproxy` installs CLIProxyAPI (its
+  `$CLIPROXY_HOME` follows XDG: `$XDG_CONFIG_HOME/cli-proxy`, honoring a
+  legacy `$REPL_HOME/cli-proxy`) — see `references/cliproxy.md`;
+  `--clean cliproxy` keeps config + OAuth logins.
   `--camofox` installs the **npm-global** Camofox browser
   (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
   `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + WebGL
@@ -78,6 +96,20 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
   running it standalone just idles forever.
 - `ensure_browser.sh` — idempotent CDP launcher for the bundled Chromium.
 - `monitor.sh` / `browser_monitor.py` — opt-in :5000 screenshot relay.
+
+## Maintaining this skill (verify, don't trust the edit tool)
+
+When one batch touches many files or repeats an `old_string`, VERIFY the effect
+on disk before moving on:
+
+- `rg` the new text (a "failed"/"no match" line can be a benign duplicate-key
+  retry) and confirm it appears the expected number of times — twice means the
+  edit applied twice.
+- Pass **absolute** paths: a `cd` from a previous terminal call persists, so a
+  relative path can resolve against the wrong directory.
+- Trust base after any edit: `bash -n` on every module (the setup.sh syntax gate
+  runs the same check), `shellcheck -S warning` on changed files, and re-run the
+  module harness.
 
 ## Camofox tuning
 

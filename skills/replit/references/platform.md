@@ -13,7 +13,7 @@ trailing-slash failures, `libatomic` for official Node ≥22 tarballs):
 - The **workspace persists** — `$REPL_HOME` (`/home/runner/workspace` on this
   box) is the durable home. Default working dir is the only home for durable files.
 - `replit shutdown` stops the container without wiping `$HOME` or deleting
-  `replit.nix`; none of these touch **`/nix/store`** (it persists outside all three
+  `.replit`/`replit.nix`; none of these touch **`/nix/store`** (it persists outside all three
   until GC). See `references/nix.md` for what that means for libs.
 - GC removes store TARGETS but leaves symlink POINTERS dangling: `~/.local/state/nix/profiles/*`,
   `.nix-defexpr/channels_root`, per-repo `.bin/<hash>` caches. Anything that `stat()`s
@@ -67,13 +67,23 @@ Rest are identity/cluster/p2p tokens — don't echo them into logs.
 
 - **`.replit`** — TOML. `modules = ["nodejs-24", "python-3.13", …]` (language
   runtimes; the version can be STALE — §9), `[nix] channel = "stable-25_05"`
-  (the channel `replit.nix` builds against), `[userenv.shared] KEY=VALUE` (env
-  for **every** shell, incl. registry pins — §3/§5), `[[ports]]
-  localPort/externalPort` (publishing), `entrypoint`, `run`, `[workflows]`.
-- **`replit.nix`** — workspace-root Nix deps; mechanics in `references/nix.md`.
+  and **`[nix] packages = [...]`** (the store packages — this is the
+  recommended Nix lane now; a root `replit.nix` is the older alternate form —
+  §5), `[userenv.shared] KEY=VALUE` (env for **every** shell, incl. registry
+  pins — §3/§5), `[[ports]] localPort/externalPort` (publishing), `entrypoint`,
+  `run`, `[workflows]`.
+- **`replit.nix`** — optional. The workspace used to declare store deps here;
+  they now live in `.replit [nix] packages`. Mechanics in `references/nix.md`.
 - **`$HOME/.bashrc`** — symlink into `/nix/store` (platform-regenerated
   bootstrap, not yours). Your rc is `$REPL_HOME/.config/bashrc` — §4.
 - **`.config/replit_bashrc`** — the re-entry shim §4 describes.
+- **`$REPL_HOME/.bashrc` / `$REPL_HOME/.profile`** — NOT Replit files. Hermes' own
+  installer creates them **only when run with `HOME=$REPL_HOME`**, appending a
+  `~/.local/bin` PATH line. In an ACTIVE workspace they must NOT exist:
+  Replit's rc is `$REPL_HOME/.config/bashrc` (plus the `replit_bashrc` shim),
+  and Hermes' data is redirected by `HERMES_HOME=$REPL_HOME/.hermes`. Stray
+  copies come from an installer run outside setup.sh — inert for Replit
+  shells; delete them.
 
 ## 3. Where env vars actually come from (the env-load channel)
 
@@ -233,6 +243,25 @@ npm install --registry=https://registry.npmjs.org/
 pip analog: `PIP_INDEX_URL` is pinned to pypi.org in `.replit [userenv.shared]`
 on this workspace (works as-is); if you hit a firewall pip mirror, set
 `PIP_INDEX_URL=https://pypi.org/simple/` explicitly.
+
+### npm lifecycle scripts + TLS/CA bundle (managed by `setup.sh`)
+
+Two Node-side defaults the managed toolchain block sets (and mirrors into
+`.replit [userenv.shared]`, so workflow shells get them too):
+
+- **`npm_config_dangerously_allow_all_scripts=true`** — npm refuses to run
+  lifecycle (`postinstall`, …) scripts by default on a fresh Node ≥ 26, which
+  silently breaks installers that rely on them. The **env form** is read
+  exactly like the config file (verified: `npm_config_dangerously_allow_all_scripts=true
+  npm config get dangerously-allow-all-scripts` → `true`), and unlike
+  `npm config set dangerously-allow-all-scripts=true --location=user` (which
+  writes `$HOME/.npmrc` — **wiped** on recreate) it lives in the persistent rc
+  / `userenv` and survives.
+- **CA bundle.** `pkgs.cacert` in `.replit [nix] packages` exports
+  `SYSTEM_CERTIFICATE_PATH`; the rc block consumes it to export `SSL_CERT_FILE`,
+  `SSL_CERT_DIR` (= its dirname), `NIX_SSL_CERT_FILE` and `NODE_EXTRA_CA_CERTS`.
+  If TLS fetches fail with an unknown-CA error, check that `cacert` is still in
+  `[nix] packages` and that a fresh shell shows `$SYSTEM_CERTIFICATE_PATH`.
 
 ### Which registry vars are Replit-auto vs project-pinned
 

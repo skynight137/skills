@@ -3,7 +3,9 @@
 # Camoufox-Firefox on a Nix host (Replit or otherwise).
 #
 # WHY: Replit's rtld-loader (LD_AUDIT) only searches REPLIT_LD_LIBRARY_PATH,
-# which holds the TOP-LEVEL lib dirs of the replit.nix-declared packages (~6).
+# which holds the TOP-LEVEL lib dirs of the declared packages (~6) — the
+# packages you list in .replit [nix] packages (a root replit.nix is the older
+# equivalent form).
 # Firefox's GTK3 runtime needs the TRANSITIVE X11 closure (~40+ dirs) — those
 # live in dependency stores the loader never sees. This script generates it.
 # The generated file is what the camofox launcher consumes
@@ -28,7 +30,7 @@
 #   exclusion list below is load-bearing, not cosmetic — keep it.
 #
 # Usage: generate-closure.sh <output-file>
-# Requirements: nix (nix-env or replit.nix rebuild), nixpkgs channel.
+# Requirements: nix (nix-env, or a rebuild of .replit [nix] packages / replit.nix), nixpkgs channel.
 # Output: colon-separated `lib` dirs, sorted, single line.
 
 set -euo pipefail
@@ -53,7 +55,8 @@ resolve_root() { # $1 = lib soname ; prints store root path (or nothing)
             [[ -d "$root" ]] && { printf '%s' "$root"; return 0; }
         fi
     fi
-    # 2) replit.nix install: resolve via the nixpkgs channel
+    # 2) nixpkgs-channel resolution (works whether the package was declared
+    #    in .replit [nix] packages, in replit.nix, or installed via nix-env)
     case "$lib" in
         libgtk-3.so.0)   nix eval --raw "nixpkgs#gtk3" 2>/dev/null ;;
         libasound.so.2)  nix eval --raw "nixpkgs#alsa-lib" 2>/dev/null ;;
@@ -66,16 +69,17 @@ declare -a roots=()
 for lib in libgtk-3.so.0 libasound.so.2 libXdamage.so.1; do
     root="$(resolve_root "$lib")"
     if [[ -z "${root:-}" ]]; then
-        echo "ERROR: no store root for $lib — install via replit.nix (gtk3, alsa-lib, xorg.libXdamage)" >&2
+        echo "ERROR: no store root for $lib — install gtk3/alsa-lib/xorg.libXdamage" >&2
         echo "       or: nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage" >&2
         exit 1
     fi
     if [[ ! -d "$root" ]]; then
         echo "ERROR: $lib resolved to $root, but that path is NOT in /nix/store." >&2
-        echo "       Cold store: nothing has installed the GTK/ALSA/X11 libs yet (no replit.nix" >&2
-        echo "       build, no nix-env). The nixpkgs channel resolves the name; the libs must" >&2
+        echo "       Cold store: nothing has installed the GTK/ALSA/X11 libs yet (no [nix]" >&2
+        echo "       packages build, no nix-env). The nixpkgs channel resolves the name; the libs must" >&2
         echo "       actually exist in the store. Fix (one of):" >&2
-        echo "         replit.nix: deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ];  # wait for rebuild" >&2
+        echo "         .replit  [nix] packages = [\"gtk3\", \"alsa-lib\", \"xorg.libXdamage\"]  # wait for rebuild" >&2
+        echo "         (old form: replit.nix deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ])" >&2
         echo "         nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage" >&2
         exit 1
     fi

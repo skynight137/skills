@@ -47,9 +47,16 @@ main() {
     fi
   else
     parse_args "$@"
-    # A bare --clean (no target) means a full wipe when non-interactive.
+    # A bare --clean (no target) means a full wipe when non-interactive — but
+    # only when the caller EXPLICITLY opted in with -y/--yes. A bare `-c` in a
+    # non-TTY used to default to wiping everything (Hermes included) with no
+    # prompt; now it refuses and tells the caller the explicit form.
     if $CLEAN && [[ -z "$CLEAN_TARGET" ]]; then
-      CLEAN_TARGET="all"
+      if $YES; then
+        CLEAN_TARGET="all"
+      else
+        die "Non-interactive '--clean' with no target is ambiguous (would wipe EVERYTHING, including Hermes). Use '--clean all -y' to confirm, '--clean <tool>' for one tool, or run on a TTY for the pick-menu."
+      fi
     fi
   fi
 
@@ -100,20 +107,23 @@ main() {
   # fresh binary and relies on _ldpool_prepend's env on this process.
   ensure_libatomic
 
-  $INSTALL_ANDROID  && install_android_tools
-  $INSTALL_UV       && install_uv
-  $INSTALL_NODE     && install_node
-  $INSTALL_OPENCODE && install_opencode
-  $INSTALL_OLLAMA   && install_ollama
-  $INSTALL_CLAUDE   && install_claude
-  $INSTALL_HERMES   && install_hermes
-  $INSTALL_ORI      && install_ori
-  $INSTALL_RCLONE   && install_rclone
-  $INSTALL_QBT      && install_qbt
-  $INSTALL_ARIA2    && install_aria2
-  $INSTALL_FFMPEG   && install_ffmpeg
-  $INSTALL_CLIPROXY && install_cliproxy
-  $INSTALL_CAMOFOX  && install_camofox
+  # Each tool runs in its own errored-but-isolated step (run_install_step):
+  # one broken installer no longer aborts the rest of the run. A failure is
+  # reported, collected and re-surfaced in the summary.
+  $INSTALL_ANDROID  && run_install_step android-tools      install_android_tools
+  $INSTALL_UV       && run_install_step uv                 install_uv
+  $INSTALL_NODE     && run_install_step node               install_node
+  $INSTALL_OPENCODE && run_install_step opencode           install_opencode
+  $INSTALL_OLLAMA   && run_install_step ollama             install_ollama
+  $INSTALL_CLAUDE   && run_install_step claude             install_claude
+  $INSTALL_HERMES   && run_install_step hermes             install_hermes
+  $INSTALL_ORI      && run_install_step ori                install_ori
+  $INSTALL_RCLONE   && run_install_step rclone             install_rclone
+  $INSTALL_QBT      && run_install_step qbt                install_qbt
+  $INSTALL_ARIA2    && run_install_step aria2              install_aria2
+  $INSTALL_FFMPEG   && run_install_step ffmpeg             install_ffmpeg
+  $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
+  $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
 
   if $DOCTOR; then
     doctor || true
@@ -166,6 +176,11 @@ SUMMARY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi
+
+  # Report (and fail on) tools that did not install. Run as the LAST step so
+  # the exit actions (rc/userenv writers) still fire on a partial run, and
+  # non-zero so automation can tell a complete install from a partial one.
+  install_fail_summary || exit 1
 }
 
 # Syntax gate: validate the entry point and every sourced module. Resolve

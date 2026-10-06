@@ -11,7 +11,7 @@ exactly three layers. Missing any layer = failure:
 
 | Layer | What it is | Cost |
 |-------|-----------|------|
-| **L1 — store must CONTAIN the libs** | `replit.nix` (recommended) or `nix-env -iA` or a warm store from a prior build | replit.nix: one-time, async rebuild; nix-env: immediate, lost on container recreate |
+| **L1 — store must CONTAIN the libs** | `.replit [nix] packages` (recommended) or a root `replit.nix`, or `nix-env -iA`, or a warm store from a prior build | packages/replit.nix: one-time, async rebuild; nix-env: immediate, lost on container recreate |
 | **L2 — the full transitive closure as `LD_LIBRARY_PATH`** | generated file: `nix path-info --recursive <root>` per top package, keep paths shipping `lib/`, exclude base-provided families | ~2s to generate |
 | **L3 — the loader sees L2** | `export LD_LIBRARY_PATH="$(cat file)"` before launch (or a wrapper does it) | free |
 
@@ -27,30 +27,47 @@ R="$(nix eval --raw nixpkgs#gtk3 2>/dev/null)"; [ -e "$R/lib/libgtk-3.so.0" ] &&
 
 Empty = cold store → §2.
 
-## 2. replit.nix vs nix-env
+## 2. Getting packages into the store: `.replit [nix]` (recommended) vs `replit.nix` vs `nix-env`
 
-```bash
-# A: replit.nix at workspace root — auto-applies on every Replit rebuild,
-#    survives container recreates (recommended):
-{pkgs}: { deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]; }
-#   … then WAIT for the rebuild before testing.
+**Current recommended lane: the `[nix] packages` array in `.replit`** — the
+workspace's own `.replit` declares every store package there and the
+root `replit.nix` has been removed:
 
-# B: nix-env — immediate, but the ~/.nix-profile is lost when the container
-#    is recreated from its template (experiments only):
-nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
+```toml
+# .replit
+[nix]
+channel = "stable-25_05"
+packages = ["shellcheck", "tmux", "zlib", "xorg.xvfb", "openssl", "cacert", ...]
 ```
 
-Both are runtime-equivalent: they put the same packages into `/nix/store`.
-**The runtime mechanism is the store, not the install method** — a workspace
+A root **`replit.nix`** still works and is the older/alternate form:
+
+```nix
+{pkgs}: { deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]; }
+```
+
+Both are runtime-equivalent: they put the same packages into `/nix/store`, and
+**the runtime mechanism is the store, not the declaration site** — a workspace
 whose store a prior build filled works with neither file present (verified
 T0–T3 matrix); a truly fresh container with an empty store fails with
 `replit.nix` deleted.
 
-`replit.nix` changes trigger an **async rebuild**; the sandbox env (PATH,
-`REPLIT_LD_LIBRARY_PATH`) only reflects the new build after the rebuild and
-a fresh shell. The channel it builds against: `[nix] channel` in `.replit`
+`nix-env` is the immediate, non-persistent option:
+
+```bash
+nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
+```
+
+Changes to `[nix] packages` (or `replit.nix`) trigger an **async rebuild**; the
+sandbox env (PATH, `REPLIT_LD_LIBRARY_PATH`) only reflects the new build after
+the rebuild and a fresh shell. The channel is `[nix] channel` in `.replit`
 (`$REPLIT_NIX_CHANNEL`). Verify package names at search.nixos.org for the
 **pinned** channel, not latest.
+
+**`pkgs.cacert` matters twice over:** it supplies the CA bundle *and* exports
+`SYSTEM_CERTIFICATE_PATH`, which `setup.sh`'s managed rc block consumes to set
+`SSL_CERT_FILE`/`SSL_CERT_DIR`/`NIX_SSL_CERT_FILE`/`NODE_EXTRA_CA_CERTS`. Keep
+`cacert` in the `packages` list or TLS fetches lose their trust anchor.
 
 ## 3. `$REPLIT_LD_LIBRARY_PATH` alone is NEVER enough
 
@@ -103,8 +120,8 @@ Gotchas found the hard way (all still true):
 
 | Symptom | Diagnosis | Fix |
 |---------|-----------|-----|
-| `X.so.N: cannot open shared object file` — first lib a stack needs | L1: cold store | §2: replit.nix or nix-env, then continue |
+| `X.so.N: cannot open shared object file` — first lib a stack needs | L1: cold store | §2: add to `.replit [nix] packages` (or `replit.nix` / nix-env), then continue |
 | same error — a DEEP transitive lib (e.g. `libX11-xcb`) | L2: only top-level dirs exported | §3: generate the closure |
 | node crashes with `undefined symbol: ...` after export | closure shadowing base libs (old sqlite/openssl) | §3: exclude base families, prepend node's own linked dirs |
 | `nix eval` parse error | `.` instead of `#` | `nixpkgs#gtk3` |
-| new replit.nix dep not visible | rebuild not finished / stale shell | wait for rebuild, open a fresh shell |
+| new nix dep not visible | rebuild not finished / stale shell | wait for rebuild, open a fresh shell |
