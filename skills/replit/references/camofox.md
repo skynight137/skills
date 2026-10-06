@@ -724,26 +724,32 @@ the installed box, not the skill's own scripts):
   workflows (the stdio adapter alone just idles).
 - `tests/mcp_stdio_test.py` — the stdio driver used by both.
 
-**Editing this skill: it exists in TWO live copies, and they are separate
-files, not symlinks.** Edit one and the other silently keeps serving the old
-behaviour:
+**Editing this skill: there is ONE copy — the git repo.** Hermes loads it
+**in place** as an external skills dir (read-only), so an edit here is live
+immediately — no copy step, no `~/.hermes/skills/replit`, no symlinks:
 
 ```
 $HOME/workspace/skynight137-skills/skills/replit   <- git repo, source of truth
-$HOME/workspace/.hermes/skills/replit/                        <- what Hermes actually loads
+                                                    <- what Hermes loads (external_dir)
 ```
 
-Edit the repo copy, `cp` the changed files into the deployed copy, then verify
-with `diff -q` per file — a copy that silently no-ops looks identical to a
-successful one. Commit in the repo, and bump the `version:` in the frontmatter
-when behaviour changes.
+Wire it once (writes to `config.yaml`, never hand-edit it):
 
-`$REPL_HOME/scripts/` is a **pure symlink farm** into this skill's `scripts/`
-(one symlink per script, absolute) — `.replit` workflows invoke
-`bash scripts/<name>` from there, so any edit here is instantly live for the
-workflows; no copy step. Re-sync after adding/removing scripts:
-`rm -rf $REPL_HOME/scripts && mkdir $REPL_HOME/scripts && for f in $HERMES_HOME/skills/replit/scripts/*; do ln -s "$f" $REPL_HOME/scripts/; done`
-(non-skill local scripts live in `$REPL_HOME/.local/scripts/`, never mixed in).
+```bash
+hermes config set skills.external_dirs \
+  '["~/.agents/skills", "/home/runner/workspace/skynight137-skills/skills"]'
+```
+
+`hermes skills list` should show `replit … external … enabled`. External dirs
+are read-only: skill *creation* still writes to `~/.hermes/skills/`, and a
+local skill of the same name takes precedence — so do NOT also keep a copy at
+`$HOME/workspace/.hermes/skills/replit/` (a stale copy silently wins). Commit
+in the repo and bump the `version:` in the frontmatter when behaviour changes.
+
+`.replit` workflows invoke skill scripts by their **full repo path** rather
+than a `$REPL_HOME/scripts/` symlink farm (that farm is removed — call the
+script directly, e.g.
+`python3 skynight137-skills/skills/replit/scripts/camofox.py …`).
 
 Running any script in this skill writes `scripts/__pycache__/`; the repo has no
 `.gitignore`, so `git status` shows it as untracked noise. It is not tracked —
