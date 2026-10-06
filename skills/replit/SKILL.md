@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.13.0
+version: 4.15.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -84,12 +84,20 @@ without ripgrep.
   `--camofox` installs the **npm-global** Camofox browser
   (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
   `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + WebGL
-  auto-skip, and writes a runtime env snippet. Run it with
-  `camofox-browser`. See `references/camofox.md` §"npm-global lane".
+  auto-skip, and writes a runtime env snippet **plus a launcher shim**
+  (`$XDG_BIN_HOME/launch-camofox-browser`) for shells that cannot source it
+  — workflows, the Run button, MCP/cron children. **A bare `camofox-browser`
+  in those shells dies on `libgtk-3.so.0: cannot open shared object file` and
+  surfaces as an opaque 500 on cookie import**; use the snippet or the shim.
+  See `references/camofox.md` §"npm-global lane".
 - `replit_userenv.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
 - `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
+- `$XDG_BIN_HOME/launch-camofox-browser` — **generated at install** (not a repo
+  file): sources the closure `env.sh`, preflights the install, then execs
+  `camofox-browser`. The entry point for any shell that cannot inline the
+  snippet — `.replit` workflows, the Run button, cron/MCP children.
 - `tests/camofox_mcp_check.sh` — one-shot MCP health probe (waits for REST, runs a
   real stdio handshake, asserts the 11 `camofox_*` tools; exit 0 = live). Used
   by the `.replit` "camofox mcp" workflow — the adapter itself is stdio-only,

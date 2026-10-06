@@ -31,6 +31,36 @@ camofox_pkg_dir() { printf '%s/lib/node_modules/@askjo/camofox-browser' "$NODE_D
 CAMOUFOX_INSTALL_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
 CAMOFOX_CLOSURE_FILE="$XDG_DATA_HOME/camofox/closure.txt"
 
+# Server STATE dir (cookies/profiles/uploads/traces) ────────────────────────
+# The npm package defaults every one of these under $HOME/.camofox
+# (lib/config.js:139-142) — and on Replit $HOME is WIPED on recreate, so a
+# login silently evaporates. Anchor them under $XDG_CONFIG_HOME (persistent,
+# under $REPL_HOME) and export them so the server picks them up.
+#
+# The server has NO single "state dir" variable: it reads four SEPARATE env
+# vars, each with its own ~/.camofox default. CAMOFOX_STATE_DIR is a
+# camofox.py-only convenience (its --state/listing fallback) and is NOT read
+# by the server — setting it alone moves nothing.
+CAMOFOX_STATE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/camofox"
+CAMOFOX_PROFILE_DIR="$CAMOFOX_STATE_DIR/profiles"
+CAMOFOX_COOKIES_DIR="$CAMOFOX_STATE_DIR/cookies"
+CAMOFOX_UPLOADS_DIR="$CAMOFOX_STATE_DIR/uploads"
+CAMOFOX_TRACES_DIR="$CAMOFOX_STATE_DIR/traces"
+
+# One-time migration off the volatile $HOME default. Copy, never move: the old
+# dir stays valid, and a second run is a no-op because the target only takes
+# files it does not already have.
+camofox_migrate_state() {
+  local old="$HOME/.camofox"
+  [[ -d "$old" ]] || return 0
+  mkdir -p "$CAMOFOX_PROFILE_DIR" 2>/dev/null || return 0
+  if [[ -n "$(find "$CAMOFOX_PROFILE_DIR" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
+    return 0   # already populated — never clobber live state
+  fi
+  cp -a "$old"/. "$CAMOFOX_STATE_DIR"/ 2>/dev/null || true
+  warn "camofox state: re-anchored \$HOME/.camofox -> $CAMOFOX_STATE_DIR (copied; old dir left in place)"
+}
+
 # --- camoufox-js patches (idempotent) ---------------------------------------
 # (a) WebGL: auto-detect a GPU render node at launch instead of hanging on a
 #     GPU-less host. Env CAMOFOX_SKIP_WEBGL_FP=0|1 still wins.
@@ -96,8 +126,14 @@ if(!Number.isFinite(cur)||cur<floor){ j.newPageTimeoutMs=floor; fs.writeFileSync
 #   * an ambient CAMOFOX_ACCESS_KEY (from a workflow/agent) gates EVERY route,
 #     breaking keyless loopback use.
 # NOT sourced by the interactive shell rc — a 7 KB env var on every shell is
-# wasteful and hung this box's rc writer; invoke the server as
-#   bash -c '. ${XDG_DATA_HOME}/camofox/env.sh; exec camofox-browser'
+# wasteful and hung this box's rc writer.
+#
+# TWO consumers, and the second one is why the launcher below exists:
+#   1. a shell CAN source it (`bash -c '. env.sh; exec camofox-browser'`);
+#   2. the npm `camofox-browser` binary CANNOT — it is a JS entry point and the
+#      GTK closure must be in LD_LIBRARY_PATH before the process starts. So a
+#      workflow / Run-button / MCP / cron shell that just runs
+#      `camofox-browser` launches Firefox with no GTK stack.
 camofox_write_env_snippet() {
   local f="$XDG_DATA_HOME/camofox/env.sh"
   [[ -s "$CAMOFOX_CLOSURE_FILE" ]] || return 0
@@ -106,9 +142,103 @@ camofox_write_env_snippet() {
     echo "# camofox runtime env (setup.sh --camofox). Source before camofox-browser."
     echo "export LD_LIBRARY_PATH=\"\$(cat \"$CAMOFOX_CLOSURE_FILE\")\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}\""
     echo "export CAMOUFOX_INSTALL_DIR=\"$CAMOUFOX_INSTALL_DIR\""
+    # State dirs: without these the server defaults every one to $HOME/.camofox
+    # (lib/config.js:139-142) — wiped on recreate, so a cookie jar/login dies
+    # with it. The [userenv.shared] pins cover workflow shells; this covers any
+    # consumer that only sources env.sh.
+    echo "export CAMOFOX_STATE_DIR=\"$CAMOFOX_STATE_DIR\""
+    echo "export CAMOFOX_PROFILE_DIR=\"$CAMOFOX_PROFILE_DIR\""
+    echo "export CAMOFOX_COOKIES_DIR=\"$CAMOFOX_COOKIES_DIR\""
+    echo "export CAMOFOX_UPLOADS_DIR=\"$CAMOFOX_UPLOADS_DIR\""
+    echo "export CAMOFOX_TRACES_DIR=\"$CAMOFOX_TRACES_DIR\""
     echo 'if [[ "${CAMOFOX_BIND_HOST:-127.0.0.1}" = 127.0.0.1 ]]; then unset CAMOFOX_ACCESS_KEY; fi'
   } > "$f"
   ok "camofox env snippet: $f"
+}
+
+# Shell shim for consumers that cannot source env.sh.
+#
+# WHY THIS EXISTS (measured 2026-10-06): the `.replit` "camofox browser"
+# workflow ran a bare `camofox-browser`. A workflow task is a NON-interactive
+# shell: it never sources the user rc, so the exported `$XDG_DATA_HOME/camofox/
+# env.sh` was never applied and the server inherited only the pinned
+# `[userenv.shared] LD_LIBRARY_PATH=/home/runner/workspace/.local/lib`. Camoufox
+# then died on every launch with
+#   XPCOMGlueLoad error for .../libmozgtk.so: libgtk-3.so.0: cannot open shared
+#   object file: No such file or directory
+# and, because `camofox.py` imports cookies FIRST, the client only ever showed
+#   import failed: {'_http_error': 500, '_body': '{"error":"browserType.launch:
+#   Failed to launch the browser process..."}'}
+# — i.e. the "refresh page" workflow failed while the browser was dead. 6 logged
+# rp runs hit exactly this; it is not an intermittent bug.
+#
+# Fix: a shim that sources env.sh then execs the npm binary. The NAME IS
+# DELIBERATELY DIFFERENT from `camofox-browser`, so it never shadows the npm bin
+# on PATH and cannot recurse. Regenerated by `--fix`, so `--doctor` can verify it.
+#
+# ORDERING: run this AFTER the package + engine are in place (install_camofox
+# step 5; --fix derives from the installed payloads). It is best-effort by
+# design — it must never fail an install — but it is NOT a substitute for
+# installing: each prerequisite is asserted at RUNTIME below, so a half-run
+# ("launched the shim, forgot setup.sh --camofox") prints the exact missing
+# piece and the one command that fixes it, instead of the loader's
+# `libgtk-3.so.0: cannot open shared object file`.
+camofox_write_launcher() {
+  local f="$XDG_BIN_HOME/launch-camofox-browser"
+  mkdir -p "$XDG_BIN_HOME" || { warn "cannot create $XDG_BIN_HOME — camofox launcher not written"; return 0; }
+  # Quoted heredoc: every $ stays literal in the emitted script.
+  cat > "$f" <<'EOF'
+#!/usr/bin/env bash
+# Generated by setup.sh (--camofox / --fix) — do not hand-edit; re-run --fix.
+#
+# Use this from any shell that has NOT sourced env.sh: .replit workflows, the
+# Run button, cron/MCP children. A bare `camofox-browser` there launches
+# Firefox with no GTK closure and dies with
+# `libmozgtk.so: libgtk-3.so.0: cannot open shared object file` — which reaches
+# the user as a bare "Internal server error" on the first tab/cookie call.
+#
+# This is a convenience wrapper, NOT the install. Run `setup.sh --camofox`
+# first; the checks below tell you precisely what is missing if you didn't.
+set -uo pipefail
+
+X="${XDG_DATA_HOME:-${REPL_HOME:-$HOME}/.local/share}"
+ENVSH="$X/camofox/env.sh"
+CLOSURE="$X/camofox/closure.txt"
+ENGINE="${CAMOUFOX_INSTALL_DIR:-${XDG_CACHE_HOME:-${REPL_HOME:-$HOME}/.cache}/camoufox}"
+NOW="bash /home/runner/workspace/skynight137-skills/skills/replit/scripts/setup.sh"
+
+missing=0
+if ! command -v camofox-browser >/dev/null 2>&1; then
+  echo "launch-camofox-browser: camofox-browser is not installed." >&2
+  echo "  Camofox was never installed (or a \$HOME wipe removed its PATH dir)." >&2
+  echo "  Fix: $NOW --camofox" >&2
+  missing=1
+fi
+if [[ ! -s "$CLOSURE" ]]; then
+  echo "launch-camofox-browser: the GTK/X11 lib closure is missing ($CLOSURE)." >&2
+  echo "  Camofox's Firefox cannot start without it (libgtk-3.so.0)." >&2
+  echo "  Fix: $NOW --camofox" >&2
+  missing=1
+fi
+if [[ ! -s "$ENVSH" ]]; then
+  echo "launch-camofox-browser: runtime env snippet missing ($ENVSH)." >&2
+  echo "  Fix: $NOW --fix" >&2
+  missing=1
+fi
+if [[ ! -f "$ENGINE/version.json" ]]; then
+  echo "launch-camofox-browser: Camoufox engine missing ($ENGINE)." >&2
+  echo "  Fix: $NOW --camofox   (~1.3 GB fetch)" >&2
+  missing=1
+fi
+(( missing )) && { echo "launch-camofox-browser: refusing to start — see the fixes above." >&2; exit 1; }
+
+# Prerequisites OK. env.sh APPENDS the closure, so an inherited LD_LIBRARY_PATH
+# (the [userenv.shared] pool with libatomic) is preserved, not clobbered.
+. "$ENVSH"
+exec camofox-browser "$@"
+EOF
+  chmod +x "$f"
+  ok "camofox launcher shim: $f"
 }
 
 install_camofox() {
@@ -148,8 +278,18 @@ install_camofox() {
       || die "Camoufox engine fetch failed"
   fi
 
-  # 5) closure env snippet (sourced by the managed rc → camofox-browser direct)
+  # 5) closure env snippet + launcher shim (the latter for non-interactive
+  #    consumers: .replit workflows, Run button — they never source env.sh)
   camofox_write_env_snippet
+  camofox_write_launcher
+
+  # 6) state dir: re-anchor off the volatile $HOME/.camofox + persist the vars
+  #    server-wide. ensure_libatomic is not the only durable-state concern —
+  #    a cookie jar under $HOME is wiped on recreate.
+  mkdir -p "$CAMOFOX_PROFILE_DIR" "$CAMOFOX_COOKIES_DIR" "$CAMOFOX_UPLOADS_DIR" "$CAMOFOX_TRACES_DIR" 2>/dev/null || true
+  camofox_migrate_state
+  record_tool_env_vars CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR CAMOFOX_COOKIES_DIR \
+                       CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR
 
   ok "camofox installed — run: camofox-browser   (API on http://127.0.0.1:9377)"
 
@@ -168,7 +308,8 @@ clean_camofox() {
     npm_config_prefix="$NPM_GLOBAL_PREFIX" npm uninstall -g "$CAMOFOX_NPM_PKG" \
       || warn "npm uninstall -g $CAMOFOX_NPM_PKG failed — remove $pkg by hand"
   fi
-  rm -f "$XDG_BIN_HOME/camofox-browser" "$XDG_BIN_HOME/camofox-browser-mcp"
+  rm -f "$XDG_BIN_HOME/camofox-browser" "$XDG_BIN_HOME/camofox-browser-mcp" \
+        "$XDG_BIN_HOME/launch-camofox-browser"
   # Engine (re-fetchable) + closure.
   rm -rf "$CAMOUFOX_INSTALL_DIR" "$XDG_DATA_HOME/camofox"
   # Server state (cookies/profiles) is user data — kept; delete ~/.camofox to wipe.

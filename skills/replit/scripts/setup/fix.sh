@@ -66,6 +66,17 @@ fix_derive_wiring() {
   # Camofox: the npm binary is the marker (installed globally, on PATH).
   if [[ -x "$XDG_BIN_HOME/camofox-browser" || -x "$NODE_DIR/bin/camofox-browser" ]]; then
     record_tool_env_vars CAMOUFOX_INSTALL_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
+    # state dirs: a cookie jar under $HOME/.camofox is wiped on recreate, so
+    # the four server vars are re-asserted here (no install needed to repair).
+    record_tool_env_vars CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR CAMOFOX_COOKIES_DIR \
+                         CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR
+    mkdir -p "$CAMOFOX_PROFILE_DIR" "$CAMOFOX_COOKIES_DIR" "$CAMOFOX_UPLOADS_DIR" "$CAMOFOX_TRACES_DIR" 2>/dev/null || true
+    camofox_migrate_state
+    # env.sh + the launcher shim are pure wiring for non-interactive shells
+    # (.replit workflows / Run button): regenerated here so `--fix` restores a
+    # wiped closure snippet, and `--doctor` can gate on them.
+    camofox_write_env_snippet
+    camofox_write_launcher
   fi
   local b
   for b in rclone qbittorrent-nox aria2c ffmpeg; do

@@ -30,6 +30,12 @@ command -v camofox-browser >/dev/null || { echo "FAIL: camofox-browser not on PA
 
 # 0. apply the GTK/X11 closure (Firefox needs it). setup.sh writes env.sh;
 #    a live shell already sourced it via the rc, but a bare run has not.
+#    NOTE: this is exactly what a NON-interactive shell (.replit workflow, Run
+#    button, cron) fails to do — a bare `camofox-browser` there starts Firefox
+#    with no GTK closure and dies with
+#    `libmozgtk.so: libgtk-3.so.0: cannot open shared object file`. Use
+#    $XDG_BIN_HOME/launch-camofox-browser (written by setup.sh --camofox /
+#    --fix) in those shells instead of a bare camofox-browser.
 ENVSH="${XDG_DATA_HOME:-$HOME/.local/share}/camofox/env.sh"
 [[ -f "$ENVSH" ]] && . "$ENVSH"
 

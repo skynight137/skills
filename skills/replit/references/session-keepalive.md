@@ -32,6 +32,17 @@ Two verified causes of that 500 on this box (Sep 2026):
    copies shadowed the platform builds and broke curl with
    `version OPENSSL_3.5.0 not found`; the pool is strictly additive now —
    staged libatomic only. See libpool.sh header.)
+
+   ⚠ **The append only helps a shell setup.sh itself launched.** If you start
+   the server by typing `camofox-browser` in a shell that did not source
+   `env.sh`, the append never happens and this exact failure returns. The
+   `.replit` **"camofox browser"** workflow used to do precisely that — a
+   workflow task is non-interactive, so it carried only the pinned pool and
+   Firefox died on every launch (6 consecutive `rp` runs, 2026-10-06). Its task
+   now sources the snippet inline; `setup.sh --fix` also writes
+   `$XDG_BIN_HOME/launch-camofox-browser` for any other non-interactive
+   consumer. **Never run a bare `camofox-browser` from a workflow/Run-button/
+   cron shell** — source the snippet or use the shim. `--doctor` gates on both.
 2. **Missing `camofox/.env`.** Cookie import is key-gated: with no
    `CAMOFOX_API_KEY` in the SERVER env it answers 403 in production (not 500) —
    write `$CAMOFOX_ROOT/.env` with the secret from `/run/replit/env/latest.json`

@@ -119,6 +119,54 @@ doctor() {
       wfail=1
     fi
   fi
+  # Camofox closure bus: env.sh + the launcher shim. A NON-interactive shell
+  # (every .replit workflow task, the Run button, MCP/cron children) never
+  # sources env.sh, so a bare `camofox-browser` there launches Firefox with no
+  # GTK closure and dies with `libmozgtk.so: libgtk-3.so.0: cannot open shared
+  # object file` — surfacing to camofox.py as an opaque 500 on cookie import
+  # (six logged "rp" runs hit this). Gate on the wiring, not just the binary.
+  if [[ -x "$XDG_BIN_HOME/camofox-browser" || -x "$NODE_DIR/bin/camofox-browser" ]]; then
+    if [[ -s "$CAMOFOX_CLOSURE_FILE" ]]; then
+      ok "camofox lib closure ($(tr ':' '\n' < "$CAMOFOX_CLOSURE_FILE" | grep -c .) lib dirs)"
+    else
+      warn "camofox lib closure missing/empty ($CAMOFOX_CLOSURE_FILE) — Firefox cannot start; run: bash setup.sh --camofox"
+      wfail=1
+    fi
+    if [[ -s "$XDG_DATA_HOME/camofox/env.sh" ]]; then
+      ok "camofox env snippet: $XDG_DATA_HOME/camofox/env.sh"
+    else
+      warn "camofox env snippet missing ($XDG_DATA_HOME/camofox/env.sh) — non-interactive shells get no GTK closure; run: bash setup.sh --fix"
+      wfail=1
+    fi
+    if [[ -x "$XDG_BIN_HOME/launch-camofox-browser" ]]; then
+      ok "camofox launcher shim: $XDG_BIN_HOME/launch-camofox-browser"
+    else
+      warn "camofox launcher shim missing ($XDG_BIN_HOME/launch-camofox-browser) — a bare 'camofox-browser' in a workflow shell dies without GTK; run: bash setup.sh --fix"
+      wfail=1
+    fi
+    # State dir: $HOME is wiped on recreate, so a profile/cookie jar left at the
+    # package default (~/.camofox) silently loses the login. Gate on the pins.
+    if [[ "${CAMOFOX_PROFILE_DIR:-}" == "$WORKSPACE"/* || "${CAMOFOX_PROFILE_DIR:-}" == "$REPL_HOME"/* ]]; then
+      ok "camofox state dir: ${CAMOFOX_PROFILE_DIR}"
+    elif [[ -n "${CAMOFOX_PROFILE_DIR:-}" ]]; then
+      warn "camofox state dir is OUTSIDE the persistent workspace (${CAMOFOX_PROFILE_DIR}) — profiles/cookies die on recreate; run: bash setup.sh --fix"
+      wfail=1
+    else
+      warn "camofox state dir not pinned — the server defaults to \$HOME/.camofox (wiped on recreate); run: bash setup.sh --fix"
+      wfail=1
+    fi
+    # Legacy state still sitting at the volatile $HOME default: only a problem when
+    # the persistent target has NOT been populated yet (migration pending). Both
+    # dirs holding data is the normal post-migration state — the copy is
+    # deliberately non-destructive, so it must not read as a wiring failure.
+    if [[ -n "${CAMOFOX_PROFILE_DIR:-}" && "$CAMOFOX_PROFILE_DIR" != "$HOME/.camofox/profiles" ]] \
+       && [[ -z "$(find "$CAMOFOX_PROFILE_DIR" -mindepth 1 -print -quit 2>/dev/null)" ]] \
+       && [[ -d "$HOME/.camofox/profiles" ]] \
+       && [[ -n "$(find "$HOME/.camofox/profiles" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
+      warn "camofox state not migrated: \$HOME/.camofox has cookies/profiles but ${CAMOFOX_PROFILE_DIR} is empty — run: bash setup.sh --camofox"
+      wfail=1
+    fi
+  fi
   if [[ -f "$HOME/.profile" ]] && grep -qF 'toolchain-profile' "$HOME/.profile"; then
     ok "toolchain lines in ~/.profile"
   else
