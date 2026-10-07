@@ -28,9 +28,10 @@ camofox-browser-mcp         # the MCP adapter (stdio) — register with Hermes
 `setup.sh --camofox` does, in order: `npm i -g @askjo/camofox-browser`; patches
 the installed `camoufox-js` with the GPU-less **WebGL auto-skip** (below); raises
 the package's `newPageTimeoutMs` to a 60000 floor; generates the GTK/X11 lib
-closure to `$XDG_DATA_HOME/camofox/closure.txt`; fetches the package-pinned
-Camoufox engine into `$XDG_CACHE_HOME/camoufox`; and writes
-`$XDG_DATA_HOME/camofox/env.sh` — a small runtime env snippet.
+closure to `$CAMOFOX_STATE_DIR/closure.txt` (`$XDG_CONFIG_HOME/camofox`); fetches
+the package-pinned Camoufox engine into `$XDG_CACHE_HOME/camoufox`; and writes
+`$CAMOFOX_STATE_DIR/env.sh` — a small runtime env snippet. Both aux files live
+in the state dir (one root for the whole install).
 
 **The closure must be on `LD_LIBRARY_PATH` for `camofox-browser` to run**, so
 launch it through the snippet (the `.replit` "camofox browser" workflow does
@@ -686,8 +687,9 @@ Hermes' builtin `browser_exec` is **unusable on this box** (verified
 2026-10-02): the Nix Playwright Chromium dies on a GLIBC-2.39 symbol in
 `.local/lib/libsystemd.so.0`, and Hermes' staged
 `.hermes/tools/chromium-1208` can't dlopen `libnspr4` (installing /repl's NSS
-libs drags glibc 2.42 into conflict). Replit's own Chromium (`ensure_browser.sh`,
-CDP :9222) works for local/dev targets but its UA leaks `HeadlessChrome` —
+libs drags glibc 2.42 into conflict). Replit's own Chromium
+(`$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, CDP :9222) works for local/dev
+targets but its UA leaks `HeadlessChrome` —
 instant bot-wall bait. The answer for agent automation is the
 **camofox-browser MCP adapter** (`camofox-browser/mcp/server.mjs`), which
 exposes 11 `camofox_*` tools (create_tab/snapshot/click/type/navigate/scroll/
@@ -811,7 +813,7 @@ The adapter forwards the access key automatically (tool-contracts declare
 - `SKILL.md` — this file.
 - `scripts/setup/camofox.sh` — the `setup.sh --camofox` module (install +
   step), the entry point for the npm lane. Also generates two artifacts outside
-  the repo: `$XDG_DATA_HOME/camofox/env.sh` (runtime closure env) and
+  the repo: `$CAMOFOX_STATE_DIR/env.sh` (runtime closure env) and
   `$XDG_BIN_HOME/launch-camofox-browser` (the shim for shells that cannot source
   it).
 - `scripts/setup/generate-closure.sh` — the LD_LIBRARY_PATH closure builder

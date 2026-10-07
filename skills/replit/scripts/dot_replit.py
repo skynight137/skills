@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# scripts/replit_userenv.py
+# scripts/dot_replit.py
 """tomlkit-backed manager for .replit [userenv.shared] toolchain keys.
 
 Invoked by scripts/setup.sh. All edits are STRUCTURAL via tomlkit — no

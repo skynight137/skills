@@ -132,10 +132,10 @@ doctor() {
       warn "camofox lib closure missing/empty ($CAMOFOX_CLOSURE_FILE) — Firefox cannot start; run: bash setup.sh --camofox"
       wfail=1
     fi
-    if [[ -s "$XDG_DATA_HOME/camofox/env.sh" ]]; then
-      ok "camofox env snippet: $XDG_DATA_HOME/camofox/env.sh"
+    if [[ -s "$CAMOFOX_ENV_SNIPPET" ]]; then
+      ok "camofox env snippet: $CAMOFOX_ENV_SNIPPET"
     else
-      warn "camofox env snippet missing ($XDG_DATA_HOME/camofox/env.sh) — non-interactive shells get no GTK closure; run: bash setup.sh --fix"
+      warn "camofox env snippet missing ($CAMOFOX_ENV_SNIPPET) — non-interactive shells get no GTK closure; run: bash setup.sh --fix"
       wfail=1
     fi
     if [[ -x "$XDG_BIN_HOME/launch-camofox-browser" ]]; then

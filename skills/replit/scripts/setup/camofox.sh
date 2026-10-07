@@ -29,10 +29,9 @@ CAMOFOX_NPM_PKG="@askjo/camofox-browser"
 camofox_pkg_dir() { printf '%s/lib/node_modules/@askjo/camofox-browser' "$NODE_DIR"; }
 
 CAMOUFOX_INSTALL_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
-CAMOFOX_CLOSURE_FILE="$XDG_DATA_HOME/camofox/closure.txt"
 
-# Server STATE dir (cookies/profiles/uploads/traces) ────────────────────────
-# The npm package defaults every one of these under $HOME/.camofox
+# Server STATE dir (cookies/profiles/uploads/traces + the closure + env snippet) ──
+# The npm package defaults every state var under $HOME/.camofox
 # (lib/config.js:139-142) — and on Replit $HOME is WIPED on recreate, so a
 # login silently evaporates. Anchor them under $XDG_CONFIG_HOME (persistent,
 # under $REPL_HOME) and export them so the server picks them up.
@@ -41,11 +40,30 @@ CAMOFOX_CLOSURE_FILE="$XDG_DATA_HOME/camofox/closure.txt"
 # vars, each with its own ~/.camofox default. CAMOFOX_STATE_DIR is a
 # camofox.py-only convenience (its --state/listing fallback) and is NOT read
 # by the server — setting it alone moves nothing.
+#
+# closure.txt and env.sh live in this SAME dir (not $XDG_DATA_HOME): one
+# state root for the whole camofox install, so a wipe/move touches one path.
 CAMOFOX_STATE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/camofox"
 CAMOFOX_PROFILE_DIR="$CAMOFOX_STATE_DIR/profiles"
 CAMOFOX_COOKIES_DIR="$CAMOFOX_STATE_DIR/cookies"
 CAMOFOX_UPLOADS_DIR="$CAMOFOX_STATE_DIR/uploads"
 CAMOFOX_TRACES_DIR="$CAMOFOX_STATE_DIR/traces"
+CAMOFOX_CLOSURE_FILE="$CAMOFOX_STATE_DIR/closure.txt"
+CAMOFOX_ENV_SNIPPET="$CAMOFOX_STATE_DIR/env.sh"
+
+# One-time move of closure.txt/env.sh off the older $XDG_DATA_HOME/camofox
+# layout so an existing install keeps working without a re-fetch. Copy, never
+# move: the old path stays valid, and a second run is a no-op.
+camofox_migrate_aux_files() {
+  local old_dir="$XDG_DATA_HOME/camofox" f
+  [[ -d "$old_dir" ]] || return 0
+  mkdir -p "$CAMOFOX_STATE_DIR" 2>/dev/null || return 0
+  for f in closure.txt env.sh; do
+    [[ -s "$old_dir/$f" && ! -e "$CAMOFOX_STATE_DIR/$f" ]] || continue
+    cp -a "$old_dir/$f" "$CAMOFOX_STATE_DIR/$f" 2>/dev/null \
+      && warn "camofox: moved $f -> $CAMOFOX_STATE_DIR (copied; old file left in place)"
+  done
+}
 
 # One-time migration off the volatile $HOME default. Copy, never move: the old
 # dir stays valid, and a second run is a no-op because the target only takes
@@ -135,7 +153,7 @@ if(!Number.isFinite(cur)||cur<floor){ j.newPageTimeoutMs=floor; fs.writeFileSync
 #      workflow / Run-button / MCP / cron shell that just runs
 #      `camofox-browser` launches Firefox with no GTK stack.
 camofox_write_env_snippet() {
-  local f="$XDG_DATA_HOME/camofox/env.sh"
+  local f="$CAMOFOX_ENV_SNIPPET"
   [[ -s "$CAMOFOX_CLOSURE_FILE" ]] || return 0
   mkdir -p "$(dirname "$f")"
   {
@@ -201,7 +219,7 @@ camofox_write_launcher() {
 # first; the checks below tell you precisely what is missing if you didn't.
 set -uo pipefail
 
-X="${XDG_DATA_HOME:-${REPL_HOME:-$HOME}/.local/share}"
+X="${XDG_CONFIG_HOME:-${REPL_HOME:-$HOME}/.config}"
 ENVSH="$X/camofox/env.sh"
 CLOSURE="$X/camofox/closure.txt"
 ENGINE="${CAMOUFOX_INSTALL_DIR:-${XDG_CACHE_HOME:-${REPL_HOME:-$HOME}/.cache}/camoufox}"
@@ -245,7 +263,9 @@ install_camofox() {
   step "Camofox browser (npm-global @askjo/camofox-browser)"
   need_cmd npm
   need_cmd node
-  mkdir -p "$XDG_BIN_HOME" "$XDG_DATA_HOME/camofox" "$CAMOUFOX_INSTALL_DIR"
+  mkdir -p "$XDG_BIN_HOME" "$CAMOFOX_STATE_DIR" "$CAMOUFOX_INSTALL_DIR"
+  # Re-anchor closure.txt/env.sh from the older $XDG_DATA_HOME/camofox layout.
+  camofox_migrate_aux_files
 
   # 1) package (idempotent; global install resolves fast on re-run)
   echo "  npm install -g $CAMOFOX_NPM_PKG"
@@ -310,8 +330,10 @@ clean_camofox() {
   fi
   rm -f "$XDG_BIN_HOME/camofox-browser" "$XDG_BIN_HOME/camofox-browser-mcp" \
         "$XDG_BIN_HOME/launch-camofox-browser"
-  # Engine (re-fetchable) + closure.
-  rm -rf "$CAMOUFOX_INSTALL_DIR" "$XDG_DATA_HOME/camofox"
-  # Server state (cookies/profiles) is user data — kept; delete ~/.camofox to wipe.
-  ok "Camofox removed (engine + closure + package; server state kept in ~/.camofox)"
+  # Engine (re-fetchable) + closure/env snippet (aux files under the state dir).
+  rm -rf "$CAMOUFOX_INSTALL_DIR"
+  rm -f "$CAMOFOX_CLOSURE_FILE" "$CAMOFOX_ENV_SNIPPET"
+  rm -rf "$XDG_DATA_HOME/camofox"   # older layout, if still present
+  # Server state (cookies/profiles) is user data — kept; delete $CAMOFOX_STATE_DIR to wipe.
+  ok "Camofox removed (engine + closure + package; server state kept in $CAMOFOX_STATE_DIR)"
 }

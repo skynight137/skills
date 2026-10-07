@@ -58,16 +58,26 @@ normal, run it as-is.
 
 Run the :9222 daemon only while you need it; kill it when the task is done.
 Do NOT schedule it on cron — the container dies and nothing restarts it.
-`scripts/ensure_browser.sh` is the idempotent launcher (no-op if the port is
-already live); it drives the store browser **only** — there is deliberately
-no fallback to any other browser on PATH.
+Launch the store browser directly (there is deliberately no fallback to any
+other browser on PATH):
+
+```bash
+CHROME="$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE"     # the store browser
+CHROME_PORT="${CHROME_PORT:-9222}"
+CHROME_DATA_DIR="${CHROME_DATA_DIR:-$XDG_DATA_HOME/chromium/default}"
+"$CHROME" --headless=new --no-sandbox --disable-gpu \
+  --remote-debugging-port="$CHROME_PORT" \
+  --user-data-dir="$CHROME_DATA_DIR" about:blank &
+# verify it is live:
+curl -s "http://127.0.0.1:$CHROME_PORT/json/version"
+```
 
 **Where Chromium keeps data.** The store launcher does not set a profile
 dir, so an unmanaged launch uses Chromium's default:
 `$XDG_CONFIG_HOME/chromium` — on Replit that's pre-set to
 `$REPL_HOME/.config/chromium`, i.e. **workspace** (persists; `$HOME` is wiped
-on recreate). `ensure_browser.sh` passes an explicit `--user-data-dir`
-instead: `$CHROME_DATA_DIR` (default `$XDG_DATA_HOME/chromium/default`).
+on recreate). Pass an explicit `--user-data-dir` instead, e.g.
+`$XDG_DATA_HOME/chromium/default` (as above).
 
 **Multiple agents sharing one sandbox.** Chromium locks `--user-data-dir`
 (`SingletonLock`) — two instances can NEVER share one profile dir; the
@@ -76,7 +86,9 @@ agent with its own port and data dir:
 
 ```bash
 CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
-    bash scripts/ensure_browser.sh
+  "$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE" --headless=new --no-sandbox \
+  --disable-gpu --remote-debugging-port="$CHROME_PORT" \
+  --user-data-dir="$CHROME_DATA_DIR" about:blank &
 ```
 
 ## Pitfalls
@@ -101,9 +113,6 @@ CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
 
 ## Files in this skill
 
-- `scripts/ensure_browser.sh` — idempotent, on-demand CDP daemon launcher
-  (source of truth for the :9222 launch line; per-agent `CHROME_PORT` /
-  `CHROME_DATA_DIR` overrides).
-- `scripts/monitor.sh`, `scripts/browser_monitor.py` — the opt-in :5000
-  screenshot relay (`monitor.sh on` → `https://$REPLIT_DOMAINS:5000`,
-  off by default).
+- `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` — Replit's Playwright-managed
+  Chromium in the Nix store (the browser itself, no installer script needed:
+  see the 4 steps above).

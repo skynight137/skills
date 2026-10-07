@@ -333,14 +333,19 @@ emit_managed_block() {
 
 # >>> toolchain >>>
 
-# use global registry
-export YARN_REGISTRY="https://registry.yarnpkg.com"
-export YARN_NPM_REGISTRY_SERVER="https://registry.yarnpkg.com"
-export PIP_INDEX_URL="https://pypi.org/simple"
-export npm_config_registry="https://registry.npmjs.org"
-export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
-export GOPROXY="https://proxy.golang.org,direct"
-export PIP_TRUSTED_HOST="pypi.org"
+# Registry defaults. Replit feeds the package-firewall
+# (http://package-firewall.replit.internal/...) into the runtime env BEFORE
+# this block is sourced, so these are FALLBACKS only: the \${VAR:-default}
+# form resolves at SOURCE time and leaves a platform/operator value intact.
+# Unguarded exports here previously forced the public registry and shadowed
+# the firewall — `echo $NPM_CONFIG_REGISTRY` showed registry.npmjs.org.
+export YARN_REGISTRY="\${YARN_REGISTRY:-https://registry.yarnpkg.com}"
+export YARN_NPM_REGISTRY_SERVER="\${YARN_NPM_REGISTRY_SERVER:-https://registry.yarnpkg.com}"
+export PIP_INDEX_URL="\${PIP_INDEX_URL:-https://pypi.org/simple}"
+export npm_config_registry="\${npm_config_registry:-https://registry.npmjs.org}"
+export NPM_CONFIG_REGISTRY="\${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
+export GOPROXY="\${GOPROXY:-https://proxy.golang.org,direct}"
+export PIP_TRUSTED_HOST="\${PIP_TRUSTED_HOST:-pypi.org}"
 
 # npm lifecycle scripts. The literal form the docs suggest,
 #   npm config set dangerously-allow-all-scripts=true --location=user
@@ -600,7 +605,7 @@ EOF
     return 0
   fi
 
-  if ! "${py[@]}" "$SCRIPT_DIR/replit_userenv.py" --file "$replit_file" \
+  if ! "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$replit_file" \
        --set "REPLIT_BASHRC=$target"; then
     warn ".replit REPLIT_BASHRC pin failed — workflow shells keep the platform env"
     return 0
@@ -678,7 +683,7 @@ rescue_tool_lines() {
 # The shell rc only reaches shells that source it (consoles). [userenv.shared]
 # compiles into /run/replit/env/latest and applies to EVERY repl process —
 # consoles, agents, workflows — the global env path. ALL TOML manipulation
-# lives in scripts/replit_userenv.py (tomlkit): keys are added, updated in
+# lives in scripts/dot_replit.py (tomlkit): keys are added, updated in
 # place, or deleted by NAME inside the table — no marker comments, no
 # sed/awk line surgery. Everything else in .replit (workflows, ports, the
 # operator's own keys) round-trips untouched.
@@ -773,7 +778,7 @@ strip_userenv_keys() {
   ((${#del[@]})) || return 0
   local -a py=()
   replit_resolve_py py || { warn "no tomlkit-capable python (project .venv or uv) — $file userenv keys left untouched"; return 0; }
-  if "${py[@]}" "$SCRIPT_DIR/replit_userenv.py" --file "$file" "${del[@]}"; then
+  if "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$file" "${del[@]}"; then
     ok "Removed $labels-owned userenv keys from $file"
   else
     warn "userenv key cleanup failed for $file — edit it by hand"
@@ -846,7 +851,7 @@ write_replit_env() {
     set_args+=(--set "$var=$value")
   done
 
-  if ! "${py[@]}" "$SCRIPT_DIR/replit_userenv.py" --file "$replit_file" \
+  if ! "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$replit_file" \
       "${delete_args[@]}" "${set_args[@]}"; then
     mv -f "$backup" "$replit_file"
     die ".replit userenv update failed — reverted to backup"

@@ -4,7 +4,7 @@
 set -e 
 
 # Absolute path of this script's directory — the tomlkit .replit writer
-# (replit_userenv.py) lives next to setup.sh.
+# (dot_replit.py) lives next to setup.sh.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 # Mode (auto-detected from the environment — no flag) ─────────────────────────
