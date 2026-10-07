@@ -221,9 +221,15 @@ rc_path_lines() {
 # the value baked at write time. This is the rc path that replaces
 # [userenv.shared] tool keys (only REPLIT_BASHRC stays in .replit).
 rc_tool_env_lines() {
-  local var
+  local var skip
   for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"}; do
     [[ "$var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue   # skip PATH dirs
+    # Registries are emitted by emit_managed_block's hardcoded top block; never
+    # repeat them here (a legacy [userenv.shared] registry key rescued into
+    # _TOOL_ENV_VARS would otherwise emit the same export twice).
+    skip=0
+    for r in "${_REGISTRY_ENV_VARS[@]}"; do [[ "$var" == "$r" ]] && { skip=1; break; }; done
+    ((skip)) && continue
     # A registered-but-unset var (its module was not sourced this run) is
     # skipped, never emitted empty — `${!var}` under set -u would abort the run.
     [[ -n "${!var+x}" ]] || continue
@@ -768,6 +774,9 @@ rescue_userenv_keys() {
     [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]] || continue
     var="${BASH_REMATCH[1]}"
     [[ -n "$(env_var_owner "$var")" ]] || continue
+    # A registry key is emitted by the rc block's fixed top section, not as a
+    # tool var — leaving it here would emit the same export twice.
+    for r in "${_REGISTRY_ENV_VARS[@]}"; do [[ "$var" == "$r" ]] && continue 2; done
     [[ -n "${seen[$var]:-}" ]] && continue
     [[ -n "${!var+x}" ]] || continue
     seen["$var"]=1
