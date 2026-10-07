@@ -58,7 +58,7 @@ normal, run it as-is.
 
 Run the :9222 daemon only while you need it; kill it when the task is done.
 Do NOT schedule it on cron — the container dies and nothing restarts it.
-`scripts/ensure_browser.sh` is the idempotent launcher (no-op if the port is
+`scripts/start-replit-chromium.sh` is the idempotent launcher (no-op if the port is
 already live). It resolves the browser at run time (Replit store wrapper, else
 `$CHROME_BIN`, else the Hermes bundled Chrome) and, for builds that miss
 runtime libs, maps each missing soname to its CURRENT store path via
@@ -108,7 +108,7 @@ CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
 
 ## Files in this skill
 
-- `scripts/ensure_browser.sh` — idempotent, on-demand CDP daemon launcher.
+- `scripts/start-replit-chromium.sh` — idempotent, on-demand CDP daemon launcher.
   Resolves the browser and its missing libs at RUN time (never a hardcoded
   `/nix/store` hash); per-agent `CHROME_PORT` / `CHROME_DATA_DIR` overrides.
 - `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` — Replit's Playwright-managed
