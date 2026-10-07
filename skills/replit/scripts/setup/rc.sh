@@ -224,6 +224,9 @@ rc_tool_env_lines() {
   local var
   for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"}; do
     [[ "$var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue   # skip PATH dirs
+    # A registered-but-unset var (its module was not sourced this run) is
+    # skipped, never emitted empty — `${!var}` under set -u would abort the run.
+    [[ -n "${!var+x}" ]] || continue
     printf 'export %s="${%s:-%s}"\n' "$var" "$var" "${!var}"
   done
 }
@@ -468,6 +471,7 @@ EOF
   # re-emits on re-runs).
   local var
   for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"}; do
+    [[ -n "${!var+x}" ]] || continue   # unset var (module not sourced) — skip
     if [[ -n "${_PRESET_ENV[$var]:-}" && "${_PRESET_ENV[$var]}" != "${!var}" ]]; then
       continue
     fi
