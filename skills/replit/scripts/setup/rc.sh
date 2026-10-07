@@ -228,7 +228,9 @@ rc_tool_env_lines() {
     # repeat them here (a legacy [userenv.shared] registry key rescued into
     # _TOOL_ENV_VARS would otherwise emit the same export twice).
     skip=0
-    for r in "${_REGISTRY_ENV_VARS[@]}"; do [[ "$var" == "$r" ]] && { skip=1; break; }; done
+    for r in "${_FIXED_RC_ENV_VARS[@]}"; do
+      [[ "$var" == "$r" ]] && { skip=1; break; }
+    done
     ((skip)) && continue
     # A registered-but-unset var (its module was not sourced this run) is
     # skipped, never emitted empty — `${!var}` under set -u would abort the run.
@@ -752,6 +754,11 @@ replit_resolve_py() {
 # (Replit's package-firewall mirrors) wins.
 _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
   npm_config_registry NPM_CONFIG_REGISTRY GOPROXY PIP_TRUSTED_HOST)
+# Vars the fixed blocks already export (registries, the npm-scripts setting and
+# the workspace-persisted git config). Never re-emit them as tool vars — doing
+# so duplicated the export and let a platform value shadow ours.
+_FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
+  npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
 # needing their installer to re-run this time. Candidates are restricted to
@@ -774,9 +781,11 @@ rescue_userenv_keys() {
     [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]] || continue
     var="${BASH_REMATCH[1]}"
     [[ -n "$(env_var_owner "$var")" ]] || continue
-    # A registry key is emitted by the rc block's fixed top section, not as a
-    # tool var — leaving it here would emit the same export twice.
-    for r in "${_REGISTRY_ENV_VARS[@]}"; do [[ "$var" == "$r" ]] && continue 2; done
+    # A fixed-block var (registry / npm setting / git config) is skipped here
+    # so the same export never lands twice.
+    for r in "${_FIXED_RC_ENV_VARS[@]}"; do
+      [[ "$var" == "$r" ]] && continue 2
+    done
     [[ -n "${seen[$var]:-}" ]] && continue
     [[ -n "${!var+x}" ]] || continue
     seen["$var"]=1

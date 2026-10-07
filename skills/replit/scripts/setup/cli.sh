@@ -126,6 +126,13 @@ main() {
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
 
+  # Fold in wiring registered inside the installers' subshells (spill file), then
+  # derive from disk for tools already present but not installed this run.
+  load_wiring_spill
+  if declare -F fix_derive_wiring >/dev/null 2>&1; then
+    fix_derive_wiring
+  fi
+
   if $DOCTOR; then
     doctor || true
   fi

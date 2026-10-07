@@ -27,7 +27,7 @@ fix_derive_wiring() {
     record_tool_env_vars JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS
     record_tool_path_dirs "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
   fi
-  if [[ -d "$XDG_DATA_HOME/uv" ]]; then
+  if [[ -x "$XDG_BIN_HOME/uv" ]]; then
     record_tool_env_vars UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH
     record_tool_path_dirs "$XDG_BIN_HOME"
   fi
