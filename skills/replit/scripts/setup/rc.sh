@@ -213,6 +213,19 @@ rc_path_lines() {
   done
 }
 
+# Tool env vars for the managed rc block. One guarded line per var registered
+# by this run's installers: ${VAR:-<value>} so a platform/operator value in the
+# inherited env wins at SOURCE time (never shadow it), while an unset var gets
+# the value baked at write time. This is the rc path that replaces
+# [userenv.shared] tool keys (only REPLIT_BASHRC stays in .replit).
+rc_tool_env_lines() {
+  local var
+  for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"}; do
+    [[ "$var" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue   # skip PATH dirs
+    printf 'export %s="${%s:-%s}"\n' "$var" "$var" "${!var}"
+  done
+}
+
 # Hermes PM stages its own x64 Node tarball under $HERMES_HOME/tools; the
 # official Node linux-x64 binary (>=22 line — what install_node ships, and
 # what Camofox requires) is dynamically linked against libatomic.so.1, which
@@ -385,10 +398,16 @@ fi
 # any invocation (see references/camofox.md) — NOT in the rc, because the closure
 # is large and only the browser binary needs it.
 
-# Platform-level dirs only. Tool vars (JAVA_HOME, NODE_DIR, OLLAMA_MODELS,
-# config dirs) are NOT re-exported here: .replit [userenv.shared] is the single
-# global source that reaches all shells; env-sync (above) + re-exporting would
-# risk shadowing a value the platform/operator set.
+# Tool env vars (JAVA_HOME, NODE_DIR, OLLAMA_MODELS, ...) — the rc block is
+# the single global source now. Replit workflow/agent shells reach this rc via
+# the REPLIT_BASHRC shim (write_replit_bashrc), so [userenv.shared] no longer
+# carries them; the .replit table keeps only REPLIT_BASHRC. Emitted guarded
+# (${VAR:-value}) so a value the platform/operator set at source time wins.
+EOF
+  rc_tool_env_lines
+  cat <<'EOF'
+
+# Platform-level dirs.
 export WORKSPACE="$WORKSPACE"
 export XDG_CONFIG_HOME="$XDG_CONFIG_HOME"
 export XDG_DATA_HOME="$XDG_DATA_HOME"
@@ -457,6 +476,13 @@ EOF
 }
 
 write_bashrc() {
+  # Migrate any legacy [userenv.shared] tool keys into this run's set BEFORE
+  # the block is emitted: write_replit_env (which runs after) DELETES them
+  # from .replit, so they must already be in the rc or the value would be lost.
+  if [[ "$REPLIT_MODE" == true ]]; then
+    rescue_userenv_keys "${REPL_HOME}/.replit"
+  fi
+
   # Nothing registered this run (e.g. --doctor alone) — don't touch the rc at
   # all. Stripping the block here would WIPE the wiring a previous install
   # wrote, since the block would be regenerated with zero PATH lines.
@@ -680,12 +706,13 @@ rescue_tool_lines() {
 }
 
 # [userenv.shared] manager ──────────────────────────────────────────────────
-# The shell rc only reaches shells that source it (consoles). [userenv.shared]
-# compiles into /run/replit/env/latest and applies to EVERY repl process —
-# consoles, agents, workflows — the global env path. ALL TOML manipulation
-# lives in scripts/dot_replit.py (tomlkit): keys are added, updated in
-# place, or deleted by NAME inside the table — no marker comments, no
-# sed/awk line surgery. Everything else in .replit (workflows, ports, the
+# The shell rc reaches shells that reach it — interactive consoles directly,
+# and Replit workflow/agent shells through the REPLIT_BASHRC shim
+# (write_replit_bashrc). So the rc block is the single global source for tool
+# vars; [userenv.shared] keeps ONLY the REPLIT_BASHRC pin. ALL TOML
+# manipulation lives in scripts/dot_replit.py (tomlkit): keys are added,
+# updated in place, or deleted by NAME inside the table — no marker comments,
+# no sed/awk line surgery. Everything else in .replit (workflows, ports, the
 # operator's own keys) round-trips untouched.
 
 # Resolve a tomlkit-capable interpreter into the array named $1: the
@@ -707,21 +734,12 @@ replit_resolve_py() {
   fi
 }
 
-# The fixed registry overrides setup.sh maintains in [userenv.shared]. They
-# are DEFAULTS only — a value the platform/operator feeds in the inherited
-# env (Replit's package-firewall mirrors) wins. The shell-rc block in
-# emit_managed_block carries the same values (kept in sync by hand).
+# The fixed registry override NAMES. Legacy [userenv.shared] keys are deleted
+# by name (strip_userenv_keys / write_replit_env); the VALUES live in the
+# managed rc block (emit_managed_block), guarded so a platform/operator value
+# (Replit's package-firewall mirrors) wins.
 _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
   npm_config_registry NPM_CONFIG_REGISTRY GOPROXY PIP_TRUSTED_HOST)
-declare -A _REGISTRY_ENV_VALUES=(
-  [YARN_REGISTRY]="https://registry.yarnpkg.com"
-  [YARN_NPM_REGISTRY_SERVER]="https://registry.yarnpkg.com"
-  [PIP_INDEX_URL]="https://pypi.org/simple"
-  [npm_config_registry]="https://registry.npmjs.org"
-  [NPM_CONFIG_REGISTRY]="https://registry.npmjs.org"
-  [GOPROXY]="https://proxy.golang.org,direct"
-  [PIP_TRUSTED_HOST]="pypi.org"
-)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
 # needing their installer to re-run this time. Candidates are restricted to
@@ -823,39 +841,29 @@ write_replit_env() {
     return 0
   fi
 
-  local var value
+  # [userenv.shared] now keeps ONLY the REPLIT_BASHRC pin (set by
+  # write_replit_bashrc). Tool/registry vars used to be written here as the
+  # "global env path"; they now live in the managed rc block
+  # (emit_managed_block -> rc_tool_env_lines), which every shell reaches via
+  # the REPLIT_BASHRC shim. This function therefore only DELETES legacy tool
+  # keys here, cleaning up the old layout, and sets nothing.
+  local var
   local -A seen=()
   # REPLIT_BASHRC is deliberately NOT in this delete list: the pin is owned
   # by write_replit_bashrc, which runs after this function and re-sets it.
   # Deleting it here would race that write on every install.
-  local -a delete_args=() set_args=()
+  local -a delete_args=()
   for var in ${_TOOL_ENV_VARS[@]+"${_TOOL_ENV_VARS[@]}"} "${_REGISTRY_ENV_VARS[@]}"; do
     [[ -n "${seen[$var]:-}" ]] && continue
     seen["$var"]=1
     delete_args+=(--delete-key "$var")
-    # Registry vars are defaults-only; a live value (platform/operator fed)
-    # wins. All other managed vars read from the current shell env.
-    if [[ -n "${_REGISTRY_ENV_VALUES[$var]:-}" ]]; then
-      value="${!var:-${_REGISTRY_ENV_VALUES[$var]}}"
-    else
-      value="${!var}"
-    fi
-    # No-shadowing rule: a var set in the inherited environment (user or
-    # platform, snapshotted at startup) to a DIFFERENT value is SKIPPED —
-    # userenv must not shadow a value the operator chose. An inherited
-    # value equal to ours means it is (re)fed from our own previous write
-    # and must be re-emitted, or the key would shrink to nothing on re-run.
-    if [[ -n "${_PRESET_ENV[$var]:-}" && "${_PRESET_ENV[$var]}" != "$value" ]]; then
-      continue
-    fi
-    set_args+=(--set "$var=$value")
   done
 
   if ! "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$replit_file" \
-      "${delete_args[@]}" "${set_args[@]}"; then
+      "${delete_args[@]}"; then
     mv -f "$backup" "$replit_file"
     die ".replit userenv update failed — reverted to backup"
   fi
   rm -f "$backup"
-  ok "userenv updated: $replit_file"
+  ok "userenv cleaned: $replit_file (tool vars now live in the rc block; only REPLIT_BASHRC pinned)"
 }
