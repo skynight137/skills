@@ -128,16 +128,19 @@ _bashrc_candidate(){
 BASHRC="${BASHRC:-$(_bashrc_candidate)}"
 
 # Workflow bashrc shim (replit mode) ─────────────────────────────────────────
-# Replit workflows run their tasks in a NON-INTERACTIVE shell. That shell
-# never sources the interactive rc above, so a workflow process (shell.exec
-# tasks in .replit, the Run button, deploys) inherited none of the toolchain
-# env — managed binaries in XDG_BIN_HOME were "command not found" even though
-# the same command worked in the user's terminal.
+# Replit workflows run their tasks in a NON-INTERACTIVE shell with
+# REPLIT_MODE=agent|workflow. The platform's store bashrc sources the
+# toolchain rc (${REPL_HOME}/.config/bashrc) ONLY when REPLIT_MODE is EMPTY
+# (store bashrc: `if [[ -f "${BASHRC}" ]] && [[ -z "${REPLIT_MODE}" ]]`), so in
+# a workflow shell that guard fails and the managed block is skipped — a
+# workflow process (shell.exec tasks in .replit, the Run button, deploys)
+# inherited none of the toolchain env, and managed binaries in XDG_BIN_HOME
+# were "command not found" even though the same command worked in the terminal.
 #
-# Non-interactive bash instead sources the file named by $BASH_ENV, and the
-# platform points that at the file named by $REPLIT_BASHRC. Pinning
-# REPLIT_BASHRC to this shim is what closes the gap: the shim is a thin
-# `source ~/.bashrc` so workflows get exactly the user terminal's env.
+# The platform runs non-interactive bash with $REPLIT_BASHRC as its rc file.
+# Pinning REPLIT_BASHRC to this shim closes the gap: the shim unsets
+# REPLIT_MODE and re-sources ~/.bashrc, so the store bashrc's guard passes and
+# workflows get exactly the user terminal's env.
 #
 # Deliberately a DIFFERENT file from $BASHRC: $BASHRC is the user rc
 # (setup-managed, writable, may be edited by the operator); this shim is

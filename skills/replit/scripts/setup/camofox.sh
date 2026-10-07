@@ -178,9 +178,10 @@ camofox_write_env_snippet() {
 #
 # WHY THIS EXISTS (measured 2026-10-06): the `.replit` "camofox browser"
 # workflow ran a bare `camofox-browser`. A workflow task is a NON-interactive
-# shell: it never sources the user rc, so the exported `$XDG_DATA_HOME/camofox/
-# env.sh` was never applied and the server inherited only the pinned
-# `[userenv.shared] LD_LIBRARY_PATH=/home/runner/workspace/.local/lib`. Camoufox
+# shell with REPLIT_MODE set, and an old run predated the REPLIT_BASHRC shim,
+# so the env snippet never reached it: the server inherited only the pinned
+# `[userenv.shared] LD_LIBRARY_PATH=/home/runner/workspace/.local/lib`, which
+# carries the pool but NOT GTK. Camoufox
 # then died on every launch with
 #   XPCOMGlueLoad error for .../libmozgtk.so: libgtk-3.so.0: cannot open shared
 #   object file: No such file or directory

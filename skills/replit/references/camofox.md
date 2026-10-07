@@ -44,8 +44,9 @@ bash -c '. "${XDG_DATA_HOME:-$HOME/.local/share}/camofox/env.sh"; exec camofox-b
 ⚠ **A bare `camofox-browser` dies in any shell that did not source `env.sh`.**
 The npm binary is a JS entry point: it cannot self-apply `LD_LIBRARY_PATH`, so
 the GTK closure must already be in the process env. A **non-interactive** shell
-(every `.replit` workflow task, the Run button, MCP/cron children) never sources
-the user rc, so a bare `camofox-browser` there inherits only whatever
+(every `.replit` workflow task, the Run button, MCP/cron children) sources the
+toolchain rc only through the `REPLIT_BASHRC` shim, and Camofox's own `env.sh`
+is separate from that — so a bare `camofox-browser` there inherits only whatever
 `[userenv.shared]` pinned — `libgtk-3.so.0: cannot open shared object file`,
 Firefox never starts, and because `camofox.py` imports cookies **first** you only
 ever see an opaque `import failed: {'_http_error': 500, ... 'browserType.launch:
