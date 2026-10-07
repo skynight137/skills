@@ -114,6 +114,7 @@ gotchas), `references/web-content-lanes.md` (coarse lane picker).
 - **Display/GPU:** none (`--headless`). Inherits Chrome 145's GPU story,
   i.e. WebGL via SwiftShader if the underlying Chrome is launched with
   `--enable-unsafe-swiftshader`.
+- **⚠ LD_LIBRARY_PATH is dropped.** agent-browser spawns Chrome with a clean env, so pointing `AGENT_BROWSER_EXECUTABLE_PATH` at a bare Hermes chrome fails with `libnspr4.so: cannot open shared object file`. Use the generated `launch-hermes-chrome` shim (or any wrapper that exports the resolved closure then `exec`s chrome) as the executable path.
 - **Anti-bot:** inherits the plain-Chrome fingerprint — **not stealthy**.
 - **VERIFIED load:** `open https://example.com` → `✓ Example Domain`
   (https://example.com/); `eval "document.title"` → `"Example Domain"`.
