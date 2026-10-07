@@ -58,19 +58,12 @@ normal, run it as-is.
 
 Run the :9222 daemon only while you need it; kill it when the task is done.
 Do NOT schedule it on cron — the container dies and nothing restarts it.
-Launch the store browser directly (there is deliberately no fallback to any
-other browser on PATH):
-
-```bash
-CHROME="$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE"     # the store browser
-CHROME_PORT="${CHROME_PORT:-9222}"
-CHROME_DATA_DIR="${CHROME_DATA_DIR:-$XDG_DATA_HOME/chromium/default}"
-"$CHROME" --headless=new --no-sandbox --disable-gpu \
-  --remote-debugging-port="$CHROME_PORT" \
-  --user-data-dir="$CHROME_DATA_DIR" about:blank &
-# verify it is live:
-curl -s "http://127.0.0.1:$CHROME_PORT/json/version"
-```
+`scripts/ensure_browser.sh` is the idempotent launcher (no-op if the port is
+already live). It resolves the browser at run time (Replit store wrapper, else
+`$CHROME_BIN`, else the Hermes bundled Chrome) and, for builds that miss
+runtime libs, maps each missing soname to its CURRENT store path via
+`nix eval --raw nixpkgs#<attr>` — the hashes differ per machine, so it never
+hardcodes a `/nix/store/...` path.
 
 **Where Chromium keeps data.** The store launcher does not set a profile
 dir, so an unmanaged launch uses Chromium's default:
@@ -100,8 +93,10 @@ CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
   equivalent: see `references/platform.md`.)
 - **`LD_LIBRARY_PATH`:** usually unnecessary — the Nix `chrome` wrapper
   points at its own store. Only touch it if you see `cannot open shared
-  object file`, and then use the closure method from `references/nix.md` §3, never
-  a hand-picked partial list.
+  object file`, and then use the closure method from `references/nix.md` §3 or
+  the resolver (`scripts/setup/resolve-libs.sh chromium`), never
+  a hand-picked partial list **and never a copied `/nix/store/<hash>` path** —
+  those hashes differ per machine.
 - Playwright scripts and CDP are independent lanes to the same browser;
   neither needs `agent-browser` or any other npm driver.
 
@@ -113,6 +108,9 @@ CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
 
 ## Files in this skill
 
+- `scripts/ensure_browser.sh` — idempotent, on-demand CDP daemon launcher.
+  Resolves the browser and its missing libs at RUN time (never a hardcoded
+  `/nix/store` hash); per-agent `CHROME_PORT` / `CHROME_DATA_DIR` overrides.
 - `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` — Replit's Playwright-managed
-  Chromium in the Nix store (the browser itself, no installer script needed:
-  see the 4 steps above).
+  Chromium in the Nix store (a self-contained wrapper; the browser itself,
+  no installer script needed: see the 4 steps above).

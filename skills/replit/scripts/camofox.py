@@ -100,9 +100,15 @@ def default_root():
 def default_state():
     if os.environ.get("CAMOFOX_STATE_DIR"):
         return os.environ["CAMOFOX_STATE_DIR"]
-    # npm-global lane: the server keeps state under $HOME/.camofox (profile
-    # persistence default). Prefer it when it exists so list/screenshot find
-    # the real jars; else the git-clone layout's <root>/state.
+    # Our durable state dir (setup.sh --camofox): $XDG_CONFIG_HOME/camofox.
+    # Persistent under $REPL_HOME, so a $HOME wipe on recreate does not lose
+    # the cookie jars. This is the default the installer writes.
+    xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(
+        os.environ.get("REPL_HOME") or os.path.expanduser("~"), ".config")
+    state = os.path.join(xdg, "camofox")
+    if os.path.isdir(state):
+        return state
+    # Legacy npm-global default, only if an older install left one.
     if os.path.isdir(os.path.expanduser("~/.camofox")):
         return os.path.expanduser("~/.camofox")
     return os.path.join(default_root(), "state")

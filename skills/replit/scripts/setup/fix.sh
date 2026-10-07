@@ -260,6 +260,10 @@ run_fix() {
   fix_profile
   fix_hermes_config
 
+  # Camofox GTK closure + Hermes Chromium closure: re-resolve on THIS machine
+  # (store hashes are not portable) so a --fix after a machine change repairs them.
+  [[ -n "$(hermes_chrome_bin 2>/dev/null || true)" ]] && install_hermes_chromium
+
   # --- 5. durable libatomic (official Node tarballs need it regardless) ---
   ensure_libatomic
 

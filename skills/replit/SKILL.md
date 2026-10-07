@@ -23,7 +23,7 @@ other lane assumes its persistence rules.
 |---|---|---|
 | persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `dot_replit.py` |
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
-| drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE` |
+| drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `ensure_browser.sh` |
 | open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
 | pick the right browser lane (4 exist: Replit Playwright Chromium, Hermes Chrome 145, agent-browser CLI, Camofox) | `references/browser-lanes.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `.hermes/tools/chromium-1208`, `agent-browser`, `:9377` |
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |

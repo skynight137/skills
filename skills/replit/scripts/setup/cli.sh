@@ -42,7 +42,7 @@ main() {
       && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
-      && ! $INSTALL_CAMOFOX; then
+      && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM; then
       die "No tools selected. Aborting."
     fi
   else
@@ -124,6 +124,7 @@ main() {
   $INSTALL_FFMPEG   && run_install_step ffmpeg             install_ffmpeg
   $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
+  $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
 
   if $DOCTOR; then
     doctor || true

@@ -19,7 +19,6 @@ cliproxy_arch() {
 
 install_cliproxy() {
   step "CLIProxyAPI (CLI OAuth → API bridge)"
-  need_cmd curl
   need_cmd tar
   mkdir -p "$XDG_BIN_HOME" "$CLIPROXY_HOME"
 
@@ -94,11 +93,18 @@ access:
     - "$gen_key"
 
 oauth:
-  auth-dir: "~/.cli-proxy-api"       # OAuth credential JSONs land here
+  auth-dir: "$CLIPROXY_HOME/auths"   # OAuth credential JSONs land here
 YAML
     chmod 600 "$CLIPROXY_HOME/config.yaml"
     warn "config.yaml generated (client key + management secret set; keys in the file)"
   fi
+
+  # Persistence guard: pin oauth.auth-dir inside $CLIPROXY_HOME. The upstream
+  # default is "~/.cli-proxy-api" — under $HOME, which Replit WIPES on
+  # recreate, so a completed OAuth login would silently vanish. Only rewrites
+  # when the value is exactly that volatile default (a user-chosen path is
+  # left alone); copies, never moves, any existing creds.
+  cliproxy_pin_authdir
   rm -rf "$tmpdir" "$tmp"
 
   ln -sfn "$CLIPROXY_HOME/cli-proxy-api" "$XDG_BIN_HOME/cli-proxy-api"

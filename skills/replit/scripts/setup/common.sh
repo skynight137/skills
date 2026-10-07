@@ -138,7 +138,9 @@ seed_tool_wiring(){
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
   wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
-  wire_tool camofox CAMOUFOX_INSTALL_DIR -- "$XDG_BIN_HOME"
+  wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
+    CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"
+  wire_tool hermes-chromium HERMES_CHROME_STATE -- "$XDG_BIN_HOME"
 }
 
 # State flags ───────────────────────────────────────────────────────────────
@@ -156,6 +158,7 @@ INSTALL_ARIA2=false
 INSTALL_FFMPEG=false
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
+INSTALL_HERMES_CHROMIUM=false
 INSTALL_ALL=false
 DOCTOR=false
 FIX=false

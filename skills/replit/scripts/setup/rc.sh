@@ -116,6 +116,7 @@ parse_args() {
       --aria2)                  INSTALL_ARIA2=true ;;
       --ffmpeg)                 INSTALL_FFMPEG=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
+      -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --doctor)                  DOCTOR=true ;;
       --fix)                     FIX=true ;;
       --list|--show)             LIST_STATE=true ;;
@@ -175,6 +176,7 @@ parse_args() {
     INSTALL_FFMPEG=true
     INSTALL_CLIPROXY=true
     INSTALL_CAMOFOX=true
+    INSTALL_HERMES_CHROMIUM=true
   fi
 }
 

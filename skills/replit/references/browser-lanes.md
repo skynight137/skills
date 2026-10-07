@@ -58,22 +58,23 @@ gotchas), `references/web-content-lanes.md` (coarse lane picker).
   `libnspr4.so: cannot open shared object file`. It has no RPATH.
 - **`--help` (observed):** `No manual entry for chrome`.
 - **Engine:** Chromium/Chrome (Blink) 145.
-- **Invoke** (the env line is mandatory):
+- **Invoke** (resolve the closure on THIS machine — store hashes are NOT
+  portable between hosts, so never copy a `/nix/store/...` path):
   ```bash
-  export LD_LIBRARY_PATH="\
-  /nix/store/1wx9nkcxavkfc01wg4qzqyd3710yvgf0-nspr-4.34/lib:\
-  /nix/store/2jsrwgic869zynqljiqa4g7dqzpwm2yd-nss-3.101.2/lib:\
-  /nix/store/1mv469gq5n0l32cb2lam7mkfl9s22dlg-libxkbcommon-1.7.0/lib:\
-  /nix/store/24w3s75aa2lrvvxsybficn8y3zxd27kp-mesa-libgbm-25.1.0/lib"
+  # resolve soname -> nixpkgs attr -> store root, then export the closure
+  bash skills/replit/scripts/setup/resolve-libs.sh /tmp/chromium-closure.txt chromium
+  export LD_LIBRARY_PATH="$(cat /tmp/chromium-closure.txt)"
   /home/runner/workspace/.hermes/tools/chromium-1208/chrome-linux64/chrome \
     --headless=new --no-sandbox --disable-gpu --dump-dom https://example.com
+  # or just use the generated shim (setup.sh --hermes-browser writes it):
+  launch-hermes-chrome --version
   ```
   Missing libs (from `ldd`): `libnspr4.so libnss3.so libnssutil3.so
-  libsmime3.so libxkbcommon.so.0 libgbm.so.1`. **Use the 64-bit nix store
-  paths** — this box also has 32-bit copies of nspr/nss and picking one gives
-  `wrong ELF class: ELFCLASS32`. Hermes itself wires the full closure via
-  `sandbox_host.py`, so `agent-browser`/`browser_exec` usually get this for
-  free.
+  libsmime3.so libxkbcommon.so.0 libgbm.so.1`. The resolver picks the **64-bit**
+  store copy automatically — this box also has 32-bit copies and a hand-picked
+  one gives `wrong ELF class: ELFCLASS32`. Hermes itself wires the full closure
+  via `sandbox_host.py`, so `agent-browser`/`browser_exec` usually get this for
+  free; `setup.sh --hermes-browser` makes a bare invocation work too.
 - **Display/GPU:** none needed.
 - **Anti-bot:** same as lane 1 — stock Chrome for Testing, `HeadlessChrome`
   token + `navigator.webdriver=true` under CDP. **Not stealthy.**
