@@ -21,10 +21,13 @@ other lane assumes its persistence rules.
 
 | You want to… | Read | Scripts |
 |---|---|---|
-| persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `replit_userenv.py` |
+| persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `dot_replit.py` |
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
-| drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `ensure_browser.sh`, `monitor.sh`, `browser_monitor.py` |
+| drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `start-replit-chromium.sh` |
 | open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
+| pick the right browser lane (4 exist: Replit Playwright Chromium, Hermes Chrome 145, agent-browser CLI, Camofox) | `references/browser-lanes.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `.hermes/tools/chromium-1208`, `agent-browser`, `:9377` |
+| tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
+| compare every browser lane on this box (versions, loads, webdriver/stealth, WebGL) — full run report | `references/browser-compare-report.md` | `start-replit-chromium.sh`, `resolve-libs.sh`, `launch-hermes-chrome` |
 | bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -90,7 +93,7 @@ without ripgrep.
   in those shells dies on `libgtk-3.so.0: cannot open shared object file` and
   surfaces as an opaque 500 on cookie import**; use the snippet or the shim.
   See `references/camofox.md` §"npm-global lane".
-- `replit_userenv.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
+- `dot_replit.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
 - `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
@@ -102,8 +105,6 @@ without ripgrep.
   real stdio handshake, asserts the 11 `camofox_*` tools; exit 0 = live). Used
   by the `.replit` "camofox mcp" workflow — the adapter itself is stdio-only,
   running it standalone just idles forever.
-- `ensure_browser.sh` — idempotent CDP launcher for the bundled Chromium.
-- `monitor.sh` / `browser_monitor.py` — opt-in :5000 screenshot relay.
 
 ## Maintaining this skill (verify, don't trust the edit tool)
 

@@ -89,8 +89,42 @@ export PATH="$XDG_BIN_HOME:$JAVA_HOME/bin:$SDK/cmdline-tools/bin:$SDK/platform-t
 # are not: they shadow whatever the platform env had).
 _TOOL_ENV_VARS=()
 _TOOL_PATH_DIRS=()
-record_tool_env_vars() { _TOOL_ENV_VARS+=("$@"); }
-record_tool_path_dirs() { _TOOL_PATH_DIRS+=("$@"); }
+# Installers run inside run_install_step's SUBSHELL, so an array append there
+# dies with the subshell. Mirror every registration into a spill file (which a
+# subshell CAN write) and fold it back after the install loop — this is what
+# keeps an installer's declared wiring from being silently dropped.
+_TOOL_WIRING_SPILL="${_TOOL_WIRING_SPILL:-$(mktemp)}"
+export _TOOL_WIRING_SPILL
+_load_wiring_add() {  # $1=E|P  $2=name  (no spill write; used by the load pass)
+  case "$1" in
+    E) [[ " ${_TOOL_ENV_VARS[*]-} " == *" $2 "* ]] || _TOOL_ENV_VARS+=("$2") ;;
+    P) [[ " ${_TOOL_PATH_DIRS[*]-} " == *" $2 "* ]] || _TOOL_PATH_DIRS+=("$2") ;;
+  esac
+}
+record_tool_env_vars() {
+  # Idempotent: the same var can register twice (installer AND fix_derive_wiring,
+  # or two installers sharing one), which would emit the export twice.
+  local v
+  for v in "$@"; do
+    _load_wiring_add E "$v"
+    [[ -n "${_TOOL_WIRING_SPILL:-}" ]] && printf 'E %s\n' "$v" >> "$_TOOL_WIRING_SPILL"
+  done
+}
+record_tool_path_dirs() {
+  local d
+  for d in "$@"; do
+    _load_wiring_add P "$d"
+    [[ -n "${_TOOL_WIRING_SPILL:-}" ]] && printf 'P %s\n' "$d" >> "$_TOOL_WIRING_SPILL"
+  done
+}
+load_wiring_spill() {  # fold in registrations made in installer subshells
+  [[ -s "${_TOOL_WIRING_SPILL:-}" ]] || return 0
+  local kind val
+  while IFS=' ' read -r kind val; do
+    [[ -n "$val" ]] && _load_wiring_add "$kind" "$val"
+  done < "$_TOOL_WIRING_SPILL"
+  : > "$_TOOL_WIRING_SPILL"   # consumed; later appends start clean
+}
 
 # Per-tool OWNERSHIP wiring: each install function declares which env
 # vars and PATH dirs belong to it, so per-tool `--clean <tool>` can drop
@@ -138,7 +172,9 @@ seed_tool_wiring(){
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
   wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
-  wire_tool camofox CAMOUFOX_INSTALL_DIR -- "$XDG_BIN_HOME"
+  wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
+    CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"
+  wire_tool hermes-chromium HERMES_CHROME_STATE -- "$XDG_BIN_HOME"
 }
 
 # State flags ───────────────────────────────────────────────────────────────
@@ -156,6 +192,7 @@ INSTALL_ARIA2=false
 INSTALL_FFMPEG=false
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
+INSTALL_HERMES_CHROMIUM=false
 INSTALL_ALL=false
 DOCTOR=false
 FIX=false

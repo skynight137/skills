@@ -7,7 +7,7 @@ Four lanes, cheapest first. Measured on a Replit/Nix sandbox.
 | `web_search(query)` | finding URLs, answering a question | no browser |
 | `web_extract([url])` | reading a page you already have the URL for | no browser, returns markdown |
 | `browser_exec` | clicking, typing, JS, logins on ordinary sites | one Chromium tab |
-| Camofox `:8008` | the lanes above returned a bot wall | ~20s cold launch, 60-90s first time |
+| Camofox `:9377` | the lanes above returned a bot wall | ~20s cold launch, 60-90s first time |
 
 ## Block detection, by signature
 

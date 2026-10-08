@@ -102,6 +102,7 @@ back_up_tool() {
     hermes)  hermes_backup ;;
     ollama)  : ;;  # models are preserved in place by clean_ollama (too big to archive)
     camofox) : ;;  # ~/.camofox server state is preserved by clean_camofox
+    hermes-chromium) : ;;  # the browser itself is Hermes-managed; clean_ drops only the closure
     *)       : ;;  # nothing user-owned (binary-only tools)
   esac
 }
@@ -507,6 +508,7 @@ clean() {
         ori)           clean_ori ;;
         cliproxy)      clean_cliproxy ;;
         camofox)       clean_camofox ;;
+        hermes-chromium) clean_hermes_chromium ;;
         rclone)        clean_rclone ;;
         qbt)           clean_qbt ;;
         aria2)         clean_aria2 ;;

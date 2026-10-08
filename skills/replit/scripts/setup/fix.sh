@@ -27,7 +27,7 @@ fix_derive_wiring() {
     record_tool_env_vars JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS
     record_tool_path_dirs "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
   fi
-  if [[ -d "$XDG_DATA_HOME/uv" ]]; then
+  if [[ -x "$XDG_BIN_HOME/uv" ]]; then
     record_tool_env_vars UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH
     record_tool_path_dirs "$XDG_BIN_HOME"
   fi
@@ -259,6 +259,10 @@ run_fix() {
   # --- 4. login-shell profile + hermes config chain ---
   fix_profile
   fix_hermes_config
+
+  # Camofox GTK closure + Hermes Chromium closure: re-resolve on THIS machine
+  # (store hashes are not portable) so a --fix after a machine change repairs them.
+  [[ -n "$(hermes_chrome_bin 2>/dev/null || true)" ]] && install_hermes_chromium
 
   # --- 5. durable libatomic (official Node tarballs need it regardless) ---
   ensure_libatomic
