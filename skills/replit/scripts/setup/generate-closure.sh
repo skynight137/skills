@@ -78,8 +78,8 @@ for lib in libgtk-3.so.0 libasound.so.2 libXdamage.so.1; do
         echo "       Cold store: nothing has installed the GTK/ALSA/X11 libs yet (no [nix]" >&2
         echo "       packages build, no nix-env). The nixpkgs channel resolves the name; the libs must" >&2
         echo "       actually exist in the store. Fix (one of):" >&2
-        echo "         .replit  [nix] packages = [\"gtk3\", \"alsa-lib\", \"xorg.libXdamage\"]  # wait for rebuild" >&2
-        echo "         (old form: replit.nix deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ])" >&2
+        echo "         replit.nix  deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]  # recommended; wait for rebuild" >&2
+        echo "         .replit  [nix] packages = [\"gtk3\", \"alsa-lib\", \"xorg.libXdamage\"]  # alternate lane" >&2
         echo "         nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage" >&2
         exit 1
     fi

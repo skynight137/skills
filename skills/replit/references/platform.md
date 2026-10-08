@@ -67,13 +67,12 @@ Rest are identity/cluster/p2p tokens — don't echo them into logs.
 
 - **`.replit`** — TOML. `modules = ["nodejs-24", "python-3.13", …]` (language
   runtimes; the version can be STALE — §9), `[nix] channel = "stable-25_05"`
-  and **`[nix] packages = [...]`** (the store packages — this is the
-  recommended Nix lane now; a root `replit.nix` is the older alternate form —
-  §5), `[userenv.shared] KEY=VALUE` (env for **every** shell, incl. registry
+  and **`[nix] packages = [...]`** (the store packages — an alternate lane;
+  the recommended one is the root `replit.nix`, §5), `[userenv.shared] KEY=VALUE` (env for **every** shell, incl. registry
   pins — §3/§5), `[[ports]] localPort/externalPort` (publishing), `entrypoint`,
   `run`, `[workflows]`.
-- **`replit.nix`** — optional. The workspace used to declare store deps here;
-  they now live in `.replit [nix] packages`. Mechanics in `references/nix.md`.
+- **`replit.nix`** — **recommended** place to declare store deps (incl.
+  `pkgs.cacert`). Keep it tracked in git. Mechanics in `references/nix.md`.
 - **`$HOME/.bashrc`** — symlink into `/nix/store` (platform-regenerated
   bootstrap, not yours). Your rc is `$REPL_HOME/.config/bashrc` — §4.
 - **`.config/replit_bashrc`** — the re-entry shim §4 describes.

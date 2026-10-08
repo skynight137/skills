@@ -29,28 +29,36 @@ Empty = cold store → §2.
 
 ## 2. Getting packages into the store: `.replit [nix]` (recommended) vs `replit.nix` vs `nix-env`
 
-**Current recommended lane: the `[nix] packages` array in `.replit`** — the
-workspace's own `.replit` declares every store package there and the
-root `replit.nix` has been removed:
-
-```toml
-# .replit
-[nix]
-channel = "stable-25_05"
-packages = ["shellcheck", "tmux", "zlib", "xorg.xvfb", "openssl", "cacert", ...]
-```
-
-A root **`replit.nix`** still works and is the older/alternate form:
+**Recommended lane: the root `replit.nix`** — declare every store package
+there. Packages added in `.replit [nix] packages` were observed to drop
+`cacert`, which left TLS without a CA bundle, so `.replit` is NOT the default.
 
 ```nix
-{pkgs}: { deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]; }
+# replit.nix (workspace root)
+{pkgs}: {
+  deps = [
+    pkgs.cacert          # CA bundle -> SYSTEM_CERTIFICATE_PATH -> SSL_CERT_FILE
+    pkgs.gtk3            # Camofox: libmozgtk.so -> libgtk-3.so.0
+    pkgs.alsa-lib        # Camofox
+    pkgs.xorg.libXdamage # Camofox
+    pkgs.xorg.xvfb       # Camofox virtual display + GLX
+    # ...the rest of the workspace toolchain
+  ];
+}
 ```
 
-Both are runtime-equivalent: they put the same packages into `/nix/store`, and
-**the runtime mechanism is the store, not the declaration site** — a workspace
-whose store a prior build filled works with neither file present (verified
-T0–T3 matrix); a truly fresh container with an empty store fails with
-`replit.nix` deleted.
+Verify before relying on it: `nix-instantiate --parse replit.nix` (syntax) and
+`nix eval` each `pkgs.<attr>` name against the pinned channel. Keep `replit.nix`
+tracked in git; a staged deletion of it is a regression, not a cleanup.
+
+`.replit [nix] packages` is the **alternate** lane. Use it only if the
+`replit.nix` form is unavailable on the platform, and re-check `cacert` after
+every rebuild.
+
+The runtime mechanism is still the store, not the declaration site: a
+workspace whose store a prior build filled works without either file (verified
+T0–T3 matrix). A fresh container with an empty store needs the declaration,
+which is why `replit.nix` is the one to keep.
 
 `nix-env` is the immediate, non-persistent option:
 

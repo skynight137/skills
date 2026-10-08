@@ -294,7 +294,7 @@ ${REPL_HOME:-$HOME}/camofox/
 ## Why this works on Replit (the three non-obvious facts)
 
 1. **Libs must exist in `/nix/store` — how they got there is
-   interchangeable.** `.replit [nix] packages` (recommended; auto-applies on
+   interchangeable.** `replit.nix` (recommended; auto-applies on
    every rebuild), a root `replit.nix`, `nix-env -iA`, or a warm store from a
    prior build all work
    identically at runtime. `replit shutdown` + wiping `$HOME` does NOT
