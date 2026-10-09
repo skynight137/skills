@@ -28,7 +28,7 @@ PYTHONPATH=""
 npm_config_dangerously_allow_all_scripts="${npm_config_dangerously_allow_all_scripts:-true}"
 
 # TLS / CA bundle derived from the Nix cacert package. `pkgs.cacert` (declared
-# in .replit [nix] packages) exports SYSTEM_CERTIFICATE_PATH; these four are
+# in replit.nix) exports SYSTEM_CERTIFICATE_PATH; these four are
 # the variables curl/npm/node consult. Empty on a box without that package, in
 # which case nothing is pinned and the platform defaults apply.
 _TLS_ENV_VARS=()

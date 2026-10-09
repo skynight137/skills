@@ -380,7 +380,7 @@ export PIP_TRUSTED_HOST="\${PIP_TRUSTED_HOST:-pypi.org}"
 # (verified with npm config ls -l) and lives in this persistent block.
 export npm_config_dangerously_allow_all_scripts=true
 
-# TLS / CA bundle. The cacert package in .replit [nix] packages exports
+# TLS / CA bundle. The cacert package in replit.nix exports
 # SYSTEM_CERTIFICATE_PATH; wire it into the standard variables curl / npm /
 # node consult, so HTTPS fetches trust the Nix bundle instead of failing.
 # Escaped so the values resolve when the shell SOURCES this file (the
