@@ -20,12 +20,6 @@ CAMOFOX_ROOT, CAMOFOX_STATE_DIR, CAMOFOX_API_KEY, … not just the key. No agent
 framework required: only $CAMOFOX_ENV_FILE and $CAMOFOX_ROOT/.env are consulted
 (see default_env). The server URL is dialed via CAMOFOX_BASE_URL only.
 """
-import certifi,os
-
-
-
-os.environ["SSL_CERT_FILE"] = "/nix/store/pxg9a4a39ms2312i2k2wx1hvigid718d-nss-cacert-3.111/etc/ssl/certs/ca-bundle.crt" #certifi.where()
-
 import argparse, glob, json, os, sys, time, urllib.error, urllib.request
 from typing import cast
 

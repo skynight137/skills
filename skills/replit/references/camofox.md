@@ -745,7 +745,19 @@ Two non-obvious facts, both measured:
 1. **Node ≥ 24 can't verify Replit's TLS chain** (`unable to verify the first
    certificate` — `fetch failed`; curl is fine). Any Node client (including
    the MCP adapter) talking HTTPS to a `*.replit.dev` URL needs
-   `NODE_OPTIONS=--use-system-ca`.
+   `NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt` (the system bundle).
+   On this box `NODE_OPTIONS=--use-system-ca` alone is **not enough**: the
+   platform exports `NODE_EXTRA_CA_CERTS` pointing at the Nix `nss-cacert`
+   bundle (`.config/bashrc:32-35`, from `$SYSTEM_CERTIFICATE_PATH`), which lacks
+   the Replit proxy root, and `fetch` reads that variable. Verified: with the
+   system bundle, MCP `camofox_create_tab` → 200 and `camofox_list_tabs` shows
+   the tab, verification on.
+   **Python (`urllib`, `camofox.py`) fails the same way** with
+   `CERTIFICATE_VERIFY_FAILED`: its default trust path (`capath=/etc/ssl/certs`,
+   no `cafile`) doesn't load the Replit proxy root that curl trusts from
+   `/etc/ssl/certs/ca-certificates.crt`. `camofox.py` passes that bundle
+   explicitly and keeps verification on. **certifi does not fix this** — its
+   bundle lacks the Replit root. Don't disable verification to get past it.
 2. **⚠ The Replit proxy makes every request look like loopback
    (`req.ip = 127.0.0.1`) — and the loopback auth bypass is defeated.**
    Worse: without `CAMOFOX_ACCESS_KEY` set, the tabs routes are open to ALL
@@ -774,6 +786,9 @@ node "$CAMOFOX_ROOT/camofox-browser/mcp/server.mjs"
 ```
 
 ⚠ **`CAMOFOX_API_KEY` is NOT what protects `/tabs` — `CAMOFOX_ACCESS_KEY` is.**
+Cookie import is the one exception: `POST /sessions/<u>/cookies` checks
+`CAMOFOX_API_KEY` only, so a client that sends the access key there gets 403.
+`camofox.py` sends the access key everywhere except cookie import.
 Measured on :9000 through the Replit dev domain (2026-10-06), `NODE_ENV=production`:
 
 | route | no key at all | `CAMOFOX_API_KEY` set | `CAMOFOX_ACCESS_KEY` set |
@@ -781,7 +796,7 @@ Measured on :9000 through the Replit dev domain (2026-10-06), `NODE_ENV=producti
 | `GET /health` | 200 | 200 | 200 *(open by design)* |
 | `GET /tabs` | **200** | **200** | **401** → 200 with key |
 | `POST /tabs` | **200** (created a tab) | **200** | **401** → 200 with key |
-| `POST /sessions/<u>/cookies` | 403 | 200 with key | gated by ACCESS_KEY |
+| `POST /sessions/<u>/cookies` | 403 | **200 with API key** (ACCESS_KEY gets 403) | 403 — use `CAMOFOX_API_KEY` |
 
 So an "api key" alone leaves an **open stealth browser on your egress IP** for
 anyone holding the dev-domain URL — and it does not take a secret, because the
