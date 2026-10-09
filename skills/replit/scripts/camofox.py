@@ -81,6 +81,15 @@ if ENV_FILE:
 # Canonical dial var (official MCP-adapter name, server.mjs:46). One name for
 # both clients; no legacy fallback — a wrong var just means the default.
 CAMOFOX_URL = os.environ.get("CAMOFOX_BASE_URL", "http://127.0.0.1:9377").rstrip("/")
+
+# Python's default trust path (capath only on Replit) does not include the Replit
+# proxy root that curl trusts via the system bundle. Use the system bundle when it
+# exists; verification stays on either way.
+_SYSTEM_CA = "/etc/ssl/certs/ca-certificates.crt"
+_SSL_CTX = None
+if os.path.exists(_SYSTEM_CA):
+    import ssl
+    _SSL_CTX = ssl.create_default_context(cafile=_SYSTEM_CA)
 SAMESITE = {"no_restriction": "None", "lax": "Lax", "strict": "Strict",
             "unspecified": "Lax", "none": "None"}
 
@@ -117,16 +126,16 @@ def default_state():
 # --- HTTP --------------------------------------------------------------------
 def load_key(env_path):
     """Prefer the explicit/--env file, then the (already merged) environment.
-    CAMOFOX_API_KEY is the client token; ALSO accept the CAMOFOX_ACCESS_KEY
-    superkey so a box that only exports ACCESS_KEY (which gates every route)
-    still authenticates."""
+    CAMOFOX_ACCESS_KEY wins when set: the server's global gate checks it on
+    every route except /health. CAMOFOX_API_KEY is the fallback for servers
+    that run without an access key."""
     if env_path and os.path.exists(env_path):
         f = _read_env_file(env_path)
-        v = f.get("CAMOFOX_API_KEY") or f.get("CAMOFOX_ACCESS_KEY")
+        v = f.get("CAMOFOX_ACCESS_KEY") or f.get("CAMOFOX_API_KEY")
         if v:
             return v
-    return (os.environ.get("CAMOFOX_API_KEY")
-            or os.environ.get("CAMOFOX_ACCESS_KEY") or None)
+    return (os.environ.get("CAMOFOX_ACCESS_KEY")
+            or os.environ.get("CAMOFOX_API_KEY") or None)
 
 
 def req(key, method, path, body=None, timeout=300):
@@ -136,7 +145,7 @@ def req(key, method, path, body=None, timeout=300):
         headers={"Content-Type": "application/json",
                  "Authorization": f"Bearer {key or ''}"}, method=method)
     try:
-        with urllib.request.urlopen(r, timeout=timeout) as resp:
+        with urllib.request.urlopen(r, timeout=timeout, context=_SSL_CTX) as resp:
             return json.loads(resp.read())
     except urllib.error.HTTPError as e:
         return {"_http_error": e.code, "_body": e.read().decode()[:400]}
@@ -150,7 +159,7 @@ def req_bytes(key, path, timeout=120):
         CAMOFOX_URL + path,
         headers={"Authorization": f"Bearer {key or ''}"})
     try:
-        with urllib.request.urlopen(r, timeout=timeout) as resp:
+        with urllib.request.urlopen(r, timeout=timeout, context=_SSL_CTX) as resp:
             return resp.read(), None
     except urllib.error.HTTPError as e:
         return None, f"HTTP {e.code}: {e.read().decode()[:200]}"
@@ -197,7 +206,7 @@ def diagnose_timeout():
                               cached playwright flag, verified live)"""
     try:
         t0 = time.time()
-        with urllib.request.urlopen(CAMOFOX_URL + "/health", timeout=5) as resp:
+        with urllib.request.urlopen(CAMOFOX_URL + "/health", timeout=5, context=_SSL_CTX) as resp:
             h = json.loads(resp.read())
         ms = int((time.time() - t0) * 1000)
         return (f"[camofox] diagnosis: server {CAMOFOX_URL} answers /health in {ms}ms "
@@ -221,7 +230,10 @@ def diagnose_timeout():
 
 def import_cookies(key, user, cookie_path):
     cookies = json.load(open(cookie_path))
-    r = req(key, "POST", f"/sessions/{user}/cookies",
+    # /sessions/:userId/cookies checks CAMOFOX_API_KEY only (server.js:420), not the
+    # access key every other route accepts. Send the API key here, or it gets 403.
+    api_key = os.environ.get("CAMOFOX_API_KEY") or key
+    r = req(api_key, "POST", f"/sessions/{user}/cookies",
             {"cookies": [convert(c) for c in cookies]}, timeout=60)
     if "_http_error" in r or "_error" in r:
         print(f"import failed: {r}", file=sys.stderr)
@@ -369,13 +381,14 @@ def wait_for_server(key, timeout, interval=2.0):
     boot) and Replit `waitForPort` only gates the *provision* workflow, not
     parallel consumers; wait here on Errno 111 (refused)."""
     deadline = time.time() + timeout
+    last = {}
     while time.time() < deadline:
-        r = req(key, "GET", "/health", timeout=5)
-        if "_error" not in r and "_http_error" not in r:
+        last = req(key, "GET", "/health", timeout=5)
+        if "_error" not in last and "_http_error" not in last:
             return True
         time.sleep(interval)
-    print(f"camofox not ready after {timeout}s (is the camofox launcher running?)",
-          file=sys.stderr)
+    print(f"camofox not ready after {timeout}s (is the camofox launcher running?)"
+          f" last probe: {last}", file=sys.stderr)
     return False
 
 
