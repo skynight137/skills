@@ -33,12 +33,19 @@ npm_config_dangerously_allow_all_scripts="${npm_config_dangerously_allow_all_scr
 # which case nothing is pinned and the platform defaults apply.
 _TLS_ENV_VARS=()
 if [[ -n "${SYSTEM_CERTIFICATE_PATH:-}" ]]; then
-  SSL_CERT_FILE="$SYSTEM_CERTIFICATE_PATH"
-  SSL_CERT_DIR="$(dirname "$SSL_CERT_FILE")"
-  NIX_SSL_CERT_FILE="$SSL_CERT_FILE"
-  NODE_EXTRA_CA_CERTS="$SSL_CERT_FILE"
-  export SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS
-  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS)
+  # The Nix bundle lacks the Replit proxy root, so Node, Python (urllib/httpx) and
+  # requests fail on *.replit.dev. The system bundle trusts it. Use it when it
+  # exists; fall back to the Nix bundle otherwise. Verification stays on.
+  _SYS_CA=/etc/ssl/certs/ca-certificates.crt
+  _CA="$SYSTEM_CERTIFICATE_PATH"
+  [[ -r "$_SYS_CA" ]] && _CA="$_SYS_CA"
+  SSL_CERT_FILE="$_CA"
+  SSL_CERT_DIR="$(dirname "$SYSTEM_CERTIFICATE_PATH")"
+  NIX_SSL_CERT_FILE="$SYSTEM_CERTIFICATE_PATH"
+  NODE_EXTRA_CA_CERTS="$_CA"
+  REQUESTS_CA_BUNDLE="$_CA"
+  export SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE
+  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 fi
 
 ORI_CONFIG_DIR="$XDG_CONFIG_HOME/ori"

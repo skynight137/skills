@@ -387,10 +387,16 @@ export npm_config_dangerously_allow_all_scripts=true
 # platform env is loaded before $BASHRC), not at write time — an unescaped
 # heredoc would bake in the writing shell's value and clobber an operator's.
 if [ -n "\${SYSTEM_CERTIFICATE_PATH:-}" ]; then
-  export SSL_CERT_FILE="\$SYSTEM_CERTIFICATE_PATH"
-  export SSL_CERT_DIR="\$(dirname "\$SSL_CERT_FILE")"
-  export NIX_SSL_CERT_FILE="\$SSL_CERT_FILE"
-  export NODE_EXTRA_CA_CERTS="\$SSL_CERT_FILE"
+  # Node/Python/requests need the system bundle (it trusts the Replit proxy root);
+  # the Nix bundle does not. Fall back to Nix only if the system bundle is absent.
+  _tls_sys_ca=/etc/ssl/certs/ca-certificates.crt
+  _tls_ca="\$SYSTEM_CERTIFICATE_PATH"
+  [ -r "\$_tls_sys_ca" ] && _tls_ca="\$_tls_sys_ca"
+  export SSL_CERT_FILE="\$_tls_ca"
+  export SSL_CERT_DIR="\$(dirname "\$SYSTEM_CERTIFICATE_PATH")"
+  export NIX_SSL_CERT_FILE="\$SYSTEM_CERTIFICATE_PATH"
+  export NODE_EXTRA_CA_CERTS="\$_tls_ca"
+  export REQUESTS_CA_BUNDLE="\$_tls_ca"
 fi
 
 # Hermes PM stages its own x64 Node tarball AND --node installs the official
