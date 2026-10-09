@@ -117,16 +117,16 @@ def default_state():
 # --- HTTP --------------------------------------------------------------------
 def load_key(env_path):
     """Prefer the explicit/--env file, then the (already merged) environment.
-    CAMOFOX_API_KEY is the client token; ALSO accept the CAMOFOX_ACCESS_KEY
-    superkey so a box that only exports ACCESS_KEY (which gates every route)
-    still authenticates."""
+    CAMOFOX_ACCESS_KEY wins when set: the server's global gate checks it on
+    every route except /health. CAMOFOX_API_KEY is the fallback for servers
+    that run without an access key."""
     if env_path and os.path.exists(env_path):
         f = _read_env_file(env_path)
-        v = f.get("CAMOFOX_API_KEY") or f.get("CAMOFOX_ACCESS_KEY")
+        v = f.get("CAMOFOX_ACCESS_KEY") or f.get("CAMOFOX_API_KEY")
         if v:
             return v
-    return (os.environ.get("CAMOFOX_API_KEY")
-            or os.environ.get("CAMOFOX_ACCESS_KEY") or None)
+    return (os.environ.get("CAMOFOX_ACCESS_KEY")
+            or os.environ.get("CAMOFOX_API_KEY") or None)
 
 
 def req(key, method, path, body=None, timeout=300):
