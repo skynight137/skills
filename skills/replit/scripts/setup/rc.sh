@@ -215,10 +215,10 @@ rc_path_lines() {
   done
 }
 
-# Tool env vars for the managed rc block. One guarded line per var registered
-# by this run's installers: ${VAR:-<value>} so a platform/operator value in the
-# inherited env wins at SOURCE time (never shadow it), while an unset var gets
-# the value baked at write time. This is the rc path that replaces
+# Tool env vars for the managed rc block. One plain export per var registered
+# by this run's installers, with the value this setup resolved at write time.
+# setup.sh is Replit-only, so the value is forced, not checked against the
+# inherited env. This is the rc path that replaces
 # [userenv.shared] tool keys (only REPLIT_BASHRC stays in .replit).
 rc_tool_env_lines() {
   local var skip
@@ -235,7 +235,7 @@ rc_tool_env_lines() {
     # A registered-but-unset var (its module was not sourced this run) is
     # skipped, never emitted empty — `${!var}` under set -u would abort the run.
     [[ -n "${!var+x}" ]] || continue
-    printf 'export %s="${%s:-%s}"\n' "$var" "$var" "${!var}"
+    printf 'export %s="%s"\n' "$var" "${!var}"
   done
 }
 
@@ -359,19 +359,15 @@ emit_managed_block() {
 
 # >>> toolchain >>>
 
-# Registry defaults. Replit feeds the package-firewall
-# (http://package-firewall.replit.internal/...) into the runtime env BEFORE
-# this block is sourced, so these are FALLBACKS only: the \${VAR:-default}
-# form resolves at SOURCE time and leaves a platform/operator value intact.
-# Unguarded exports here previously forced the public registry and shadowed
-# the firewall — `echo $NPM_CONFIG_REGISTRY` showed registry.npmjs.org.
-export YARN_REGISTRY="\${YARN_REGISTRY:-https://registry.yarnpkg.com}"
-export YARN_NPM_REGISTRY_SERVER="\${YARN_NPM_REGISTRY_SERVER:-https://registry.yarnpkg.com}"
-export PIP_INDEX_URL="\${PIP_INDEX_URL:-https://pypi.org/simple}"
-export npm_config_registry="\${npm_config_registry:-https://registry.npmjs.org}"
-export NPM_CONFIG_REGISTRY="\${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
-export GOPROXY="\${GOPROXY:-https://proxy.golang.org,direct}"
-export PIP_TRUSTED_HOST="\${PIP_TRUSTED_HOST:-pypi.org}"
+# Registry settings. Plain exports: these point at the public registries, so
+# a Replit package-firewall value set before this block is overwritten.
+export YARN_REGISTRY="https://registry.yarnpkg.com"
+export YARN_NPM_REGISTRY_SERVER="https://registry.yarnpkg.com"
+export PIP_INDEX_URL="https://pypi.org/simple"
+export npm_config_registry="https://registry.npmjs.org"
+export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
+export GOPROXY="https://proxy.golang.org,direct"
+export PIP_TRUSTED_HOST="pypi.org"
 
 # npm lifecycle scripts. The literal form the docs suggest,
 #   npm config set dangerously-allow-all-scripts=true --location=user
@@ -393,7 +389,7 @@ if [ -n "\${SYSTEM_CERTIFICATE_PATH:-}" ]; then
   _tls_ca="\$SYSTEM_CERTIFICATE_PATH"
   [ -r "\$_tls_sys_ca" ] && _tls_ca="\$_tls_sys_ca"
   export SSL_CERT_FILE="\$_tls_ca"
-  export SSL_CERT_DIR="\$(dirname "\$SYSTEM_CERTIFICATE_PATH")"
+  export SSL_CERT_DIR=/etc/ssl/certs
   export NIX_SSL_CERT_FILE="\$SYSTEM_CERTIFICATE_PATH"
   export NODE_EXTRA_CA_CERTS="\$_tls_ca"
   export REQUESTS_CA_BUNDLE="\$_tls_ca"
@@ -426,13 +422,9 @@ EOF
   rc_tool_env_lines
   cat <<'EOF'
 
-# Platform-level dirs.
-export WORKSPACE="$WORKSPACE"
-export XDG_CONFIG_HOME="$XDG_CONFIG_HOME"
-export XDG_DATA_HOME="$XDG_DATA_HOME"
-export XDG_CACHE_HOME="$XDG_CACHE_HOME"
-export XDG_STATE_HOME="$XDG_STATE_HOME"
-export XDG_BIN_HOME="$XDG_BIN_HOME"
+# Platform-level dirs. XDG_CONFIG/DATA/CACHE_HOME come from the platform by default.
+# XDG_BIN_HOME is ours (the single PATH entry): always $REPL_HOME/.local/bin.
+export XDG_BIN_HOME="$REPL_HOME/.local/bin"
 
 # git global config -> workspace-persisted file (tmpfs on /run is wiped)
 export GIT_CONFIG_GLOBAL="${XDG_CONFIG_HOME:-$HOME/.config}/git/config"
@@ -454,16 +446,15 @@ alias q='exit'
 
 ## replit
 alias off='replit shutdown'
-alias setup='bash scripts/setup.sh'
 
 ## git
 alias glo='git log --oneline'
 alias gss='git status --short'
 
 ## hermes
-alias hu='hermes update --force'
-alias hce='hermes config edit'
-alias ht='hermes --tui-native'
+alias hu="$XDG_BIN_HOME/hermes update --force"
+alias hce="$XDG_BIN_HOME/hermes config edit"
+alias ht="$XDG_BIN_HOME/hermes --tui-native"
 
 # <<< toolchain <<<
 EOF
@@ -709,7 +700,7 @@ rescue_tool_lines() {
        || [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
       var="${BASH_REMATCH[1]}"
       case "$var" in
-        WORKSPACE|REPL_HOME|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_BIN_HOME|REPLIT_BASHRC)
+        WORKSPACE|REPL_HOME|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_BIN_HOME|REPLIT_BASHRC)
           continue ;;
       esac
       # A var the CURRENT script no longer defines (dropped in a newer
@@ -764,7 +755,8 @@ _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
 # the workspace-persisted git config). Never re-emit them as tool vars — doing
 # so duplicated the export and let a platform value shadow ours.
 _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
-  npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL)
+  npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL \
+  SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
 # needing their installer to re-run this time. Candidates are restricted to

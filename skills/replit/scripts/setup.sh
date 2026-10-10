@@ -70,7 +70,7 @@ cd "$WORKSPACE"
 # XDG roots per mode (the design decision env auto-detection drives) ──────────
 # Both branches must end with the FIVE vars below set, each honoring a
 # pre-set XDG_* value (the platform/operator may have chosen one):
-#   XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_STATE_HOME XDG_BIN_HOME
+#   XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_BIN_HOME
 # replit:  pre-set wins, else fall back UNDER $WORKSPACE (persistent).
 #          $HOME is forbidden — wiped on restart.
 # default: pre-set wins, else canonical $HOME paths (~/.config, ...).
@@ -83,16 +83,14 @@ if [[ "$REPLIT_MODE" == true ]]; then
   XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$WORKSPACE/.config}"
   XDG_CACHE_HOME="${XDG_CACHE_HOME:-$WORKSPACE/.cache}"
   XDG_DATA_HOME="${XDG_DATA_HOME:-$WORKSPACE/.local/share}"
-  XDG_STATE_HOME="${XDG_STATE_HOME:-$WORKSPACE/.local/state}"
-  XDG_BIN_HOME="${XDG_BIN_HOME:-$WORKSPACE/.local/bin}"
+  XDG_BIN_HOME="${XDG_BIN_HOME:-$REPL_HOME/.local/bin}"
 else
   XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
   XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
   XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-  XDG_STATE_HOME="${XDG_STATE_HOME:-$HOME/.local/state}"
   XDG_BIN_HOME="${XDG_BIN_HOME:-$HOME/.local/bin}"
 fi
-export XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_BIN_HOME WORKSPACE
+export XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_BIN_HOME WORKSPACE
 
 # Binaries live in XDG_BIN_HOME (single PATH entry). Use directly —
 # no redundant alias.
