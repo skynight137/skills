@@ -215,10 +215,10 @@ rc_path_lines() {
   done
 }
 
-# Tool env vars for the managed rc block. One guarded line per var registered
-# by this run's installers: ${VAR:-<value>} so a platform/operator value in the
-# inherited env wins at SOURCE time (never shadow it), while an unset var gets
-# the value baked at write time. This is the rc path that replaces
+# Tool env vars for the managed rc block. One plain export per var registered
+# by this run's installers, with the value this setup resolved at write time.
+# setup.sh is Replit-only, so the value is forced, not checked against the
+# inherited env. This is the rc path that replaces
 # [userenv.shared] tool keys (only REPLIT_BASHRC stays in .replit).
 rc_tool_env_lines() {
   local var skip
@@ -235,7 +235,7 @@ rc_tool_env_lines() {
     # A registered-but-unset var (its module was not sourced this run) is
     # skipped, never emitted empty — `${!var}` under set -u would abort the run.
     [[ -n "${!var+x}" ]] || continue
-    printf 'export %s="${%s:-%s}"\n' "$var" "$var" "${!var}"
+    printf 'export %s="%s"\n' "$var" "${!var}"
   done
 }
 
@@ -423,8 +423,8 @@ EOF
   cat <<'EOF'
 
 # Platform-level dirs. XDG_CONFIG/DATA/CACHE_HOME come from the platform by default.
-# XDG_BIN_HOME is ours (the single PATH entry), so it is exported only when set.
-[ -n "${XDG_BIN_HOME:-}" ] && export XDG_BIN_HOME="$XDG_BIN_HOME"
+# XDG_BIN_HOME is ours (the single PATH entry): always $REPL_HOME/.local/bin.
+export XDG_BIN_HOME="$REPL_HOME/.local/bin"
 
 # git global config -> workspace-persisted file (tmpfs on /run is wiped)
 export GIT_CONFIG_GLOBAL="${XDG_CONFIG_HOME:-$HOME/.config}/git/config"
