@@ -83,7 +83,7 @@ if [[ "$REPLIT_MODE" == true ]]; then
   XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$WORKSPACE/.config}"
   XDG_CACHE_HOME="${XDG_CACHE_HOME:-$WORKSPACE/.cache}"
   XDG_DATA_HOME="${XDG_DATA_HOME:-$WORKSPACE/.local/share}"
-  XDG_BIN_HOME="${XDG_BIN_HOME:-$WORKSPACE/.local/bin}"
+  XDG_BIN_HOME="${XDG_BIN_HOME:-$REPL_HOME/.local/bin}"
 else
   XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
   XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
