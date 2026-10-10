@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.15.0
+version: 4.17.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -29,6 +29,8 @@ other lane assumes its persistence rules.
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
 | compare every browser lane on this box (versions, loads, webdriver/stealth, WebGL) — full run report | `references/browser-compare-report.md` | `start-replit-chromium.sh`, `resolve-libs.sh`, `launch-hermes-chrome` |
 | bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
+| make an HTTPS client (Python, Node, git, uv) trust the Replit proxy without disabling verification | `references/tls-trust.md` | `setup/rc.sh`, `setup/common.sh` (TLS block) |
+| expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
 official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md`.
@@ -45,6 +47,11 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
 3. **`$REPLIT_LD_LIBRARY_PATH` is never enough** for GUI browsers — you need
    the full transitive closure (nix.md §3; `scripts/setup/generate-closure.sh`).
 4. **npm is behind a package firewall**; pin `--registry=https://registry.npmjs.org/`.
+   It can reject a transitive dependency outright (`403 ... Blocked by Security
+   Policy` on a CVE-flagged package), and only the *dev* tree pulls the usual
+   offender. This shell also exports `NODE_ENV=production`, and npm then silently
+   omits devDependencies — `tsc: command not found` is the tell. Prefix installs
+   and builds with `env -u NODE_ENV`.
 5. **Replit ships a Playwright-managed Chromium** — `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`;
    never `playwright install`.
 
@@ -94,6 +101,7 @@ without ripgrep.
   surfaces as an opaque 500 on cookie import**; use the snippet or the shim.
   See `references/camofox.md` §"npm-global lane".
 - `dot_replit.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
+  - Verify the pin after every `--fix`: `write_replit_bashrc` needs tomlkit (from `.venv`, `python3`, or `uv`). On a fresh box none of them has tomlkit, so the function prints `python tomlkit not found, write REPLIT_BASHRC manually` and still returns 0. That is a failure: workflow shells then lack the line and break silently. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`. Install tomlkit into `.venv` before running `setup.sh --fix` on a fresh machine, or add the line by hand under `[userenv.shared]`.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
 - `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
@@ -108,6 +116,10 @@ without ripgrep.
 
 ## Maintaining this skill (verify, don't trust the edit tool)
 
+- Changes to this skill's repo go on a feature branch in a `.worktrees/<name>` worktree and open a PR for review. Never commit directly to `main`.
+- Test against the live target before committing, and commit only after a passing run. Delete throwaway test scripts and key files first, so the PR holds only the fix.
+- Never write a silent fallback (`except ImportError: pass`, a default that hides a failed dependency or trust store). Fail with the name of what is missing; a silent pass hid the real TLS cause here.
+
 When one batch touches many files or repeats an `old_string`, VERIFY the effect
 on disk before moving on:
 
@@ -119,6 +131,40 @@ on disk before moving on:
 - Trust base after any edit: `bash -n` on every module (the setup.sh syntax gate
   runs the same check), `shellcheck -S warning` on changed files, and re-run the
   module harness.
+
+## Camofox public access
+
+- With `CAMOFOX_ACCESS_KEY` set, every route except `/health` requires `Authorization: Bearer <access key>`. A browser address bar cannot send that header, so `{"error":"Unauthorized"}` in a browser means the gate works. It is not a fault.
+- The global gate checks the access key only; `CAMOFOX_API_KEY` gets 401 on `/tabs`. Cookie import is the reverse: `POST /sessions/<u>/cookies` checks the API key only, so the access key gets 403 there. `camofox.py` sends the access key everywhere except cookie import, which uses the API key.
+- Removing the access key opens every route to anyone with the URL. Never do that to clear a 401 on a public server.
+- A public test goes through the public URL with a header-capable client (`curl` or `camofox.py`). A localhost pass proves the server works, not the proxy path.
+- Keep TLS verification on in every client. Diagnose a public failure in this order: `curl -sS https://<domain>:<port>/health` (verified) first, then `curl -sk` (skip verify). If the verified call fails with curl error 60 and the `-k` call returns 200, the server is fine and this client's trust store lacks the Replit proxy root CA (see the bundle rule below); a `502` from the domain means nothing listens on that port. Run the verified call before naming any cause. A client with verification off proves reachability only; never report it as a pass for auth or the tool path.
+- curl and Python can trust different stores on the same box. curl reads `/etc/ssl/certs/ca-certificates.crt`, which holds the Replit proxy root; Python's default context has `cafile=None` and only `capath=/etc/ssl/certs`, so the identical URL fails with `CERTIFICATE_VERIFY_FAILED`. Fix it in the client: `ssl.create_default_context(cafile='/etc/ssl/certs/ca-certificates.crt')` and pass `context=` to every `urlopen`. Confirm the root is in that bundle with a verified `curl` (no `-k`) first. certifi's bundle lacks the proxy root, so `certifi.where()` does not fix it. Do not disable verification; `PYTHONHTTPSVERIFY` is not a Python setting and does nothing. The per-client variable table (Node, Python `urllib`/`httpx`/`requests`, git, uv) and the generator fix are in `references/tls-trust.md`.
+- Node has the same split, and `NODE_OPTIONS=--use-system-ca` alone is not enough. `NODE_EXTRA_CA_CERTS` overrides the system store, and the Nix bundle it often points at lacks the proxy root. Set `NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt` for the MCP adapter and any `fetch` client, and keep verification on. Confirm with `fetch(url)` in the same environment before running the adapter.
+- `camofox.py` prints "not ready" for every probe failure, including certificate errors. To see the real exception, run `camofox.req(None, 'GET', '/health')` with `CAMOFOX_BASE_URL` set; the `_error` field names the cause.
+- The Camofox MCP adapter reports every network failure as `camofox error: fetch failed`, which hides the TLS cause. If `tools/list` works but tool calls fail with that text, the adapter's `fetch` cannot verify the proxy, not the server. Fix the client trust store (above), then rerun the tool call.
+- Read a Replit secret into a shell variable with `replit secrets exec --keys NAME -- sh -c 'printf %s "$NAME"'`. The `--` form is required; without it the output is empty and looks like a missing key.
+- A key copy in `.hermes/.env` can differ from the Replit secret. When `/tabs` returns 401 with a key you believe is correct, compare SHA-256 prefixes of both values (never print them) before blaming the server.
+- A public port must appear in `.replit` `[[ports]]` with matching `localPort` and `externalPort`, and the server must bind `0.0.0.0` on that port. The URL always carries the port (`https://$REPLIT_DEV_DOMAIN:<port>/`) — only one port can be the default, so a bare domain hits 80 and 502s when nothing listens there. The router is HTTP(S)-only, so a non-HTTP protocol (sshd, a DB port) cannot be exposed this way at all. Serve a service on a port nothing else owns: two `.replit` workflows sharing a `waitForPort` cannot both bind. Details: `references/exposing-ports.md`.
+- Start the server with its env loaded, never with a bare `node server.js` from a shell that has not sourced `$XDG_CONFIG_HOME/camofox/env.sh`. Without it the browser lacks the GTK/X11 library path and fails with `browserType.launch ... libX11-xcb.so.1`; every tab call then returns `503 browser_launch_timeout`. Load secrets in the same command, e.g. `replit secrets exec --keys CAMOFOX_ACCESS_KEY,CAMOFOX_API_KEY -- sh -c '. $XDG_CONFIG_HOME/camofox/env.sh; node server.js'`, with `CAMOFOX_BIND_HOST=0.0.0.0`, and confirm the port is in `.replit` `[[ports]]`.
+- Stop a Camofox server that a `.replit` workflow manages through the workflow in the Replit UI. A `kill` of `node server.js` is undone by the workflow, which relaunches both the server and `camofox-browser-mcp`. Kill by explicit PID only; a `pkill -f` pattern can match the calling shell.
+- In a test, a 400 on an empty `/tabs` body means the gate passed. A `503 browser_launch_timeout` is a server-side browser launch failure, separate from auth.
+- Separate the gate's status from the target page's status. A gate rejection is the server's own JSON error: `{"error":"Unauthorized"}` (401) or `{"error":"Forbidden"}` (403). A `/tabs` call that passes the gate returns 200, and the target page's status is in the `httpStatus` field (for example 404 or 403 from the site). Read `httpStatus` before blaming auth.
+- A cookie-import 403 with the correct client code means the running server's keys differ from the secret. The server reads `CAMOFOX_API_KEY` and `CAMOFOX_ACCESS_KEY` only at startup, so changing a Replit secret does nothing until the server restarts. Compare key lengths (never values) between the secret and the server's environment, then restart the server with the same values and retry.
+- A `.replit` workflow runs `camofox.py` from its own path. After a fix merges, pull the clone that path points at; a local clone at an older commit runs the old code and reproduces a fixed bug. Check `git log -1 -- <file>` in that clone before debugging the code.
+- `env -i` empties PATH, so a following `timeout python3` fails with `No such file or directory`. Pass the absolute interpreter (`PY=$(command -v python3)`) when running in a clean environment.
+
+## Setup-script env rules (`setup.sh`, `setup/rc.sh`, `setup/common.sh`)
+
+- Export only what the script owns. Replit already provides `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME`; re-exporting them adds nothing. `XDG_BIN_HOME` is the one PATH entry the toolchain owns, always `$REPL_HOME/.local/bin`.
+- Do not define `XDG_STATE_HOME`. No script reads it, so it is dead config.
+- Point `SSL_CERT_DIR` at the system directory (`/etc/ssl/certs`), not `dirname $SYSTEM_CERTIFICATE_PATH`. The Nix store directory has no proxy root, so it disagrees with `SSL_CERT_FILE` (the system bundle).
+- Generated `hermes` aliases must call `$XDG_BIN_HOME/hermes`, not bare `hermes`, so they resolve to the managed binary.
+- Verify generated rc output before committing: call the emitter directly (`emit_managed_block` with `REPLIT_MODE=true`), `bash -n` the output, grep for the removed names, then source the output in a clean shell and run each alias. A text check passes an alias that cannot run.
+- Double-quote any alias whose body uses a variable, so the variable expands at definition: `alias hu="$XDG_BIN_HOME/hermes update --force"`. Single quotes keep `$XDG_BIN_HOME` literal, and the alias then fails when called. In a quoted heredoc (`<<'EOF'`) write `$VAR` bare; a backslash is written into the file as-is.
+- Test an alias from a sourced file, not on the line that sources it: bash parses the file's aliases only after that line. Run `shopt -s expand_aliases`, then `source rc.sh`, then the alias on its own line.
+- Registry settings in the emitted block are plain exports, not `${VAR:-default}`, so the public registries win over a firewall value set earlier. `PIP_TRUSTED_HOST` is also a plain export.
+- `--fix` runs the `setup/` code of the checkout it is launched from. Run it from the branch under test. A `main` checkout re-emits the old block, so the live `.config/bashrc` will not show a fix that is still in review.
 
 ## Camofox tuning
 

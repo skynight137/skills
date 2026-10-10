@@ -38,7 +38,7 @@ launch it through the snippet (the `.replit` "camofox browser" workflow does
 exactly this):
 
 ```bash
-bash -c '. "${XDG_DATA_HOME:-$HOME/.local/share}/camofox/env.sh"; exec camofox-browser'
+bash -c '. "${XDG_CONFIG_HOME:-$HOME/.config}/camofox/env.sh"; exec camofox-browser'
 ```
 
 ⚠ **A bare `camofox-browser` dies in any shell that did not source `env.sh`.**
@@ -781,7 +781,7 @@ NODE_ENV=production node server.js
 
 # client (anywhere):
 CAMOFOX_BASE_URL=https://<dev-domain>:9000 CAMOFOX_ACCESS_KEY=*** \
-NODE_OPTIONS=--use-system-ca \
+NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
 node "$CAMOFOX_ROOT/camofox-browser/mcp/server.mjs"
 ```
 
@@ -815,6 +815,42 @@ The two keys are **different mechanisms**, not aliases:
 
 The adapter forwards the access key automatically (tool-contracts declare
 `auth:'accessKey'` per route).
+
+### Testing a public port: probe the domain with verification OFF to read the server, ON to trust it
+
+A Replit `*.replit.dev` URL can serve an app and still look dead to the sandbox. The proxy presents a per-workspace leaf issued by `Replit internal proxy Root CA - <workspace-id>`, which is not in the system bundle. Every HTTPS client that verifies will fail with `CERTIFICATE_VERIFY_FAILED` (Python `urllib`) or curl exit 60, before any request reaches the app.
+
+The failure looks like a dead port. Plain curl shows `000` for every port, including the root. Do not conclude "proxy down" or "port not mapped" from that alone.
+
+Test in this order:
+
+1. Confirm the failure type: `curl -sv https://<domain>/` and read the TLS lines. A completed handshake followed by a 404 or a JSON body means the proxy is up.
+2. To check reachability only, send the request with verification disabled. Do not use that response as proof of identity, and do not leave verification disabled in any real client.
+3. The server's own answer is the proof: an app-specific JSON body (for Camofox, `{"ok":true,"engine":"camoufox",...}` on `/health`) confirms the right service answered.
+4. For a real client, supply the proxy root CA through the trust store (`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, or `NODE_OPTIONS=--use-system-ca`). Sourcing `$REPLIT_BASHRC` or reading `$SYSTEM_CERTIFICATE_PATH` does not add it; both point at the same Nix CA bundle, which lacks the Replit root. A TLS session exposes only the leaf, so the root cannot be recovered from the handshake.
+
+A Node client needs `NODE_OPTIONS=--use-system-ca` even when curl works (see the Node ≥ 24 note above).
+
+### Public probe checklist for Camofox on a non-loopback port
+
+Run these checks, in order, before calling a port public:
+
+- `/health` returns 200 with no key, by design.
+- A protected route (`POST /tabs`) returns 401 with no key and with a wrong key.
+- The access key passes the gate. A 400 on an empty body means the request reached the handler, so auth passed.
+- The API key alone is rejected on `/tabs`. `CAMOFOX_ACCESS_KEY` is the key that governs ordinary routes (see "Exposing Camofox beyond localhost").
+
+Use a freshly generated key for each test run, store it in a file under the scratch folder with mode 600, and delete it when the test ends. Stop the test server by PID after each run, and confirm the local port is closed.
+
+### Running `camofox.py` from a machine other than the server
+
+`camofox.py` probes `/health` at `CAMOFOX_BASE_URL` before it acts, and that variable defaults to `http://127.0.0.1:9377`. On any machine without a local Camofox on 9377, the probe never answers and the script exits with `camofox not ready after 60s (is the camofox launcher running?)`. That message means the probe got no answer from the configured URL. It does not mean the launcher is down.
+
+- Set `CAMOFOX_BASE_URL=https://<domain>:<port>` before the run. The script reads it at import, so an env file loaded later has no effect.
+- Key selection: `load_key()` (`camofox.py:118`) sends `CAMOFOX_API_KEY` in preference to `CAMOFOX_ACCESS_KEY` whenever both are set. A server with the global gate on rejects the API key on `/tabs` (401), so `camofox.py` fails even though the access key is also set. On a build where `load_key()` still prefers the API key, `/tabs` returns 401 even with the access key set. Verified: API key alone → 401 on `/tabs`; access key alone → past the gate. Cookie import is the exception: it needs the API key, and the access key gets 403.
+- Verify certificates on the client machine. A sandbox that does not trust the Replit proxy root CA fails the same probe with `CERTIFICATE_VERIFY_FAILED`, and the script reports that as "not ready". Test the URL with `urllib` or `curl` first. Only the Replit root CA fixes this, not disabling verification.
+- Test `/health` with no key, then `/tabs` with no key (expect 401), then with the access key (expect past the gate).
+- `refresh-page` loops and never exits on its own. A `timeout` kill leaves the output empty, which looks like a failure. Confirm a tab operation from the server log (`tab created`, status 200) or from one direct `camofox.req` call, not from the loop's output.
 
 ## Verification (done)
 

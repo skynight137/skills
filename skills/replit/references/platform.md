@@ -223,6 +223,7 @@ Consequences:
   rc alone: pin it in `.replit [userenv.shared]`, which reaches every shell type.
 - Verify after editing: open a **fresh** terminal and confirm the block loaded
   (`alias`, `printenv`) and that it does **not** hang.
+- The `REPLIT_BASHRC` pin is written by `setup.sh` (`write_replit_bashrc`, `setup/rc.sh`) only when a tomlkit-capable Python resolves: `.venv/bin/python3`, then `python3`, then `uv run --with tomlkit`. On a fresh box with none of those, the run prints a warning and skips the pin, so workflow shells keep the platform default. Check with `grep -n REPLIT_BASHRC .replit`. Fix: install tomlkit into `.venv` (or put `uv` on PATH), then re-run `bash setup.sh --fix`.
 
 ## 5. npm / package managers package firewall
 
