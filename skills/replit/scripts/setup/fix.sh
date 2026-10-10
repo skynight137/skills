@@ -122,7 +122,7 @@ EOF
     # Only export tool vars whose payload exists: a JAVA tool honoring a
     # JAVA_HOME that points at a deleted dir mis-detects worse than one
     # that is unset. XDG/HERMES_HOME are platform paths — always valid.
-    local vars=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_BIN_HOME HERMES_HOME)
+    local vars=(XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_BIN_HOME HERMES_HOME)
     [[ -d "$SDK" ]] && vars+=(JAVA_HOME ANDROID_HOME)
     local v
     for v in "${vars[@]}"; do printf 'export %s="%s"\n' "$v" "${!v}"; done

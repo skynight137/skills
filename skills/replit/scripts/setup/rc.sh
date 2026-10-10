@@ -393,7 +393,7 @@ if [ -n "\${SYSTEM_CERTIFICATE_PATH:-}" ]; then
   _tls_ca="\$SYSTEM_CERTIFICATE_PATH"
   [ -r "\$_tls_sys_ca" ] && _tls_ca="\$_tls_sys_ca"
   export SSL_CERT_FILE="\$_tls_ca"
-  export SSL_CERT_DIR="\$(dirname "\$SYSTEM_CERTIFICATE_PATH")"
+  export SSL_CERT_DIR=/etc/ssl/certs
   export NIX_SSL_CERT_FILE="\$SYSTEM_CERTIFICATE_PATH"
   export NODE_EXTRA_CA_CERTS="\$_tls_ca"
   export REQUESTS_CA_BUNDLE="\$_tls_ca"
@@ -426,13 +426,9 @@ EOF
   rc_tool_env_lines
   cat <<'EOF'
 
-# Platform-level dirs.
-export WORKSPACE="$WORKSPACE"
-export XDG_CONFIG_HOME="$XDG_CONFIG_HOME"
-export XDG_DATA_HOME="$XDG_DATA_HOME"
-export XDG_CACHE_HOME="$XDG_CACHE_HOME"
-export XDG_STATE_HOME="$XDG_STATE_HOME"
-export XDG_BIN_HOME="$XDG_BIN_HOME"
+# Platform-level dirs. XDG_CONFIG/DATA/CACHE_HOME come from the platform by default.
+# XDG_BIN_HOME is ours (the single PATH entry), so it is exported only when set.
+[ -n "${XDG_BIN_HOME:-}" ] && export XDG_BIN_HOME="$XDG_BIN_HOME"
 
 # git global config -> workspace-persisted file (tmpfs on /run is wiped)
 export GIT_CONFIG_GLOBAL="${XDG_CONFIG_HOME:-$HOME/.config}/git/config"
@@ -454,16 +450,15 @@ alias q='exit'
 
 ## replit
 alias off='replit shutdown'
-alias setup='bash scripts/setup.sh'
 
 ## git
 alias glo='git log --oneline'
 alias gss='git status --short'
 
 ## hermes
-alias hu='hermes update --force'
-alias hce='hermes config edit'
-alias ht='hermes --tui-native'
+alias hu='$XDG_BIN_HOME/hermes update --force'
+alias hce='$XDG_BIN_HOME/hermes config edit'
+alias ht='$XDG_BIN_HOME/hermes --tui-native'
 
 # <<< toolchain <<<
 EOF
@@ -709,7 +704,7 @@ rescue_tool_lines() {
        || [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*= ]]; then
       var="${BASH_REMATCH[1]}"
       case "$var" in
-        WORKSPACE|REPL_HOME|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_BIN_HOME|REPLIT_BASHRC)
+        WORKSPACE|REPL_HOME|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_BIN_HOME|REPLIT_BASHRC)
           continue ;;
       esac
       # A var the CURRENT script no longer defines (dropped in a newer
