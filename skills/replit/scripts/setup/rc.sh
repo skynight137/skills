@@ -755,7 +755,8 @@ _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
 # the workspace-persisted git config). Never re-emit them as tool vars — doing
 # so duplicated the export and let a platform value shadow ours.
 _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
-  npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL)
+  npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL \
+  SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
 # needing their installer to re-run this time. Candidates are restricted to
