@@ -371,7 +371,7 @@ export PIP_INDEX_URL="\${PIP_INDEX_URL:-https://pypi.org/simple}"
 export npm_config_registry="\${npm_config_registry:-https://registry.npmjs.org}"
 export NPM_CONFIG_REGISTRY="\${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
 export GOPROXY="\${GOPROXY:-https://proxy.golang.org,direct}"
-export PIP_TRUSTED_HOST="\${PIP_TRUSTED_HOST:-pypi.org}"
+export PIP_TRUSTED_HOST="pypi.org"
 
 # npm lifecycle scripts. The literal form the docs suggest,
 #   npm config set dangerously-allow-all-scripts=true --location=user
