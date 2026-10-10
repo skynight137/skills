@@ -456,9 +456,9 @@ alias glo='git log --oneline'
 alias gss='git status --short'
 
 ## hermes
-alias hu='$XDG_BIN_HOME/hermes update --force'
-alias hce='$XDG_BIN_HOME/hermes config edit'
-alias ht='$XDG_BIN_HOME/hermes --tui-native'
+alias hu="$XDG_BIN_HOME/hermes update --force"
+alias hce="$XDG_BIN_HOME/hermes config edit"
+alias ht="$XDG_BIN_HOME/hermes --tui-native"
 
 # <<< toolchain <<<
 EOF
