@@ -359,18 +359,14 @@ emit_managed_block() {
 
 # >>> toolchain >>>
 
-# Registry defaults. Replit feeds the package-firewall
-# (http://package-firewall.replit.internal/...) into the runtime env BEFORE
-# this block is sourced, so these are FALLBACKS only: the \${VAR:-default}
-# form resolves at SOURCE time and leaves a platform/operator value intact.
-# Unguarded exports here previously forced the public registry and shadowed
-# the firewall — `echo $NPM_CONFIG_REGISTRY` showed registry.npmjs.org.
-export YARN_REGISTRY="\${YARN_REGISTRY:-https://registry.yarnpkg.com}"
-export YARN_NPM_REGISTRY_SERVER="\${YARN_NPM_REGISTRY_SERVER:-https://registry.yarnpkg.com}"
-export PIP_INDEX_URL="\${PIP_INDEX_URL:-https://pypi.org/simple}"
-export npm_config_registry="\${npm_config_registry:-https://registry.npmjs.org}"
-export NPM_CONFIG_REGISTRY="\${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org}"
-export GOPROXY="\${GOPROXY:-https://proxy.golang.org,direct}"
+# Registry settings. Plain exports: these point at the public registries, so
+# a Replit package-firewall value set before this block is overwritten.
+export YARN_REGISTRY="https://registry.yarnpkg.com"
+export YARN_NPM_REGISTRY_SERVER="https://registry.yarnpkg.com"
+export PIP_INDEX_URL="https://pypi.org/simple"
+export npm_config_registry="https://registry.npmjs.org"
+export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
+export GOPROXY="https://proxy.golang.org,direct"
 export PIP_TRUSTED_HOST="pypi.org"
 
 # npm lifecycle scripts. The literal form the docs suggest,
