@@ -300,9 +300,17 @@ install_hermes() {
     || die "Hermes installer failed"
   rm -f "$installer"
 
-  # The launcher landed in $hermes_home/.local/bin (== XDG_BIN_HOME, on PATH) —
-  # no rc edit by the installer.
-  ok "HERMES_HOME=$HERMES_HOME browser=$([ -n "$chrome" ] && echo 'replit chromium' || echo 'none')"
+  # The installer drops a `hermes` launcher shim in $hermes_home/.local/bin
+  # (== XDG_BIN_HOME in replit mode) that just execs the real launcher under
+  # $HERMES_HOME. That shim is not needed: write_hermes_tools_block puts the
+  # real launcher dir ($HERMES_HOME/hermes-agent/.hermes/bin) on PATH, which
+  # survives a $HOME wipe (Replit's $HOME is ephemeral). Drop the shim so
+  # shells resolve the real binary, not a shim pointing at a wiped path.
+  rm -f "$XDG_BIN_HOME/hermes" "$XDG_BIN_HOME/hermes-agent" "$XDG_BIN_HOME/hermes-acp"
+
+  local real_bin="$HERMES_HOME/hermes-agent/.hermes/bin/hermes"
+  [[ -x "$real_bin" ]] || warn "expected Hermes launcher at $real_bin — check the install"
+  ok "HERMES_HOME=$HERMES_HOME launcher=$real_bin browser=$([ -n "$chrome" ] && echo 'replit chromium' || echo 'none')"
   record_tool_env_vars HERMES_HOME
   record_tool_path_dirs "$XDG_BIN_HOME"
   wire_tool hermes HERMES_HOME -- "$XDG_BIN_HOME"

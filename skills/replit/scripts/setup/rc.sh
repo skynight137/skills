@@ -754,8 +754,12 @@ _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
 # Vars the fixed blocks already export (registries, the npm-scripts setting and
 # the workspace-persisted git config). Never re-emit them as tool vars — doing
 # so duplicated the export and let a platform value shadow ours.
+# HERMES_HOME is here too: the hermes-tools block owns it (it exports
+# HERMES_HOME + HERMES_MANAGED_DIR next to the launcher PATH), so emitting it
+# again from the generic tool-var pass would duplicate the line.
 _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
   npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL \
+  HERMES_HOME \
   SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
