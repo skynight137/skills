@@ -267,10 +267,7 @@ install_hermes() {
   step "Hermes Agent (AI agent assistant)"
   need_cmd curl
   rm -rf "$HERMES_HOME"
-  # Clear stale launcher shims from BOTH possible dirs before the installer
-  # rewrites them (see remove_hermes_launcher_shims for why $HOME/.local/bin).
-  rm -f "$XDG_BIN_HOME/hermes" "$XDG_BIN_HOME/hermes-agent" "$XDG_BIN_HOME/hermes-acp" \
-        "$HOME/.local/bin/hermes" "$HOME/.local/bin/hermes-agent" "$HOME/.local/bin/hermes-acp"
+  rm -f "$XDG_BIN_HOME/hermes" "$XDG_BIN_HOME/hermes-agent" "$XDG_BIN_HOME/hermes-acp"
   mkdir -p "$HERMES_HOME" "$XDG_BIN_HOME"
 
   local installer="$XDG_DATA_HOME/_hermes-install.sh"
@@ -303,16 +300,11 @@ install_hermes() {
     || die "Hermes installer failed"
   rm -f "$installer"
 
-  # The installer drops `hermes` launcher shims in $hermes_home/.local/bin that
-  # just exec the real launcher under $HERMES_HOME. Those shims are not needed:
-  # write_hermes_tools_block puts the real launcher dir
-  # ($HERMES_HOME/hermes-agent/.hermes/bin) on PATH, which survives a $HOME
-  # wipe. Drop them from BOTH possible locations — install_hermes falls back to
-  # $HOME when $REPLIT_MODE is not "true", so they are not always in
-  # $XDG_BIN_HOME. Otherwise a stale $HOME/.local/bin/hermes shadows the real
-  # binary on PATH and points at an ephemeral dir.
-  remove_hermes_launcher_shims
-
+  # Hermes publishes its own convenience forwarders (`hermes`, `hermes-acp`,
+  # `hermes-agent`) into $HOME/.local/bin via _launchers.expose_cli; each
+  # forwards to the durable launcher under $HERMES_HOME. Leave them alone:
+  # deleting them is futile (Hermes republishes on every install/update) and
+  # breaks `hermes-agent`, which has no .hermes/bin entry of its own.
   local real_bin="$HERMES_HOME/hermes-agent/.hermes/bin/hermes"
   [[ -x "$real_bin" ]] || warn "expected Hermes launcher at $real_bin — check the install"
   ok "HERMES_HOME=$HERMES_HOME launcher=$real_bin browser=$([ -n "$chrome" ] && echo 'replit chromium' || echo 'none')"

@@ -53,10 +53,6 @@ fix_derive_wiring() {
   # seed's REPL_HOME entry is an ownership label, not an emitted PATH dir).
   if [[ -d "$HERMES_HOME" ]]; then
     record_tool_env_vars HERMES_HOME; record_tool_path_dirs "$XDG_BIN_HOME"
-    # Drop any stray launcher shim so `hermes` resolves to the real binary.
-    # A shim left in $HOME/.local/bin (install_hermes falls back to $HOME when
-    # $REPLIT_MODE is not "true") shadows it on PATH; --fix repairs that.
-    remove_hermes_launcher_shims
   fi
   if [[ -x "$XDG_BIN_HOME/ori" ]]; then
     record_tool_env_vars ORI_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
