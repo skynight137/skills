@@ -452,9 +452,13 @@ alias glo='git log --oneline'
 alias gss='git status --short'
 
 ## hermes
-alias hu="$XDG_BIN_HOME/hermes update --force"
-alias hce="$XDG_BIN_HOME/hermes config edit"
-alias ht="$XDG_BIN_HOME/hermes --tui-native"
+# Plain `hermes`, NOT $XDG_BIN_HOME/hermes: the installer's shim there is
+# removed after install, and the hermes-tools block puts the real launcher
+# dir ($HERMES_HOME/hermes-agent/.hermes/bin) on PATH. Resolving via PATH
+# keeps these aliases working across a Recreate (which wipes the shim).
+alias hu="hermes update --force"
+alias hce="hermes config edit"
+alias ht="hermes --tui-native"
 
 # <<< toolchain <<<
 EOF
