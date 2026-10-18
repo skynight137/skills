@@ -45,7 +45,9 @@ doctor() {
   check_tool "OpenCode" "$XDG_BIN_HOME/opencode"
   check_tool "Ollama" ollama
   check_tool "Claude" "$XDG_BIN_HOME/claude"
-  check_tool "Hermes" "$HERMES_HOME/hermes-agent/venv/bin/hermes"
+  # The real launcher (the official installer's .local/bin shim just execs
+  # this) — write_hermes_tools_block puts this dir on PATH.
+  check_tool "Hermes" "$HERMES_HOME/hermes-agent/.hermes/bin/hermes"
   check_tool "ORI" "$XDG_BIN_HOME/ori"
   check_tool "rclone" "$XDG_BIN_HOME/rclone"
   check_tool "qBittorrent-nox" "$XDG_BIN_HOME/qbittorrent-nox"

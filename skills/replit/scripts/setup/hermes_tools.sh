@@ -46,6 +46,16 @@ $MARK
 # toolset. .replit stays as-is (nodejs-24 / python3.13 modules remain
 # installed as the nix-profile fallback); these dirs are PREPENDED after the
 # toolchain block so they win PATH order.
+#
+# HERMES_HOME / HERMES_MANAGED_DIR live here (not the generic toolchain block)
+# because they are only meaningful alongside a Hermes install, and this block
+# is written only when $HERMES_HOME/tools exists. HERMES_MANAGED_DIR relocates
+# the managed-scope directory off its /etc/hermes default: on Replit /etc is a
+# read-only mount and cannot be created without root, so pin it under
+# $HERMES_HOME/managed. Exporting both here means every interactive shell and
+# the gateway/workflow shells inherit them — no manual export needed.
+export HERMES_HOME="$HERMES_ROOT"
+export HERMES_MANAGED_DIR="$HERMES_ROOT/managed"
 # Globbing is LAZY: every dir is re-resolved (newest version via sort -V) on
 # each shell start, so 'hermes update' swapping versions needs no rc rewrite
 # and a stale pinned path can never break an existing PATH.
@@ -61,8 +71,12 @@ for sub in \\
   export PATH="\$d:\$PATH"
 done
 [[ -d "$HERMES_ROOT/hermes-agent/.hermes/bin" ]] && export PATH="$HERMES_ROOT/hermes-agent/.hermes/bin:\$PATH"
-hvenv="\$(ls -d "$HERMES_ROOT"/hermes-agent/venv/bin "$HERMES_ROOT"/installs/*/environments/*/venv/bin 2>/dev/null | head -1)"
-[[ -n "\$hvenv" ]] && export PATH="\$hvenv:\$PATH"
+# NOTE: $HERMES_ROOT/installs/*/environments/*/venv/bin and hermes-agent/venv/bin
+# are deliberately NOT put on PATH. Those venvs belong to an isolated session run
+# (installs/<hash>/environments/<hash>/) and are not stable across sessions or
+# updates — a public shell that picked one up would call a binary from a session
+# that may not exist and crash. The .hermes/bin launcher above is the stable
+# entrypoint; it resolves the correct environment itself.
 # <<< hermes-tools <<<
 RC
   # Squeeze blank runs to one: every rewriter above (write_bashrc's strip +
