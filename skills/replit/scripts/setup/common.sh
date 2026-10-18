@@ -162,6 +162,25 @@ owned_only_by(){
   return 0
 }
 
+# Remove the official Hermes installer's `hermes` launcher shims.
+# The installer writes them to $hermes_home/.local/bin, and install_hermes picks
+# $hermes_home from $REPLIT_MODE: when that is not "true" it falls back to
+# $HOME, so the shims land in $HOME/.local/bin — which is NOT necessarily
+# $XDG_BIN_HOME ($REPL_HOME/.local/bin). A stray shim there shadows the real
+# launcher (Replit puts $HOME/.local/bin early on PATH) and points at an
+# ephemeral dir, so `hermes` resolves to a path that dies on Recreate. Clear
+# both locations.
+# Skipped when the real launcher is absent: a shim is a useless-but-harmless
+# pointer, worse to leave `hermes` with no entrypoint at all.
+remove_hermes_launcher_shims() {
+  [[ -x "$HERMES_HOME/hermes-agent/.hermes/bin/hermes" ]] || return 0
+  local d
+  for d in "$XDG_BIN_HOME" "$HOME/.local/bin"; do
+    [[ -n "$d" && -d "$d" ]] || continue
+    rm -f "$d/hermes" "$d/hermes-agent" "$d/hermes-acp"
+  done
+}
+
 seed_tool_wiring(){
   # Static ownership registrations (mirrors the wire_tool calls in the
   # install functions) so --clean can resolve line owners without
