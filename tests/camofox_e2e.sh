@@ -36,7 +36,7 @@ command -v camofox-browser >/dev/null || { echo "FAIL: camofox-browser not on PA
 #    `libmozgtk.so: libgtk-3.so.0: cannot open shared object file`. Use
 #    $XDG_BIN_HOME/launch-camofox-browser (written by setup.sh --camofox /
 #    --fix) in those shells instead of a bare camofox-browser.
-ENVSH="${XDG_DATA_HOME:-$HOME/.local/share}/camofox/env.sh"
+ENVSH="${CAMOFOX_STATE_DIR:-${XDG_CONFIG_HOME:-${REPL_HOME:-$HOME}/.config}/camofox}/env.sh"
 [[ -f "$ENVSH" ]] && . "$ENVSH"
 
 # 1. throwaway key (header-safe), never printed
@@ -68,6 +68,21 @@ curl -s -m 5 -o /dev/null "$BASE/tabs" && ok "no-key GET /tabs -> allowed on loo
 code=$(curl -s -m 5 -o /dev/null -w '%{http_code}' -X POST "$BASE/sessions/e2e/cookies" \
   -H 'Content-Type: application/json' -d '{"cookies":[]}')
 [[ "$code" = 403 ]] && ok "no-key cookie import -> 403 (privileged route gated)" || bad "no-key cookie import -> $code (expected 403)"
+
+# 3b. client/engine protocol compatibility. playwright-core >= 1.64 passes
+#     `bypassServiceWorker` to Network.setRequestInterception; the Camoufox
+#     engine's juggler schema only declares {enabled}, so it rejects the call.
+#     Narrow but fatal: the param is sent ONLY for storage-state pages, i.e.
+#     restoring a user whose persisted state carries localStorage/origins —
+#     every real logged-in account — so cookie import 500s while tabs work.
+#     A bare `npm install -g` bumps the client past the pin setup.sh writes.
+_cb="$(command -v camofox-browser)"; _pw=""
+[[ -n "$_cb" ]] && _pw="$(dirname "$(readlink -f "$_cb")")/../node_modules/playwright-core/lib/coreBundle.js"
+if [[ -f "$_pw" ]] && grep -q bypassServiceWorker "$_pw"; then
+  bad "playwright-core sends bypassServiceWorker (engine rejects it) — cookie import of a logged-in account will 500; run: bash setup.sh --camofox"
+else
+  ok "playwright-core compatible with the engine's juggler schema"
+fi
 
 # 4. open a tab (first launch can be slow — cold engine)
 tab=$(curl -s -m 120 -X POST "$BASE/tabs" --config "$CFG" -H 'Content-Type: application/json' \

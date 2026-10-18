@@ -24,6 +24,13 @@
 #      Nix repl; raised to a 60000ms floor.
 #   4. engine dir — CAMOUFOX_INSTALL_DIR (with the U; that is camoufox-js's
 #      spelling) is pinned to $XDG_CACHE_HOME/camoufox (persistent, not $HOME).
+#   5. playwright-core pin — camofox-browser asks for `playwright-core ^1.58.0`
+#      and camoufox-js declares peer `*`, so npm resolves the LATEST playwright
+#      and can outrun the engine's frozen juggler schema. Playwright 1.64 added
+#      `bypassServiceWorker` to Network.setRequestInterception and sends it on
+#      storage-state pages — the exact call a COOKIE IMPORT makes — so every
+#      cookie import 500s while ordinary tab work keeps working. Pinned to the
+#      newest compatible release (see CAMOFOX_PLAYWRIGHT_MAX).
 
 CAMOFOX_NPM_PKG="@askjo/camofox-browser"
 camofox_pkg_dir() { printf '%s/lib/node_modules/@askjo/camofox-browser' "$NODE_DIR"; }
@@ -135,6 +142,70 @@ let j; try{ j=JSON.parse(fs.readFileSync(p,"utf8")); }catch{ process.exit(0); }
 const cur=Number(j.newPageTimeoutMs);
 if(!Number.isFinite(cur)||cur<floor){ j.newPageTimeoutMs=floor; fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n"); console.log("  camofox.config.json newPageTimeoutMs "+cur+" -> "+floor); }
 ' "$cfg" || true
+}
+
+# Newest playwright-core whose Firefox network manager does NOT pass
+# `bypassServiceWorker` to Network.setRequestInterception (added in 1.64.0 and
+# sent on storage-state pages). The Camoufox engine's juggler schema
+# (chrome/juggler/content/protocol/Protocol.js inside omni.ja) declares only
+# `{enabled}`, so a newer client fails every cookie import:
+#   browser.newContext: Error setting storage state: Protocol error
+#   (Network.setRequestInterception): ... "bypassServiceWorker" ... is not
+#   described in this scheme                              -> HTTP 500
+# Raise this ONLY after confirming the engine's Protocol.js grew the param, or
+# after camoufox-js ships an engine that accepts it (camofox_engine_accepts_
+# bypass_sw checks exactly that and skips the pin when the engine is new enough).
+CAMOFOX_PLAYWRIGHT_MAX="${CAMOFOX_PLAYWRIGHT_MAX:-1.63.0}"
+
+# Does the INSTALLED engine's juggler declare bypassServiceWorker?
+camofox_engine_accepts_bypass_sw() {
+  local ja="${CAMOUFOX_INSTALL_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/camoufox}/omni.ja"
+  local proto="chrome/juggler/content/protocol/Protocol.js"
+  [[ -f "$ja" ]] || return 1
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -p "$ja" "$proto" 2>/dev/null | grep -q bypassServiceWorker && return 0
+    return 1
+  fi
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 -c 'import sys,zipfile
+d=zipfile.ZipFile(sys.argv[1]).read(sys.argv[2])
+sys.exit(0 if b"bypassServiceWorker" in d else 1)' "$ja" "$proto" 2>/dev/null
+}
+
+# Pin playwright-core so the client cannot outrun the engine. Idempotent: a
+# re-run of `npm install -g @askjo/camofox-browser` bumps it straight back to
+# the latest (its range is ^1.58.0, camoufox-js's peer is `*`), which is why
+# this runs after every install rather than being a one-off fix.
+camofox_pin_playwright() {
+  local pkg; pkg="$(camofox_pkg_dir)"
+  local pj="$pkg/node_modules/playwright-core/package.json"
+  [[ -f "$pj" ]] || { warn "playwright-core not found under $pkg — pin skipped"; return 0; }
+  command -v node >/dev/null 2>&1 || { warn "node not on PATH — playwright-core pin skipped"; return 0; }
+  local cur; cur="$(node -p "require('$pj').version" 2>/dev/null || true)"
+  [[ -n "$cur" ]] || { warn "could not read the installed playwright-core version — pin skipped"; return 0; }
+
+  if camofox_engine_accepts_bypass_sw; then
+    skip "engine accepts bypassServiceWorker — playwright-core $cur kept"
+    return 0
+  fi
+  [[ "$cur" == "$CAMOFOX_PLAYWRIGHT_MAX" ]] && { skip "playwright-core pinned at $CAMOFOX_PLAYWRIGHT_MAX"; return 0; }
+  # Never UPGRADE an already-older client: the pin is a ceiling, not a target.
+  if [[ "$(printf '%s\n%s\n' "$CAMOFOX_PLAYWRIGHT_MAX" "$cur" | sort -V | tail -1)" != "$cur" ]]; then
+    skip "playwright-core $cur is below the pin ($CAMOFOX_PLAYWRIGHT_MAX) — left alone"
+    return 0
+  fi
+
+  echo "  playwright-core $cur -> $CAMOFOX_PLAYWRIGHT_MAX (engine juggler has no bypassServiceWorker)"
+  # --no-save: the enclosing package.json is regenerated on the next global
+  # install, so writing the pin there would be silently undone.
+  npm install --prefix "$pkg" --no-audit --no-fund --no-save "playwright-core@$CAMOFOX_PLAYWRIGHT_MAX" >/dev/null 2>&1 \
+    || { warn "playwright-core pin failed — cookie import will 500 until it is pinned"; return 0; }
+  local new; new="$(node -p "require('$pj').version" 2>/dev/null || true)"
+  if [[ "$new" == "$CAMOFOX_PLAYWRIGHT_MAX" ]]; then
+    ok "playwright-core pinned at $CAMOFOX_PLAYWRIGHT_MAX (restart the camofox server to load it)"
+  else
+    warn "playwright-core pin did not take (now ${new:-unknown}) — cookie import will 500"
+  fi
 }
 
 # Runtime env for camofox, applied by sourcing this file. Co-locates the GTK/X11
@@ -279,6 +350,7 @@ install_camofox() {
   # 2) Replit compatibility patches
   camofox_patch_webgl
   camofox_raise_newpage_timeout
+  camofox_pin_playwright
 
   # 3) lib closure (globally-safe: generate-closure.sh prunes openssl/curl/…).
   #     The engine dir is forced onto the child fetch so it lands under the cache.
