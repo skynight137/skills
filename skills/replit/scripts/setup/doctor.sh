@@ -144,6 +144,26 @@ doctor() {
       warn "camofox launcher shim missing ($XDG_BIN_HOME/launch-camofox-browser) — a bare 'camofox-browser' in a workflow shell dies without GTK; run: bash setup.sh --fix"
       wfail=1
     fi
+    # playwright-core vs the engine's juggler schema: a client newer than the
+    # schema breaks EVERY cookie import (storage-state pages pass
+    # bypassServiceWorker, which the engine's Protocol.js does not declare)
+    # while ordinary tab work keeps working — so a bare `npm install -g`
+    # silently re-breaks logins. setup.sh --camofox pins it; check the pin here.
+    local _pwj; _pwj="$(camofox_pkg_dir)/node_modules/playwright-core/package.json"
+    if [[ -f "$_pwj" ]] && command -v node >/dev/null 2>&1; then
+      local _pw; _pw="$(node -p "require('$_pwj').version" 2>/dev/null || true)"
+      if [[ -z "$_pw" ]]; then
+        warn "camofox playwright-core version unreadable ($_pwj)"
+        wfail=1
+      elif camofox_engine_accepts_bypass_sw; then
+        ok "camofox playwright-core $_pw (engine accepts bypassServiceWorker)"
+      elif [[ "$(printf '%s\n%s\n' "$CAMOFOX_PLAYWRIGHT_MAX" "$_pw" | sort -V | tail -1)" == "$_pw" && "$_pw" != "$CAMOFOX_PLAYWRIGHT_MAX" ]]; then
+        warn "camofox playwright-core $_pw is newer than the engine's juggler schema — every cookie import will 500; run: bash setup.sh --camofox (pins $CAMOFOX_PLAYWRIGHT_MAX)"
+        wfail=1
+      else
+        ok "camofox playwright-core $_pw (compatible with the engine)"
+      fi
+    fi
     # State dir: $HOME is wiped on recreate, so a profile/cookie jar left at the
     # package default (~/.camofox) silently loses the login. Gate on the pins.
     if [[ "${CAMOFOX_PROFILE_DIR:-}" == "$WORKSPACE"/* || "${CAMOFOX_PROFILE_DIR:-}" == "$REPL_HOME"/* ]]; then

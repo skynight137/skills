@@ -436,7 +436,8 @@ Useful greps:
 | a failed run's log just **stops** at `listening on :9377`, error missing | client `print()`s are block-buffered when stdout is a pipe (no TTY); and `session:created` (`plugins/persistence/index.js:120`) awaits the state restore, so a wedged browser never reaches the route's `req` log line | run the CLI as `python3 -u` (or `PYTHONUNBUFFERED=1`) |
 | first `POST /tabs` on a Cloudflare site returns `httpStatus:403` (e.g. g2.com, glassdoor.com) | CF frontdoor challenges the cold profile; the URL may even be rewritten to a `__cf_chl_rt_tk` token | **retry the same sessionKey** — the second attempt usually returns `navigationOk:true` with full content (verified: g2.com 403 → 200 on retry, real reviews loaded) |
 | `libgtk-3.so.0: cannot open shared object file` | store is COLD | *Cold store* section |
-| **`POST /sessions/<u>/cookies` → 500** `browserType.launch: Failed to launch the browser process` + `libmozgtk.so: libgtk-3.so.0: cannot open shared object file`, in a **workflow / Run-button / cron** shell | that shell never sourced `env.sh`, so a bare `camofox-browser` started Firefox with no GTK closure. The `LD_LIBRARY_PATH` here is whatever `[userenv.shared]` pinned (the pool) and it does NOT carry GTK | launch via the snippet or the shim, **not** a bare `camofox-browser`: `. "${XDG_DATA_HOME}/camofox/env.sh"; exec camofox-browser`, or `launch-camofox-browser`. `--doctor` now gates on both; `--fix` regenerates them |
+| **`POST /sessions/<u>/cookies` → 500** `browserType.launch: Failed to launch the browser process` + `libmozgtk.so: libgtk-3.so.0: cannot open shared object file`, in a **workflow / Run-button / cron** shell | that shell never sourced `env.sh`, so a bare `camofox-browser` started Firefox with no GTK closure. The `LD_LIBRARY_PATH` here is whatever `[userenv.shared]` pinned (the pool) and it does NOT carry GTK | launch via the snippet or the shim, **not** a bare `camofox-browser`: `. "${XDG_CONFIG_HOME:-$REPL_HOME/.config}/camofox/env.sh"; exec camofox-browser`, or `launch-camofox-browser`. `--doctor` now gates on both; `--fix` regenerates them |
+| **`POST /sessions/<u>/cookies` → 500** `Error setting storage state: … Protocol error (Network.setRequestInterception) … "bypassServiceWorker" … not described in this scheme`, **only for real accounts** (a fresh userId imports fine) | playwright-core ≥ 1.64 sends a param the Camoufox engine's juggler schema does not declare, on the storage-state page that restoring a localStorage-bearing profile builds | `bash setup.sh --camofox` (pins playwright-core), then restart the server — see *Cookie import 500s for a logged-in account* below |
 | `libX11-xcb.so.1: cannot open shared object file` | running with only `$REPLIT_LD_LIBRARY_PATH` (24 dirs on this box) | let the script load `LD_LIBRARY_PATH.txt` (don't hand-export the top-level dirs) |
 | `ERESOLVE` / `npm warn` during install | harmless peer warnings | ignore |
 | tarball 404s from npm | Replit package-firewall registry | `--registry=https://registry.npmjs.org/` (the script sets this) |
@@ -483,6 +484,40 @@ Also: `session empty after tab reaper, closing` fires right after a cookie impor
 because an import opens no tab — that is benign. Several runs also log
 `failed to persist storage state` on SIGTERM (checkpoints in flight when the server is
 killed), which is how an import can look "lost" after a restart.
+
+### Cookie import 500s for a logged-in account — playwright-core outran the engine
+
+Signature (client prints `import failed:`; the server logs `cookie import failed`):
+
+```
+browser.newContext: Error setting storage state: Protocol error
+(Network.setRequestInterception): ERROR: failed to call method
+'Network.setRequestInterception' with parameters {"enabled":true,
+"bypassServiceWorker":true} — Found property "<root>.bypassServiceWorker" - true
+which is not described in this scheme
+```
+
+Cause: playwright-core **≥ 1.64** passes `bypassServiceWorker` on
+`Network.setRequestInterception`, but *only for storage-state pages*
+(`ffNetworkManager.ts`, `this._page.isStorageStatePage`). The Camoufox engine's
+juggler schema — `chrome/juggler/content/protocol/Protocol.js` inside `omni.ja` —
+declares `{enabled}` only, so the call is rejected and `newContext` throws; the
+route turns that into a 500. `camofox-browser` asks for `playwright-core ^1.58.0`
+and camoufox-js declares the peer as `*`, so a plain
+`npm install -g @askjo/camofox-browser` resolves the **latest** client and
+silently re-breaks logins.
+
+Why it is so confusing: the storage-state page is built **only when the
+persisted state has `origins`/localStorage** — i.e. for a real logged-in
+account. A brand-new userId, or a state with `origins: []`, imports fine, and so
+does every `/tabs` op, so it reads as "cookie import broken, browser fine".
+Measured on this box: 1.64.1 → 500 for the Replit jar (15 cookies + 1 origin),
+200 for a fresh user; 1.63.0 → 200 for both.
+
+Fix: `bash setup.sh --camofox` pins playwright-core to `CAMOFOX_PLAYWRIGHT_MAX`
+(1.63.0) via `npm install --prefix <pkg> --no-save`, then **restart the camofox
+server** — a running process keeps the client it loaded at boot. `--doctor`
+warns when an install is past the pin.
 
 ## Cookie import + session keep-alive
 
