@@ -59,6 +59,15 @@ fix_derive_wiring() {
     record_tool_env_vars HERMES_HOME HERMES_MANAGED_DIR
     record_tool_path_dirs "$XDG_BIN_HOME" "$HERMES_LAUNCHER_DIR"
   fi
+  # Mirror install_zsh's registration exactly. The zsh profile symlink is the
+  # marker; ZDOTDIR is the load-bearing var (there is no $HOME/.zshrc, so a
+  # bare `zsh` with no ZDOTDIR starts with no dotfiles, theme or plugins).
+  # Without this branch a --fix could never restore ZDOTDIR: install_zsh only
+  # registers it on the run that installs zsh.
+  if [[ -x "$XDG_BIN_HOME/zsh" ]]; then
+    record_tool_env_vars ZDOTDIR
+    record_tool_path_dirs "$XDG_BIN_HOME"
+  fi
   if [[ -x "$XDG_BIN_HOME/ori" ]]; then
     record_tool_env_vars ORI_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
   fi

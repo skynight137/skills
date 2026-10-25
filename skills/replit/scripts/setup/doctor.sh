@@ -45,6 +45,7 @@ doctor() {
   check_tool "OpenCode" "$XDG_BIN_HOME/opencode"
   check_tool "Ollama" ollama
   check_tool "Claude" "$XDG_BIN_HOME/claude"
+  check_tool "zsh" "$XDG_BIN_HOME/zsh"
   # The real launcher (the official installer's .local/bin shim just execs
   # this) — the managed rc block registers this dir on PATH.
   check_tool "Hermes" "$HERMES_HOME/hermes-agent/.hermes/bin/hermes"
@@ -123,6 +124,18 @@ doctor() {
       ok "hermes env + launcher PATH in the managed block of $BASHRC"
     else
       warn "hermes wiring missing from $BASHRC — run: bash setup.sh --fix"
+      wfail=1
+    fi
+  fi
+  if [[ -x "$XDG_BIN_HOME/zsh" ]]; then
+    # ZDOTDIR is the whole zsh wiring: no $HOME/.zshrc exists, so without it a
+    # bare `zsh` starts with no theme, plugins or tool paths. It must live in
+    # the managed block, not in a hand-added snippet above it, or a rewritten
+    # rc drops it (nothing else writes it).
+    if [[ -f "$BASHRC" ]] && grep -qE '^export[[:space:]]+ZDOTDIR=' "$BASHRC"; then
+      ok "ZDOTDIR in the managed block of $BASHRC"
+    else
+      warn "ZDOTDIR missing from $BASHRC — bare zsh loses its dotfiles; run: bash setup.sh --fix"
       wfail=1
     fi
   fi
