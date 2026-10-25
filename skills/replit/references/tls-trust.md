@@ -31,28 +31,35 @@ fails in Python.
 `ssl.create_default_context(cafile="/etc/ssl/certs/ca-certificates.crt")` and
 `context=` on each `urlopen` is the in-code equivalent for Python.
 
-## Why the platform shell breaks Node
+## Why the Nix bundle is the wrong CA store
 
-The platform exports `SYSTEM_CERTIFICATE_PATH` (the Nix bundle, from `pkgs.cacert` in
-`replit.nix`). The setup
-generator copies it into `SSL_CERT_FILE`, `NIX_SSL_CERT_FILE`, `SSL_CERT_DIR`, and
-`NODE_EXTRA_CA_CERTS`:
+The platform exports `SYSTEM_CERTIFICATE_PATH` (the Nix bundle, from `pkgs.cacert`
+in `replit.nix`) and already sets `NIX_SSL_CERT_FILE` to it. Copying that path into
+the variables curl/node/python actually read (`SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`,
+`REQUESTS_CA_BUNDLE`) does not "pin a CA store" — it **replaces** the platform store
+with one that has no Replit roots. Measured on this box: the Nix bundle has 319
+subjects and **0** Replit-named ones; `/etc/ssl/certs/ca-certificates.crt` has 287 and
+**2** — `Replit internal proxy Root CA - <uuid>` and `Replit Localhost Development CA`.
+Proxied HTTPS (`*.replit.dev`, connectors) is what breaks, while the public registry
+still answers 200 — a partial failure that reads like a random outage.
 
-- `setup/rc.sh` — the `if [ -n "\${SYSTEM_CERTIFICATE_PATH:-}" ]` block (exports).
-- `setup/common.sh` — the `_TLS_ENV_VARS` block (same four names).
+It is also a pinned `/nix/store` path: after a rebuild or GC the variable points at a
+missing file, and a missing `SSL_CERT_FILE` fails every TLS client hard (Node throws
+`UNABLE_TO_VERIFY_LEAF_SIGNATURE` on everything).
 
-So a fresh shell inherits a Node CA path that lacks the proxy root. The generator
-fix sets `NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, and `REQUESTS_CA_BUNDLE` to
-`/etc/ssl/certs/ca-certificates.crt` when that file is readable, and falls back to
-the Nix bundle when it is not. `NIX_SSL_CERT_FILE` and `SSL_CERT_DIR` stay on the Nix
-path. Check `setup/rc.sh` on your branch before assuming this is present. Nix-built
-tools that read `SSL_CERT_FILE` are not verified against the system bundle. Verify the
-generator on main before assuming this is present: `git show origin/main:skills/replit/scripts/setup/rc.sh | grep -n _tls_sys_ca`.
+Current generator (`setup/rc.sh`, `setup/common.sh`): guarded on
+`[ -r /etc/ssl/certs/ca-certificates.crt ]` and exports the system bundle for
+`SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` and `REQUESTS_CA_BUNDLE`.
+`NIX_SSL_CERT_FILE` is not set: nix resolves its own cache without it
+(`nix flake metadata nixpkgs` verified against Replit's mirror) and nothing else reads
+it. Confirm the state on your branch before assuming:
+`git show origin/main:skills/replit/scripts/setup/rc.sh | grep -n 'etc/ssl/certs/ca-certificates.crt'`.
 
-Node is the usual failure in the platform shell. The Nix bundle stays in
-`NODE_EXTRA_CA_CERTS` and makes `fetch` fail with `UNABLE_TO_VERIFY_LEAF_SIGNATURE`.
-Override it on the command line for a one-off test:
-`NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt node -e "fetch('<url>')..."`.
+Every one of these variables can be unset without breaking the registry — curl 200,
+`node fetch` 200, nix resolution fine. They exist so Node, which keeps its own bundled
+roots and ignores the platform store, also trusts the Replit roots. A one-off override
+for a single command: `NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt node -e
+"fetch('<url>')..."`.
 
 ## Procedure
 

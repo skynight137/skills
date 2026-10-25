@@ -21,31 +21,27 @@ UV_PYTHON_DOWNLOADS="auto"
 UV_PYTHON_PREFERENCE="managed"
 PYTHONPATH=""
 
-# Node 26 niceties (owned by the `node` tool — see seed_tool_wiring).
-# npm refuses lifecycle scripts by default now; the env form is read exactly
-# like the config file (verified) and, unlike `npm config set ... -g` writing
-# $HOME/.npmrc, it survives $HOME being wiped.
-npm_config_dangerously_allow_all_scripts="${npm_config_dangerously_allow_all_scripts:-true}"
-
-# TLS / CA bundle derived from the Nix cacert package. `pkgs.cacert` (declared
-# in replit.nix) exports SYSTEM_CERTIFICATE_PATH; these four are
-# the variables curl/npm/node consult. Empty on a box without that package, in
-# which case nothing is pinned and the platform defaults apply.
+# TLS / CA bundle — the PLATFORM location, /etc/ssl/certs, always. NOT the Nix
+# cacert bundle ($SYSTEM_CERTIFICATE_PATH / pkgs.cacert): that bundle carries
+# none of the Replit roots (0 Replit-named subjects vs 2 in the system bundle,
+# "Replit internal proxy Root CA" and "Replit Localhost Development CA"), so
+# wiring it in REPLACES a trust store that knows the proxy with one that does
+# not — the public registry still answers 200 while proxied hosts
+# (*.replit.dev, connectors) fail, which is painful to attribute. It is also a
+# pinned /nix/store path: after a rebuild or GC the variable points at a
+# missing file, and a missing SSL_CERT_FILE breaks every TLS client outright.
+# curl/node/python all reach the registry with these unset; they are exported
+# because tools that ignore the platform default (Node keeps its OWN bundled
+# roots) need the Replit roots added — hence NODE_EXTRA_CA_CERTS.
+# The guard is the bundle itself, so nothing is ever exported as a dead path.
 _TLS_ENV_VARS=()
-if [[ -n "${SYSTEM_CERTIFICATE_PATH:-}" ]]; then
-  # The Nix bundle lacks the Replit proxy root, so Node, Python (urllib/httpx) and
-  # requests fail on *.replit.dev. The system bundle trusts it. Use it when it
-  # exists; fall back to the Nix bundle otherwise. Verification stays on.
-  _SYS_CA=/etc/ssl/certs/ca-certificates.crt
-  _CA="$SYSTEM_CERTIFICATE_PATH"
-  [[ -r "$_SYS_CA" ]] && _CA="$_SYS_CA"
-  SSL_CERT_FILE="$_CA"
+if [[ -r /etc/ssl/certs/ca-certificates.crt ]]; then
+  SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
   SSL_CERT_DIR=/etc/ssl/certs
-  NIX_SSL_CERT_FILE="$SYSTEM_CERTIFICATE_PATH"
-  NODE_EXTRA_CA_CERTS="$_CA"
-  REQUESTS_CA_BUNDLE="$_CA"
-  export SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE
-  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
+  NODE_EXTRA_CA_CERTS="$SSL_CERT_FILE"
+  REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
+  export SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE
+  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 fi
 
 ORI_CONFIG_DIR="$XDG_CONFIG_HOME/ori"
@@ -178,7 +174,7 @@ seed_tool_wiring(){
   # running an installer. wire_tool is an idempotent map assignment.
   wire_tool uv UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH -- "$XDG_BIN_HOME"
   wire_tool android JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS -- "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
-  wire_tool node NODE_DIR npm_config_prefix npm_config_dangerously_allow_all_scripts "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
+  wire_tool node NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   wire_tool opencode OPENCODE_CONFIG_DIR -- "$XDG_BIN_HOME"
   wire_tool ollama OLLAMA_INSTALL_DIR OLLAMA_MODELS -- "$XDG_BIN_HOME"
   wire_tool claude CLAUDE_CONFIG_DIR -- "$XDG_BIN_HOME"

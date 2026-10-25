@@ -38,7 +38,7 @@ fix_derive_wiring() {
   # it on EVERY repl, so it would resurrect node wiring where our payload
   # never landed.
   if [[ -x "$NODE_DIR/bin/node" ]]; then
-    record_tool_env_vars NODE_DIR npm_config_prefix npm_config_dangerously_allow_all_scripts "${_TLS_ENV_VARS[@]}"
+    record_tool_env_vars NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}"
     record_tool_path_dirs "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   fi
   if [[ -x "$XDG_BIN_HOME/opencode" ]]; then

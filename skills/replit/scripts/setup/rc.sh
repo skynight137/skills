@@ -373,30 +373,34 @@ export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
 export GOPROXY="https://proxy.golang.org,direct"
 export PIP_TRUSTED_HOST="pypi.org"
 
-# npm lifecycle scripts. The literal form the docs suggest,
-#   npm config set dangerously-allow-all-scripts=true --location=user
-# writes $HOME/.npmrc — and on Replit $HOME is WIPED on recreate, so the
-# setting silently disappears. The env form is read by npm identically
-# (verified with npm config ls -l) and lives in this persistent block.
-export npm_config_dangerously_allow_all_scripts=true
+# npm install-script policy: deliberately NOT bypassed here.
+# npm >= 12 blocks dependency install scripts that are not covered by the
+# project's allowScripts policy, and npm_config_dangerously_allow_all_scripts
+# would disable that review for EVERY install (upstream calls it strongly
+# discouraged). npm 10/11 only warn, so the escape hatch buys nothing on this
+# box and would silently switch the guard off the moment npm 12 arrives (the
+# staged npm 12.0.2 under $HERMES_HOME/tools already enforces it — verified:
+# with the flag unset the tarball postinstall is BLOCKED, with it set it runs).
+# Allow scripts per project instead: the allowScripts field in package.json,
+# or npm approve-scripts.
 
-# TLS / CA bundle. The cacert package in replit.nix exports
-# SYSTEM_CERTIFICATE_PATH; wire it into the standard variables curl / npm /
-# node consult, so HTTPS fetches trust the Nix bundle instead of failing.
-# Escaped so the values resolve when the shell SOURCES this file (the
-# platform env is loaded before $BASHRC), not at write time — an unescaped
-# heredoc would bake in the writing shell's value and clobber an operator's.
-if [ -n "\${SYSTEM_CERTIFICATE_PATH:-}" ]; then
-  # Node/Python/requests need the system bundle (it trusts the Replit proxy root);
-  # the Nix bundle does not. Fall back to Nix only if the system bundle is absent.
-  _tls_sys_ca=/etc/ssl/certs/ca-certificates.crt
-  _tls_ca="\$SYSTEM_CERTIFICATE_PATH"
-  [ -r "\$_tls_sys_ca" ] && _tls_ca="\$_tls_sys_ca"
-  export SSL_CERT_FILE="\$_tls_ca"
+# TLS / CA bundle: the PLATFORM bundle, /etc/ssl/certs — never the Nix cacert
+# bundle ($SYSTEM_CERTIFICATE_PATH). That one carries none of the Replit roots
+# (0 Replit-named subjects vs 2 in the system bundle, "Replit internal proxy
+# Root CA" + "Replit Localhost Development CA"), so pointing these at it swaps
+# a trust store that knows the proxy for one that does not: public hosts still
+# answer 200 while proxied ones (*.replit.dev, connectors) fail — and it is a
+# pinned /nix/store path, so a rebuild or GC leaves SSL_CERT_FILE pointing at a
+# missing file, which breaks every TLS client outright. Node ignores the
+# platform store (it uses its own bundled roots), hence NODE_EXTRA_CA_CERTS,
+# which ADDS the Replit roots. Guarded on the file: a dead path is never
+# exported, and the block works in every shell, not only where the platform
+# happened to export $SYSTEM_CERTIFICATE_PATH.
+if [ -r /etc/ssl/certs/ca-certificates.crt ]; then
+  export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
   export SSL_CERT_DIR=/etc/ssl/certs
-  export NIX_SSL_CERT_FILE="\$SYSTEM_CERTIFICATE_PATH"
-  export NODE_EXTRA_CA_CERTS="\$_tls_ca"
-  export REQUESTS_CA_BUNDLE="\$_tls_ca"
+  export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
+  export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 fi
 
 # Hermes PM stages its own x64 Node tarball AND --node installs the official
@@ -759,16 +763,20 @@ replit_resolve_py() {
 # (Replit's package-firewall mirrors) wins.
 _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
   npm_config_registry NPM_CONFIG_REGISTRY GOPROXY PIP_TRUSTED_HOST)
-# Vars the fixed blocks already export (registries, the npm-scripts setting and
-# the workspace-persisted git config). Never re-emit them as tool vars — doing
-# so duplicated the export and let a platform value shadow ours.
+# Vars the fixed blocks own (registries, the TLS bundle, the workspace-persisted
+# git config). Never re-emit them as tool vars — doing so duplicated the export
+# and let a platform value shadow ours.
 # HERMES_HOME is here too: the hermes-tools block owns it (it exports
 # HERMES_HOME + HERMES_MANAGED_DIR next to the launcher PATH), so emitting it
 # again from the generic tool-var pass would duplicate the line.
+# npm_config_dangerously_allow_all_scripts and NIX_SSL_CERT_FILE are RETIRED:
+# no fixed block sets them any more, and listing them here keeps a stale
+# .replit entry or an inherited platform value from being resurrected as a
+# tool var (the Nix bundle must never come back — see the TLS block).
 _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
-  npm_config_dangerously_allow_all_scripts GIT_CONFIG_GLOBAL \
-  HERMES_HOME \
-  SSL_CERT_FILE SSL_CERT_DIR NIX_SSL_CERT_FILE NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
+  GIT_CONFIG_GLOBAL HERMES_HOME \
+  npm_config_dangerously_allow_all_scripts NIX_SSL_CERT_FILE \
+  SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
 # needing their installer to re-run this time. Candidates are restricted to
