@@ -124,8 +124,16 @@ Install: `bash setup.sh --zsh` (or the interactive menu's `zsh` item) —
 
 - Work in a worktree on a branch and open a PR against `skynight137/skills`;
   never commit to `main`.
-- The git credential helper is broken here. Push with
-  `git -c credential.helper= -c http.extraHeader="Authorization: Basic $(printf 'x-access-token:%s' "$(gh auth token)" | base64 -w0)" push -u origin <branch>`.
+- Pushes authenticate through gh's helper
+  (`credential.https://github.com.helper` = `!<nix path>/.gh-wrapped auth
+  git-credential` in `$GIT_CONFIG_GLOBAL`), so a plain
+  `git push -u origin <branch>` works. Confirm with
+  `git push --dry-run origin <branch>` before blaming auth for a failed push.
+- PRs here are squash-merged, so a branch's commits never become ancestors of
+  `main`. After a merge, `git rebase origin/main` before opening the follow-up
+  PR: without it the new PR's diff re-lists the merged work and carries a commit
+  that is already in main through its content (a 2-commit follow-up rendered as
+  13 files and 3 commits until the rebase dropped the applied one).
 - `setup` / `fix` re-emit from the checkout they are launched from, so run them
   from the branch under test. A `main` checkout re-emits the old block and the
   live rc will not show the change.
