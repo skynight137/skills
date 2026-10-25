@@ -4,6 +4,12 @@ Getting a server inside the sandbox reachable from a browser — and the one thi
 that cannot be reached that way. Pairs with the `[[ports]]` and TLS bullets in
 SKILL.md.
 
+Managed installs: `bash setup.sh --cloudflared | --tailscale | --sshx` puts the
+binaries in `$XDG_BIN_HOME` with the usual wiring (installer, `fix_derive_wiring`,
+and a `doctor` probe), so `--fix` restores them and `--clean <tool>` removes them.
+The recipes below are what you run afterwards. `--clean tailscale` keeps the node
+state under `$XDG_DATA_HOME/tailscale`, so the machine stays on the tailnet.
+
 ## Declared ports only, and the port stays in the URL
 
 Replit's dev domain proxies ONLY the ports listed in `.replit` `[[ports]]` (each
@@ -49,6 +55,11 @@ something does answer on `127.0.0.1:22` (`SSH-2.0-Go`), but that is loopback onl
 the dev domain is HTTP, and 22 is not a declared port.
 
 ## Tailscale in a Replit sandbox (userspace mode)
+
+Install: `bash setup.sh --tailscale` — binaries into `$XDG_BIN_HOME`, node state
+under `$XDG_DATA_HOME/tailscale` (kept by `--clean tailscale`, so the machine
+stays on the tailnet). The installer verifies the arch tarball against the
+channel's `<tarball>.sha256`. It starts nothing; run the daemon as below.
 
 **Pass `--statedir`, not just `--state`.** `--state` names the state *file*;
 without a `--statedir` directory tailscaled has nowhere to write the ACME
@@ -132,9 +143,11 @@ curl -sS --socks5-hostname localhost:1055 https://api.ipify.org # via exit node
 
 ## Cloudflare Tunnel — public access that does not need the tailnet
 
-`cloudflared` (static binary from `github.com/cloudflare/cloudflared/releases`)
-runs unprivileged here and needs no TUN. A *quick* tunnel needs no account at
-all and is the fastest proof: `cloudflared tunnel --url http://localhost:<port>`
+`cloudflared` (install: `bash setup.sh --cloudflared`; the static binary comes
+from `github.com/cloudflare/cloudflared/releases`, whose release publishes no
+checksum asset, so that download is unverified) runs unprivileged here and needs
+no TUN. A *quick* tunnel needs no account at all and is the fastest proof:
+`cloudflared tunnel --url http://localhost:<port>`
 prints a random `https://<words>.trycloudflare.com`.
 
 For your own hostname use a *named* tunnel. Prefer the dashboard flow plus a
@@ -201,6 +214,25 @@ without printing the value — length and prefix are enough:
 ```bash
 replit secrets exec --keys NAME -- python3 -c 'import os;v=os.environ["NAME"];print(len(v), v[:5])'
 ```
+
+## sshx — share the terminal itself
+
+Install: `bash setup.sh --sshx` (static musl binary; its GitHub releases carry no
+assets, so the installer pulls the versionless S3 tarball that `sshx.io/get`
+uses — unverified, upstream publishes no checksum).
+
+`sshx` connects OUT to `https://sshx.io` and prints a web URL for the session, so
+nothing is exposed: no declared port, no TUN, no account. That is the difference
+from cloudflared and tailscale — those publish a *service*, sshx shares the
+*shell*. Verified from `sshx --help`:
+
+- The URL is the credential: whoever holds it is in that terminal. Hand it to the
+  person who asked; never into a log, a commit or a repo file.
+- `--enable-readers` splits it into separate viewer and editor URLs — use it when
+  someone only needs to watch.
+- `-q/--quiet` prints the URL alone (scriptable), `--name <s>` titles the session,
+  `--shell <cmd>` chooses the command that runs in it.
+- `--server <url>` points the client at a self-hosted server instead of sshx.io.
 
 ## Make the box SSH-able without root
 

@@ -45,6 +45,20 @@ ARIA2_RELEASE_BASE="https://github.com/abcfy2/aria2-static-build/releases/latest
 # ffmpeg: BtbN static GPL builds (newer than the Replit Nix-built ffmpeg 6.1.2).
 FFMPEG_RELEASE_BASE="https://github.com/BtbN/FFmpeg-Builds/releases/latest/download"
 
+# Remote access (direct binaries — see references/exposing-ports.md)
+# cloudflared: Cloudflare's tunnel client. Versionless asset name, but the
+# release publishes NO checksum asset (only the binary and the .deb/.rpm
+# packages), so the download is unverified — same class as rclone/qbt/aria2c.
+CLOUDFLARED_RELEASE_BASE="https://github.com/cloudflare/cloudflared/releases/latest/download"
+# tailscale: official stable channel. The tarball name embeds the version, so it
+# is resolved from the channel's JSON index at install time, and each archive
+# has a `<tarball>.sha256` next to it (verified).
+TAILSCALE_PKGS_BASE="https://pkgs.tailscale.com/stable"
+# sshx: collaborative web terminal. Its GitHub releases carry NO assets at all
+# (checked: v0.4.1 has none); the canonical artifact is the versionless S3
+# tarball the sshx.io/get script pulls. No checksum published.
+SSHX_DOWNLOAD_BASE="https://s3.amazonaws.com/sshx"
+
 # CLIProxyAPI (router-for-me) — OAuth CLI-subscription bridge (Claude Code /
 # Codex / Antigravity / Gemini CLI / Kimi / xAI → OpenAI+Claude+Gemini APIs).
 # Release asset name embeds the version (CLIProxyAPI_<N>_linux_amd64.tar.gz),
@@ -175,6 +189,7 @@ source "$SCRIPT_DIR/setup/zsh.sh"
 source "$SCRIPT_DIR/setup/android.sh"
 source "$SCRIPT_DIR/setup/node_opencode.sh"
 source "$SCRIPT_DIR/setup/download.sh"
+source "$SCRIPT_DIR/setup/expose.sh"
 source "$SCRIPT_DIR/setup/cliproxy.sh"
 source "$SCRIPT_DIR/setup/camofox.sh"
 source "$SCRIPT_DIR/setup/hermes_chromium.sh"

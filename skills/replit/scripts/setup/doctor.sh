@@ -56,6 +56,11 @@ doctor() {
   # FFmpeg probes with -version (single dash): --version prints the banner
   # and exits 8 by design, so the generic --version probe false-fails.
   check_tool "FFmpeg" "$XDG_BIN_HOME/ffmpeg" -version
+  # Remote access (see references/exposing-ports.md). All three are optional
+  # extras; tailscale takes a SUBCOMMAND ('version'), not a flag.
+  check_tool "cloudflared" "$XDG_BIN_HOME/cloudflared"
+  check_tool "tailscale" "$XDG_BIN_HOME/tailscale" version
+  check_tool "sshx" "$XDG_BIN_HOME/sshx"
   # Camofox: the npm binary on PATH + engine presence.
   if command -v camofox-browser >/dev/null 2>&1; then
     if [[ -f "$CAMOUFOX_INSTALL_DIR/version.json" ]]; then

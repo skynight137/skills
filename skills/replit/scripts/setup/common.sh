@@ -91,6 +91,11 @@ fi
 OLLAMA_INSTALL_DIR="$XDG_DATA_HOME/ollama"
 OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
 
+# tailscale user data (node key + login) — preserved by `--clean tailscale`.
+# The binaries themselves live in $XDG_BIN_HOME, like the other direct-download
+# tools (see setup/expose.sh).
+TAILSCALE_DATA_DIR="$XDG_DATA_HOME/tailscale"
+
 # Tool dirs exported ONCE for child processes — the rest of the script
 # uses the values directly (no re-exporting inline in install functions).
 ANDROID_HOME="$SDK"
@@ -196,6 +201,9 @@ seed_tool_wiring(){
   wire_tool qbt -- "$XDG_BIN_HOME"
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
+  wire_tool cloudflared -- "$XDG_BIN_HOME"
+  wire_tool tailscale -- "$XDG_BIN_HOME"
+  wire_tool sshx -- "$XDG_BIN_HOME"
   wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
     CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"
@@ -215,6 +223,9 @@ INSTALL_RCLONE=false
 INSTALL_QBT=false
 INSTALL_ARIA2=false
 INSTALL_FFMPEG=false
+INSTALL_CLOUDFLARED=false
+INSTALL_TAILSCALE=false
+INSTALL_SSHX=false
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
 INSTALL_HERMES_CHROMIUM=false

@@ -45,6 +45,13 @@ Options:
   --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
   --aria2               Install aria2c (static musl binary from GitHub releases)
   --ffmpeg              Install FFmpeg (BtbN static GPL build: ffmpeg/ffprobe/ffplay)
+  --cloudflared         Install cloudflared (Cloudflare Tunnel client; direct binary,
+                        no checksum published upstream). See references/exposing-ports.md
+  --tailscale           Install tailscale + tailscaled (userspace tailnet client;
+                        SHA256-verified from pkgs.tailscale.com). Binaries land in
+                        XDG_BIN_HOME, node state in \$XDG_DATA_HOME/tailscale
+                        (PRESERVED by --clean tailscale)
+  --sshx                Install sshx (collaborative web terminal; direct binary)
   --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
                         Firefox server + MCP adapter). Provisions the package-pinned
                         Camoufox engine into the persistent cache, applies the Replit
@@ -67,7 +74,8 @@ Options:
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
-                        claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg removes one
+                        claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|
+                        cloudflared|tailscale|sshx removes one
                         tool. Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
                         USER DATA: tools that own it are handled safely —
@@ -120,6 +128,9 @@ parse_args() {
       --qbt)                    INSTALL_QBT=true ;;
       --aria2)                  INSTALL_ARIA2=true ;;
       --ffmpeg)                 INSTALL_FFMPEG=true ;;
+      --cloudflared)            INSTALL_CLOUDFLARED=true ;;
+      --tailscale)              INSTALL_TAILSCALE=true ;;
+      --sshx)                   INSTALL_SSHX=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --doctor)                  DOCTOR=true ;;
@@ -161,7 +172,8 @@ parse_args() {
      && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
-     && ! $INSTALL_CAMOFOX \
+     && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
+     && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi
@@ -180,6 +192,9 @@ parse_args() {
     INSTALL_QBT=true
     INSTALL_ARIA2=true
     INSTALL_FFMPEG=true
+    INSTALL_CLOUDFLARED=true
+    INSTALL_TAILSCALE=true
+    INSTALL_SSHX=true
     INSTALL_CLIPROXY=true
     INSTALL_CAMOFOX=true
     INSTALL_HERMES_CHROMIUM=true

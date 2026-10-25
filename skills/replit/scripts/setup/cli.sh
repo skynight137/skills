@@ -42,7 +42,8 @@ main() {
       && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
-      && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM; then
+      && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM \
+      && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX; then
       die "No tools selected. Aborting."
     fi
   else
@@ -123,6 +124,9 @@ main() {
   $INSTALL_QBT      && run_install_step qbt                install_qbt
   $INSTALL_ARIA2    && run_install_step aria2              install_aria2
   $INSTALL_FFMPEG   && run_install_step ffmpeg             install_ffmpeg
+  $INSTALL_CLOUDFLARED && run_install_step cloudflared      install_cloudflared
+  $INSTALL_TAILSCALE && run_install_step tailscale         install_tailscale
+  $INSTALL_SSHX     && run_install_step sshx               install_sshx
   $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
@@ -162,6 +166,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
+   cloudflared  tailscale  sshx
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
@@ -181,6 +186,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
+   cloudflared  tailscale  sshx
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
