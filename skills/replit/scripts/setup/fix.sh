@@ -93,7 +93,9 @@ fix_derive_wiring() {
     camofox_write_launcher
   fi
   local b
-  for b in rclone qbittorrent-nox aria2c ffmpeg; do
+  # Direct-binary tools own nothing but their file in $XDG_BIN_HOME, so one
+  # presence check per tool is the whole wiring.
+  for b in rclone qbittorrent-nox aria2c ffmpeg cloudflared tailscale sshx; do
     [[ -x "$XDG_BIN_HOME/$b" ]] && record_tool_path_dirs "$XDG_BIN_HOME"
   done
   return 0

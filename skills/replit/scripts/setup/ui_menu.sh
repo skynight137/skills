@@ -35,6 +35,9 @@ _MENU_ITEMS=(
   "qbt|qBittorrent-nox (headless BitTorrent)"
   "aria2|aria2c (download utility)"
   "ffmpeg|FFmpeg (static GPL build)"
+  "cloudflared|cloudflared (Cloudflare Tunnel client)"
+  "tailscale|tailscale (userspace tailnet client)"
+  "sshx|sshx (collaborative web terminal)"
 )
 _MENU_CURSOR=0
 _MENU_TOGGLE=()
@@ -79,6 +82,9 @@ _status_init() {
     "qbt-nox|qbittorrent-nox"
     "aria2c|aria2c"
     "ffmpeg|ffmpeg"
+    "cloudflared|cloudflared"
+    "tailscale|tailscale"
+    "sshx|sshx"
     "cliproxy|cli-proxy-api"
     "camofox|camofox-browser"
   )
@@ -234,6 +240,9 @@ _menu_apply() {
       qbt)      INSTALL_QBT=true ;;
       aria2)    INSTALL_ARIA2=true ;;
       ffmpeg)   INSTALL_FFMPEG=true ;;
+      cloudflared) INSTALL_CLOUDFLARED=true ;;
+      tailscale)   INSTALL_TAILSCALE=true ;;
+      sshx)        INSTALL_SSHX=true ;;
     esac
   done
 }

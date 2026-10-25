@@ -124,6 +124,9 @@ clean_paths_for() {
     qbt)           echo "$XDG_BIN_HOME/qbittorrent-nox" ;;
     aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
     ffmpeg)        echo "$XDG_BIN_HOME/ffmpeg ffprobe ffplay" ;;
+    cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
+    tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
+    sshx)          echo "$XDG_BIN_HOME/sshx" ;;
     *)             echo "$1" ;;
   esac
 }
@@ -297,6 +300,42 @@ clean_ffmpeg() {
   ok "FFmpeg removed"
 }
 
+clean_cloudflared() {
+  if ! _present "$XDG_BIN_HOME/cloudflared"; then
+    nothing_removed "cloudflared"; return 0
+  fi
+  step "Removing cloudflared"
+  rm -f "$XDG_BIN_HOME/cloudflared"
+  ok "cloudflared removed"
+}
+
+# tailscale — the binaries go, the node state does NOT: $TAILSCALE_DATA_DIR holds
+# the node key and the login, so a re-install keeps this machine on the tailnet
+# (and its Funnel/serve config) without a re-auth. Copies an older manual install
+# left in $TAILSCALE_DATA_DIR are deliberately KEPT: that dir also holds the
+# user's own start scripts, and those binaries belong to whoever wrote them.
+clean_tailscale() {
+  if ! _present "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled"; then
+    nothing_removed "tailscale"; return 0
+  fi
+  step "Removing tailscale (node state kept in $TAILSCALE_DATA_DIR)"
+  rm -f "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled"
+  ok "tailscale removed (preserved: $TAILSCALE_DATA_DIR)"
+  if [[ -e "$TAILSCALE_DATA_DIR/tailscale" || -e "$TAILSCALE_DATA_DIR/tailscaled" ]]; then
+    warn "older copies remain in $TAILSCALE_DATA_DIR — kept on purpose (your start scripts + node state live there)"
+  fi
+  return 0
+}
+
+clean_sshx() {
+  if ! _present "$XDG_BIN_HOME/sshx"; then
+    nothing_removed "sshx"; return 0
+  fi
+  step "Removing sshx"
+  rm -f "$XDG_BIN_HOME/sshx"
+  ok "sshx removed"
+}
+
 # CLIProxyAPI — removes the symlink + binary only. $CLIPROXY_HOME (config.yaml
 # with keys/OAuth logins, server.log, ~/.cli-proxy-api auth dir) is the user's
 # data and is deliberately PRESERVED; delete the dir by hand for a full wipe.
@@ -423,7 +462,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -440,7 +479,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -477,11 +516,14 @@ clean() {
       clean_qbt
       clean_aria2
       clean_ffmpeg
+      clean_cloudflared
+      clean_tailscale
+      clean_sshx
       clean_cliproxy
       clean_camofox
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -514,6 +556,9 @@ clean() {
         qbt)           clean_qbt ;;
         aria2)         clean_aria2 ;;
         ffmpeg)        clean_ffmpeg ;;
+        cloudflared)   clean_cloudflared ;;
+        tailscale)     clean_tailscale ;;
+        sshx)          clean_sshx ;;
       esac
       ;;
     "")
