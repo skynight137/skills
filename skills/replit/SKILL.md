@@ -55,6 +55,13 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    and builds with `env -u NODE_ENV`.
 5. **Replit ships a Playwright-managed Chromium** — `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`;
    never `playwright install`.
+6. **Disk splits 4 GB / 256 GB — big files only on the workspace volume.**
+   `$HOME`, `/tmp` and `/mnt/scratch` are each a ~4 GB overlay/tmpfs (`/tmp`
+   and `/mnt/scratch` are RAM); `$REPL_HOME` is the 256 GB volume and
+   `$XDG_DATA_HOME` (`/home/runner/workspace/.local/share`) sits on it, while
+   the `~/.local/share` spelling does not. Download anything over a couple of
+   GB to `$XDG_DATA_HOME/<slug>/`, never to `/tmp`, `/mnt/scratch` or `~/`.
+   See `references/large-files-disk.md`.
 
 Prefer **`rg`** over `grep` when searching the box or this repo (recursive,
 gitignore-aware, far faster); it is on PATH and also staged under
