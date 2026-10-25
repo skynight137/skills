@@ -73,11 +73,15 @@ the repo. Don't rerun on a silent timeout alone.
   ✓ uv`.
 - Bare `node --version` from an unrelated shell still "fails" (PM's staged dir
   isn't on PATH; the system node is the Nix-wrapped one) — normal. PM launches
-  its own binaries with the environment above, not PATH. To make interactive
-  shells share the agent's toolset: `setup.sh --hermes` appends a
-  `# >>> hermes-tools >>>` block after the managed toolchain block in
-  `.config/bashrc` — lazily prepends every `$HERMES_HOME/tools/*` dir (newest
-  version via sort -V) + venv/bin, so user shells get the same node/npm/gh/
-  ffmpeg/rg/uv/tirith/python + hermes launcher. `.replit` keeps nodejs-24/
-  python3.13 as nix fallback; the block just wins PATH order. Globbing is
-  lazy so `hermes update` needs no rc rewrite; `--clean hermes` drops it.
+  its own binaries with the environment above, not PATH, and that split is
+  deliberate: `setup.sh --hermes` appends a `# >>> hermes-tools >>>` block
+  after the managed toolchain block in `.config/bashrc` that exports only
+  `HERMES_HOME` + `HERMES_MANAGED_DIR` and puts the launcher dir
+  (`$HERMES_HOME/hermes-agent/.hermes/bin`) on PATH. It must NOT put
+  `$HERMES_HOME/tools/*` on the user PATH: those dirs are the agent's managed
+  install, replaced by `hermes update` and deleted by an uninstall or
+  `--clean hermes`, so a user's `npm i -g` (likewise `pip`, or a gh extension)
+  would write into Hermes' prefix and be removed with it — and PATH order would
+  decide which node/python a user script ran under. User shells keep the
+  platform toolchain (`.replit` nodejs-24 / python3.13 modules plus
+  `$XDG_BIN_HOME`); `--clean hermes` drops the block.

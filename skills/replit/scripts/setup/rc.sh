@@ -26,9 +26,10 @@ Options:
   -ol, --ollama         Install Ollama (LLM runtime) into XDG_DATA_HOME/ollama
   -cl, --claude         Install Claude Code coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
   -ha, --hermes         Install Hermes Agent assistant (curl -fsSL \$HERMES_INSTALL_URL, into \$HERMES_HOME)
-                        Also mirrors \$HERMES_HOME/tools onto the shell PATH
-                        (hermes-tools rc block) so user shells run the same
-                        node/python/gh/... as the Hermes agent
+                        Also writes the hermes-tools rc block: HERMES_HOME +
+                        HERMES_MANAGED_DIR and the launcher dir on PATH. Its
+                        \$HERMES_HOME/tools/* dirs stay OFF the user PATH, so a
+                         user's `npm i -g` cannot land in Hermes' prefix.
   -ori, --openrouterai  Install ORI coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
   -cp, --cliproxy       Install CLIProxyAPI (CLIProxyAPI_<ver>_linux_<arch> release
                         tarball, SHA256-verified against checksums.txt) into
