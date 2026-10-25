@@ -125,7 +125,7 @@ clean_paths_for() {
     aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
     ffmpeg)        echo "$XDG_BIN_HOME/ffmpeg ffprobe ffplay" ;;
     cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
-    tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
+    tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled launch-tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
     *)             echo "$1" ;;
   esac
@@ -315,14 +315,14 @@ clean_cloudflared() {
 # left in $TAILSCALE_DATA_DIR are deliberately KEPT: that dir also holds the
 # user's own start scripts, and those binaries belong to whoever wrote them.
 clean_tailscale() {
-  if ! _present "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled"; then
+  if ! _present "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled"; then
     nothing_removed "tailscale"; return 0
   fi
   step "Removing tailscale (node state kept in $TAILSCALE_DATA_DIR)"
-  rm -f "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled"
+  rm -f "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled"
   ok "tailscale removed (preserved: $TAILSCALE_DATA_DIR)"
   if [[ -e "$TAILSCALE_DATA_DIR/tailscale" || -e "$TAILSCALE_DATA_DIR/tailscaled" ]]; then
-    warn "older copies remain in $TAILSCALE_DATA_DIR — kept on purpose (your start scripts + node state live there)"
+    warn "older copies remain in $TAILSCALE_DATA_DIR — kept on purpose (your scripts + the node state live there)"
   fi
   return 0
 }

@@ -62,6 +62,12 @@ verify, extract, place in `$XDG_BIN_HOME`, `ok` with the version, then
 - `fix.sh` `fix_derive_wiring`: a presence check that re-registers the wiring as
   if the tool were installed this run. Direct-binary tools share one loop
   (`for b in rclone ... <tool>; do [[ -x ... ]] && record_tool_path_dirs ...`).
+- A tool that needs a GENERATED companion (`$XDG_BIN_HOME/launch-tailscaled`, the
+  camofox launcher) must write it from the installer **and** call that writer from
+  `fix_derive_wiring`, so `--fix` restores it too. Point `.replit` workflows at the
+  generated file, never at a hand-installed path in a random directory: that is the
+  entire reason the launcher exists, and it is what stops an old manual install
+  from keeping the workflow on a stale binary.
 - `doctor.sh`: `check_tool "<name>" "$XDG_BIN_HOME/<bin>" [flag]`. The third arg
   is the probe, so pass a subcommand when the tool has no `--version`
   (tailscale takes `version`). Gate any block-content check on the presence of
