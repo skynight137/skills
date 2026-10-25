@@ -308,9 +308,9 @@ install_hermes() {
   local real_bin="$HERMES_HOME/hermes-agent/.hermes/bin/hermes"
   [[ -x "$real_bin" ]] || warn "expected Hermes launcher at $real_bin — check the install"
   ok "HERMES_HOME=$HERMES_HOME launcher=$real_bin browser=$([ -n "$chrome" ] && echo 'replit chromium' || echo 'none')"
-  record_tool_env_vars HERMES_HOME
-  record_tool_path_dirs "$XDG_BIN_HOME"
-  wire_tool hermes HERMES_HOME -- "$XDG_BIN_HOME"
+  record_tool_env_vars HERMES_HOME HERMES_MANAGED_DIR
+  record_tool_path_dirs "$XDG_BIN_HOME" "$HERMES_LAUNCHER_DIR"
+  wire_tool hermes HERMES_HOME HERMES_MANAGED_DIR -- "$XDG_BIN_HOME" "$HERMES_LAUNCHER_DIR"
 }
 
 # ORI (AI coding tool) — smart install ─────────────────────────────────────

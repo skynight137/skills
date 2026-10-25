@@ -455,7 +455,7 @@ clean() {
       if [[ -f "$BASHRC" ]]; then
         strip_rc_block "$BASHRC"
         ok "Stripped managed block from $BASHRC"
-        strip_hermes_tools "$BASHRC"
+        strip_legacy_hermes_block "$BASHRC"
       fi
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       # Only replit mode ever wrote a userenv block — don't touch .replit
@@ -492,9 +492,10 @@ clean() {
         oc) wire_label=opencode ;;
       esac
       [[ -f "$BASHRC" ]] && strip_tool_wiring "$wire_label" "$BASHRC"
-      # The hermes-tools rc block lives OUTSIDE the managed block (own
-      # markers), so strip_tool_wiring can't see it — drop it explicitly.
-      [[ "$wire_label" == hermes ]] && strip_hermes_tools "$BASHRC"
+      # Pre-merge rcs carry a separate hermes-tools block outside the managed
+      # markers, which strip_tool_wiring cannot see — drop it here too, so a
+      # clean on an rc never re-written after the merge still works.
+      [[ "$wire_label" == hermes ]] && strip_legacy_hermes_block "$BASHRC"
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       [[ "$REPLIT_MODE" == true && -f "$replit_file" ]] && strip_userenv_keys "$wire_label" "$replit_file"
       case "$CLEAN_TARGET" in
@@ -529,7 +530,7 @@ clean() {
       # interpreter; clean_uv deletes uv, the fallback source), then remove
       # the ticked binaries + payload.
       [[ -f "$BASHRC" ]] && strip_tool_wiring "${CLEAN_TOOLS[*]}" "$BASHRC"
-      [[ " ${CLEAN_TOOLS[*]} " == *" hermes "* ]] && strip_hermes_tools "$BASHRC" || true
+      [[ " ${CLEAN_TOOLS[*]} " == *" hermes "* ]] && strip_legacy_hermes_block "$BASHRC" || true
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       [[ "$REPLIT_MODE" == true && -f "$replit_file" ]] && strip_userenv_keys "${CLEAN_TOOLS[*]}" "$replit_file"
       local label

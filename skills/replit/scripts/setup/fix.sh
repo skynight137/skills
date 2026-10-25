@@ -50,10 +50,14 @@ fix_derive_wiring() {
   if [[ -x "$XDG_BIN_HOME/claude" ]]; then
     record_tool_env_vars CLAUDE_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
   fi
-  # Mirror install_hermes' registration exactly (XDG_BIN_HOME only — the
-  # seed's REPL_HOME entry is an ownership label, not an emitted PATH dir).
-  if [[ -d "$HERMES_HOME" ]]; then
-    record_tool_env_vars HERMES_HOME; record_tool_path_dirs "$XDG_BIN_HOME"
+  # Mirror install_hermes' registration exactly: HERMES_HOME /
+  # HERMES_MANAGED_DIR and the launcher dir (an ordinary managed-block PATH
+  # line since the pre-merge hermes-tools block was folded in). Gate on an
+  # actual install — a bare $HERMES_HOME dir (leftovers, a wiped launcher)
+  # must not resurrect wiring the tool cannot back.
+  if [[ -x "$HERMES_LAUNCHER_DIR/hermes" || -d "$HERMES_HOME/tools" ]]; then
+    record_tool_env_vars HERMES_HOME HERMES_MANAGED_DIR
+    record_tool_path_dirs "$XDG_BIN_HOME" "$HERMES_LAUNCHER_DIR"
   fi
   if [[ -x "$XDG_BIN_HOME/ori" ]]; then
     record_tool_env_vars ORI_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
@@ -237,12 +241,13 @@ run_fix() {
   step "Wiring repair (no tools deleted or reinstalled)"
   local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
 
-  # --- 1. shell rc (managed toolchain block) ---
+  # --- 1. shell rc (managed toolchain block + hermes-tools block) ---
   fix_derive_wiring
+  # The hermes-tools block is re-appended by write_bashrc itself (gated on
+  # $INSTALL_HERMES / its marker / $HERMES_HOME/tools), so a missing or
+  # mis-ordered block is rebuilt here too. No separate call: it would only
+  # repeat the same work and print the ok line twice.
   write_bashrc
-  # hermes-tools block: independent of installer registration; only when the
-  # PM staged tools (write_... itself is marker-idempotent).
-  [[ -d "$HERMES_HOME/tools" ]] && write_hermes_tools_block
 
   # --- 2. .replit [userenv.shared] ---
   if [[ "$REPLIT_MODE" == true && -f "$replit_file" && -w "$replit_file" ]]; then

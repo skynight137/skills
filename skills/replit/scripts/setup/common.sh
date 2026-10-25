@@ -53,6 +53,18 @@ CLAUDE_CONFIG_DIR="$XDG_CONFIG_HOME/claude"
 OPENCODE_CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
 
 HERMES_HOME="${REPL_HOME:-$HOME}/.hermes"
+# Hermes' two env vars and the dir that holds the real launcher. All three are
+# ordinary wire-registered tool vars/PATH dirs now (the pre-merge layout kept
+# them in a separate rc block outside the managed one, which every rewrite then
+# had to re-append to keep PATH precedence stable). The launcher dir is the
+# ONLY provider of `hermes` / `hermes-acp` on this box: $XDG_BIN_HOME holds just
+# the chrome shim, no forwarder, so PATH order cannot pick a different binary.
+HERMES_LAUNCHER_DIR="$HERMES_HOME/hermes-agent/.hermes/bin"
+# Managed-scope dir: Hermes defaults to /etc/hermes, which on Replit is a
+# read-only mount that cannot be created without root, so it is pinned under
+# HERMES_HOME. Exported with HERMES_HOME so interactive, gateway and workflow
+# shells all resolve the same scope.
+HERMES_MANAGED_DIR="$HERMES_HOME/managed"
 
 # zsh interactive shell (oh-my-zsh + powerlevel10k). Binaries come from a
 # durable nix profile, the framework and dotfiles from $XDG_DATA_HOME and
@@ -85,7 +97,7 @@ ANDROID_HOME="$SDK"
 export JAVA_HOME ANDROID_HOME NODE_DIR \
        OPENCODE_CONFIG_DIR \
        CLAUDE_CONFIG_DIR ORI_CONFIG_DIR \
-       HERMES_HOME OLLAMA_INSTALL_DIR OLLAMA_MODELS
+       HERMES_HOME HERMES_MANAGED_DIR OLLAMA_INSTALL_DIR OLLAMA_MODELS
 
 # Make binaries discoverable for the rest of this script run.
 # Snapshot the INCOMING PATH first: doctor's "XDG_BIN_HOME on PATH" check
@@ -178,7 +190,7 @@ seed_tool_wiring(){
   wire_tool opencode OPENCODE_CONFIG_DIR -- "$XDG_BIN_HOME"
   wire_tool ollama OLLAMA_INSTALL_DIR OLLAMA_MODELS -- "$XDG_BIN_HOME"
   wire_tool claude CLAUDE_CONFIG_DIR -- "$XDG_BIN_HOME"
-  wire_tool hermes HERMES_HOME -- "${REPL_HOME:-$HOME}"
+  wire_tool hermes HERMES_HOME HERMES_MANAGED_DIR -- "$HERMES_LAUNCHER_DIR"
   wire_tool ori ORI_CONFIG_DIR -- "$XDG_BIN_HOME"
   wire_tool rclone -- "$XDG_BIN_HOME"
   wire_tool qbt -- "$XDG_BIN_HOME"

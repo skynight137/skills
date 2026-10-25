@@ -167,7 +167,6 @@ done < <(compgen -e)
 source "$SCRIPT_DIR/setup/common.sh"
 source "$SCRIPT_DIR/setup/ui_menu.sh"
 source "$SCRIPT_DIR/setup/bin.sh"
-source "$SCRIPT_DIR/setup/hermes_tools.sh"
 source "$SCRIPT_DIR/setup/fix.sh"
 source "$SCRIPT_DIR/setup/rc.sh"
 source "$SCRIPT_DIR/setup/doctor.sh"
