@@ -32,6 +32,7 @@ other lane assumes its persistence rules.
 | make an HTTPS client (Python, Node, git, uv) trust the Replit proxy without disabling verification | `references/tls-trust.md` | `setup/rc.sh`, `setup/common.sh` (TLS block) |
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
+| add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
 official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md`.
@@ -127,6 +128,7 @@ without ripgrep.
 - Changes to this skill's repo go on a feature branch in a `.worktrees/<name>` worktree and open a PR for review. Never commit directly to `main`.
 - PRs here are **squash-merged**, so a branch's commits never become ancestors of `main`. Two consequences: after a merge, `git rebase origin/main` before opening a follow-up PR, or its diff re-lists the work that already landed (GitHub shows the old commits plus a duplicate change); and if the PR merges while you are still editing, the later commits are stranded on a merged branch — branch off the tip, rebase onto `origin/main`, push that new branch. Confirm with `git diff --stat origin/main..HEAD` that the PR carries only the intended files before you describe it.
 - Test against the live target before committing, and commit only after a passing run. Delete throwaway test scripts and key files first, so the PR holds only the fix.
+- Adding or changing a tool flag touches roughly two dozen places in eight files. Work `references/setup-tool-checklist.md` in order and run its test sequence: a half-wired flag does not error, it is invisible, or the tool installs and then cannot be repaired or cleaned.
 - Never write a silent fallback (`except ImportError: pass`, a default that hides a failed dependency or trust store). Fail with the name of what is missing; a silent pass hid the real TLS cause here.
 
 When one batch touches many files or repeats an `old_string`, VERIFY the effect
