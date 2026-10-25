@@ -244,24 +244,35 @@ pip analog: `PIP_INDEX_URL` is pinned to pypi.org in `.replit [userenv.shared]`
 on this workspace (works as-is); if you hit a firewall pip mirror, set
 `PIP_INDEX_URL=https://pypi.org/simple/` explicitly.
 
-### npm lifecycle scripts + TLS/CA bundle (managed by `setup.sh`)
+### npm install scripts + TLS/CA bundle (managed by `setup.sh`)
 
-Two Node-side defaults the managed toolchain block sets (and mirrors into
-`.replit [userenv.shared]`, so workflow shells get them too):
+Two Node-side facts the managed toolchain block and the rc block reflect
+(mirrored into `.replit [userenv.shared]` where they are keys, so workflow
+shells get the same view):
 
-- **`npm_config_dangerously_allow_all_scripts=true`** — npm refuses to run
-  lifecycle (`postinstall`, …) scripts by default on a fresh Node ≥ 26, which
-  silently breaks installers that rely on them. The **env form** is read
-  exactly like the config file (verified: `npm_config_dangerously_allow_all_scripts=true
-  npm config get dangerously-allow-all-scripts` → `true`), and unlike
-  `npm config set dangerously-allow-all-scripts=true --location=user` (which
-  writes `$HOME/.npmrc` — **wiped** on recreate) it lives in the persistent rc
-  / `userenv` and survives.
-- **CA bundle.** `pkgs.cacert` in `.replit [nix] packages` exports
-  `SYSTEM_CERTIFICATE_PATH`; the rc block consumes it to export `SSL_CERT_FILE`,
-  `SSL_CERT_DIR` (= its dirname), `NIX_SSL_CERT_FILE` and `NODE_EXTRA_CA_CERTS`.
-  If TLS fetches fail with an unknown-CA error, check that `cacert` is still in
-  `[nix] packages` and that a fresh shell shows `$SYSTEM_CERTIFICATE_PATH`.
+- **npm's install-script policy is NOT bypassed.** npm ≥ 12 blocks dependency
+  install scripts the project has not approved; the escape hatch is
+  `npm_config_dangerously_allow_all_scripts=true`, which disables that review
+  for *every* install (upstream: "strongly discouraged") including packages
+  explicitly denied. Measured on one dependency tarball with a `postinstall`:
+  npm 10.9.9 → runs (no policy); npm 11.19.x / 11.20.0 → runs **plus** a
+  warning "install scripts not yet covered by allowScripts"; npm 12.0.2 →
+  **blocked** without the flag, runs with it. So it is not "required by Node
+  26": this box's Node 26.12.1 ships npm 11.20.0 (advisory only) and the
+  enforcing version is the 12.x staged under `$HERMES_HOME/tools`. Allow
+  scripts per project instead — `allowScripts` in `package.json`, or
+  `npm approve-scripts`. The retired name stays in `_FIXED_RC_ENV_VARS` so a
+  stale `.replit` entry cannot resurrect it.
+- **CA bundle = the platform store.** Use `/etc/ssl/certs/ca-certificates.crt`,
+  never the Nix cacert bundle (`$SYSTEM_CERTIFICATE_PATH`, from `pkgs.cacert`):
+  that one has **0** Replit-named subjects vs **2** in the system bundle
+  ("Replit internal proxy Root CA …", "Replit Localhost Development CA") and it
+  is a pinned `/nix/store` path, so a rebuild or GC turns `SSL_CERT_FILE` into a
+  missing file, which breaks every TLS client. The rc block guards on the system
+  bundle and exports `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` and
+  `REQUESTS_CA_BUNDLE` from it. `NIX_SSL_CERT_FILE` is no longer set — nix
+  resolves its own cache without it (`nix flake metadata nixpkgs` verified) —
+  and curl/node/python all reach the registry with these unset.
 
 ### Which registry vars are Replit-auto vs project-pinned
 
