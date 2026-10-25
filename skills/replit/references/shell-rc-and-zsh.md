@@ -60,6 +60,53 @@ Install: `bash setup.sh --zsh` (or the interactive menu's `zsh` item) —
   `custom/themes` before cloning oh-my-zsh is the exact shape that dies inside a
   `set -e` script with `destination path ... exists and is not empty`.
 
+## Runbook: zsh on a fresh box, and after any rc rewrite
+
+1. **Install.** `bash setup.sh --zsh` (or the menu's `zsh` item). One command,
+   idempotent, re-run it to fetch whatever is missing. It runs
+   `nix profile install --profile $REPL_HOME/.local/nix-profiles/zsh nixpkgs#zsh
+   nixpkgs#fzf`, symlinks `zsh` + `fzf` into `$XDG_BIN_HOME`, clones oh-my-zsh
+   plus the five `custom/` repos, writes `$XDG_CONFIG_HOME/zsh/.zshrc` and
+   `.p10k.zsh`, and registers `ZDOTDIR` + `$XDG_BIN_HOME` as tool wiring.
+2. **Never hand-edit the generated dotfiles.** `install_zsh` writes `.zshrc`
+   with `cat >` and re-`cp`s `.p10k.zsh` on every `--zsh` run, so a manual edit
+   is silently reverted by the next install. Edit `scripts/setup/zsh.sh` and
+   re-run. `--fix` does not touch them at all (wiring only).
+3. **`ZDOTDIR` belongs in the managed block, nowhere else.** There is no
+   `$HOME/.zshrc`, so without that export a bare `zsh` starts with no theme, no
+   plugins and none of the tool paths. It is ordinary tool wiring
+   (`common.sh` resolves it, `install_zsh` and `fix_derive_wiring` register it),
+   so `setup.sh --fix` restores it and `doctor` fails loudly when it is gone.
+   Do NOT re-add it as a hand snippet above `# >>> toolchain >>>`: the emitters
+   own everything from that marker down, and a snippet above it drifts the
+   moment the block is regenerated (this box carried exactly that snippet and
+   it was the only `ZDOTDIR` export, so a rewritten rc would have dropped zsh
+   back to a plain shell). The dotfiles reach the tool env by sourcing the
+   bashrc, so registries, TLS vars, `LD_LIBRARY_PATH` and the Hermes launcher
+   all arrive from that same block; `ZDOTDIR` is the only zsh-specific line.
+4. **Manual touches the installer leaves to you.** `.p10k.zsh` is
+   `p10k-classic.zsh` with `POWERLEVEL9K_MODE=nerdfont-v3`, so a terminal
+   without a Nerd Font renders every prompt glyph as a box or `?`; run
+   `p10k configure` or set `POWERLEVEL9K_MODE=ascii`. The aliases the zshrc
+   carries (`penv`, `psource`, `pipi`, `gclone`, `unzsh`) hold literal paths
+   baked at install time.
+5. **Non-interactive zsh prints noise that is not breakage.** With no
+   controlling terminal, oh-my-zsh reports
+   `(anon):setopt:7: can't change option: monitor` and p10k reports
+   `[ERROR]: gitstatus failed to initialize` plus advice to `exec zsh`. Both are
+   TTY artifacts of `zsh -lic`. Judge the wiring, not the prompt.
+6. **Verify (what "working" looks like here).**
+   - `bash setup.sh --doctor` → `✓ zsh: zsh 5.9 (x86_64-pc-linux-gnu)` and
+     `✓ ZDOTDIR in the managed block of .../bashrc`.
+   - `grep -nE '^export (ZDOTDIR|HERMES_HOME)=' "$REPL_HOME/.config/bashrc"` →
+     both hits land between `# >>> toolchain >>>` and `# <<< toolchain <<<`.
+   - `bash -lic 'echo $ZDOTDIR'` in a fresh terminal → the workspace dotdir
+     (`$REPL_HOME/.config/zsh`). Starting `zsh` from that shell is what makes
+     the dotfiles reachable; the export is the rc's job, not zsh's.
+   - `zsh -lic 'echo $ZSH_THEME; echo ${#plugins[@]}; command -v hermes'` →
+     `powerlevel10k/powerlevel10k`, `7`, and the launcher under
+     `$HERMES_HOME/hermes-agent/.hermes/bin`.
+
 ## Proving shell wiring
 
 - Write the probe to a file and run the shell on it (`zsh -i /tmp/probe.zsh`).
