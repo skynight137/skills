@@ -74,10 +74,12 @@ the repo. Don't rerun on a silent timeout alone.
 - Bare `node --version` from an unrelated shell still "fails" (PM's staged dir
   isn't on PATH; the system node is the Nix-wrapped one) — normal. PM launches
   its own binaries with the environment above, not PATH, and that split is
-  deliberate: `setup.sh --hermes` appends a `# >>> hermes-tools >>>` block
-  after the managed toolchain block in `.config/bashrc` that exports only
-  `HERMES_HOME` + `HERMES_MANAGED_DIR` and puts the launcher dir
-  (`$HERMES_HOME/hermes-agent/.hermes/bin`) on PATH. It must NOT put
+  deliberate: `setup.sh --hermes` registers `HERMES_HOME` + `HERMES_MANAGED_DIR`
+  as tool vars and the launcher dir (`$HERMES_HOME/hermes-agent/.hermes/bin`) as
+  a PATH dir in the single managed `# >>> toolchain >>>` block of
+  `.config/bashrc` (the pre-merge layout wrote them into a separate
+  `# >>> hermes-tools >>>` block after the managed one; that block is gone and
+  is migrated automatically on the next rc write). It must NOT put
   `$HERMES_HOME/tools/*` on the user PATH: those dirs are the agent's managed
   install, replaced by `hermes update` and deleted by an uninstall or
   `--clean hermes`, so a user's `npm i -g` (likewise `pip`, or a gh extension)

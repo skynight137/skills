@@ -26,10 +26,11 @@ Options:
   -ol, --ollama         Install Ollama (LLM runtime) into XDG_DATA_HOME/ollama
   -cl, --claude         Install Claude Code coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
   -ha, --hermes         Install Hermes Agent assistant (curl -fsSL \$HERMES_INSTALL_URL, into \$HERMES_HOME)
-                        Also writes the hermes-tools rc block: HERMES_HOME +
-                        HERMES_MANAGED_DIR and the launcher dir on PATH. Its
-                        \$HERMES_HOME/tools/* dirs stay OFF the user PATH, so a
-                         user's `npm i -g` cannot land in Hermes' prefix.
+                        Registers HERMES_HOME + HERMES_MANAGED_DIR and the
+                        launcher dir in the managed toolchain block (they are
+                        ordinary tool vars/PATH dirs, not a second rc block).
+                        Its \$HERMES_HOME/tools/* dirs stay OFF the user PATH, so
+                        a user's `npm i -g` cannot land in Hermes' prefix.
   -ori, --openrouterai  Install ORI coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
   -cp, --cliproxy       Install CLIProxyAPI (CLIProxyAPI_<ver>_linux_<arch> release
                         tarball, SHA256-verified against checksums.txt) into
@@ -51,8 +52,9 @@ Options:
                         (API on http://127.0.0.1:9377)
   --doctor              Verify the toolchain (no install) — prints versions and flags
   --fix                 Rewrite ALL wiring without deleting/reinstalling any
-                        tool: shell rc (toolchain block + hermes-tools block,
-                        when $HERMES_HOME/tools exists), .replit userenv keys,
+                        tool: shell rc (the single managed toolchain block,
+                        hermes env + launcher included when it is installed),
+                        .replit userenv keys,
                         the workflow shim + REPLIT_BASHRC pin, ~/.profile,
                         hermes config terminal.shell_init_files, and the
                         durable libatomic. Reads installed payloads to
@@ -385,7 +387,8 @@ export PIP_TRUSTED_HOST="pypi.org"
 # or npm approve-scripts.
 
 # TLS / CA bundle: the PLATFORM bundle, /etc/ssl/certs — never the Nix cacert
-# bundle ($SYSTEM_CERTIFICATE_PATH). That one carries none of the Replit roots
+# bundle (pkgs.cacert; SYSTEM_CERTIFICATE_PATH is not set on this box any more,
+# replit.nix no longer pulls it). That one carries none of the Replit roots
 # (0 Replit-named subjects vs 2 in the system bundle, "Replit internal proxy
 # Root CA" + "Replit Localhost Development CA"), so pointing these at it swaps
 # a trust store that knows the proxy for one that does not: public hosts still
@@ -395,7 +398,7 @@ export PIP_TRUSTED_HOST="pypi.org"
 # platform store (it uses its own bundled roots), hence NODE_EXTRA_CA_CERTS,
 # which ADDS the Replit roots. Guarded on the file: a dead path is never
 # exported, and the block works in every shell, not only where the platform
-# happened to export $SYSTEM_CERTIFICATE_PATH.
+# happened to export it.
 if [ -r /etc/ssl/certs/ca-certificates.crt ]; then
   export SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
   export SSL_CERT_DIR=/etc/ssl/certs
@@ -420,6 +423,25 @@ fi
 # Camofox GTK/X11 lib closure: applied inline by the .replit camofox workflow /
 # any invocation (see references/camofox.md) — NOT in the rc, because the closure
 # is large and only the browser binary needs it.
+
+# Hermes env and launcher live in THIS block now: HERMES_HOME and
+# HERMES_MANAGED_DIR are wire-registered tool vars (install_hermes / --fix) and
+# the launcher dir is a registered PATH dir, exactly like every other tool.
+# They used to be a separate hermes-tools block written outside these markers,
+# which every rewrite then had to re-append to keep PATH precedence stable; one
+# block and one grammar now. HERMES_MANAGED_DIR pins Hermes' managed-scope dir
+# under HERMES_HOME because the /etc/hermes default cannot be created on Replit
+# (/etc is a read-only mount, no root). The launcher dir is the ONLY provider
+# of hermes / hermes-acp on this box, so PATH order cannot pick a different
+# binary. $HERMES_HOME/tools/* is deliberately NOT on PATH: those are the
+# agent's managed binaries (node, npm, python, uv, gh, ffmpeg, ripgrep, ...),
+# versioned dirs that hermes update replaces and an uninstall / --clean hermes
+# deletes. On a user PATH the install target follows the binary: npm i -g would
+# write into Hermes' own prefix and die with Hermes, pip would follow Hermes'
+# interpreter, and PATH order would silently pick which node/python a user's
+# script ran under. $HERMES_HOME/installs/*/environments/*/venv/bin and
+# hermes-agent/venv/bin stay off PATH for the same reason: session-scoped
+# venvs, not stable across sessions or updates.
 
 # Tool env vars (JAVA_HOME, NODE_DIR, OLLAMA_MODELS, ...) — the rc block is
 # the single global source now. Replit workflow/agent shells reach this rc via
@@ -461,9 +483,9 @@ alias gss='git status --short'
 
 ## hermes
 # Plain `hermes`, NOT $XDG_BIN_HOME/hermes: the installer's shim there is
-# removed after install, and the hermes-tools block puts the real launcher
-# dir ($HERMES_HOME/hermes-agent/.hermes/bin) on PATH. Resolving via PATH
-# keeps these aliases working across a Recreate (which wipes the shim).
+# removed after install, and the managed block registers the real launcher
+# dir ($HERMES_HOME/hermes-agent/.hermes/bin, $HERMES_LAUNCHER_DIR) on PATH.
+# Resolving via PATH keeps these aliases working across a Recreate.
 alias hu="hermes update --force"
 alias hce="hermes config edit"
 alias ht="hermes --tui-native"
@@ -525,6 +547,12 @@ write_bashrc() {
   # memory, and write back THROUGH the path (cat >): if $BASHRC is a symlink,
   # an in-place edit happens here, so sed/awk on $BASHRC could not silently
   # replace the symlink with a plain file.
+  # Pre-merge rcs: lift the hermes env + launcher dir out of the legacy
+  # hermes-tools block (it sits outside the markers, so rescue_tool_lines cannot
+  # see it) and drop the block. Those lines are then re-emitted from the normal
+  # tool-var/PATH pass, so a run that does not install hermes still keeps them.
+  lift_legacy_hermes_wiring "$BASHRC"
+  strip_legacy_hermes_block "$BASHRC"
   # Lift this run's predecessors' wiring before the strip — see rescue_tool_lines.
   rescue_tool_lines "$BASHRC"
 
@@ -566,14 +594,6 @@ write_bashrc() {
     ok "shell rc updated: $BASHRC (toolchain block appended at bottom)"
   else
     ok "shell rc updated: $BASHRC (minimal PATH block appended at bottom)"
-  fi
-
-  # Hermes-only hook: mirror $HERMES_HOME/tools onto the user PATH, OUTSIDE
-  # and AFTER the managed block (own markers — see the function comment).
-  # Runs only when hermes was (re)installed this run; idempotent via its
-  # marker grep, so repeat installs don't stack blocks.
-  if $INSTALL_HERMES; then
-    write_hermes_tools_block
   fi
 }
 
@@ -660,6 +680,61 @@ EOF
     return 0
   fi
   ok "workflow bashrc pinned: REPLIT_BASHRC=$target (.replit userenv)"
+}
+
+# Pre-merge layout migration: the hermes-tools block ─────────────────────────
+# HERMES_HOME / HERMES_MANAGED_DIR and the launcher dir used to live in their
+# own block written OUTSIDE the managed markers (a separate rewriter re-appended
+# it after every toolchain rewrite to keep PATH precedence stable). They are
+# ordinary wire-registered tool lines now, so the legacy block is LIFTED into
+# this run's registrations and then removed. Lifting matters because the strip
+# below only rewrites the managed block: without it, a run that does not install
+# hermes (setup.sh --node) would delete the vars outright. The lift is gated on
+# an actual install (launcher binary or the staged PM tools); on a box where
+# hermes is gone the block is dropped without resurrecting anything.
+lift_legacy_hermes_wiring() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  grep -qF '# >>> hermes-tools >>>' "$file" || return 0
+  [[ -x "$HERMES_LAUNCHER_DIR/hermes" || -d "$HERMES_HOME/tools" ]] || return 0
+  local line in_block=0 dir var
+  while IFS= read -r line; do
+    case "$line" in
+      '# >>> hermes-tools >>>') in_block=1; continue ;;
+      '# <<< hermes-tools <<<') in_block=0; continue ;;
+    esac
+    (( in_block )) || continue
+    if [[ "$line" == 'case ":$PATH:" in '* ]]; then
+      # Only the hermes launcher dir is trusted out of a legacy block; any
+      # other dir there is foreign and goes away with the block.
+      local re='\*"([^"]*)"\*'
+      if [[ "$line" =~ $re ]]; then
+        dir="${BASH_REMATCH[1]#:}"; dir="${dir%:}"
+        [[ "$dir" == "$HERMES_LAUNCHER_DIR" ]] && record_tool_path_dirs "$dir"
+      fi
+      continue
+    fi
+    if [[ "$line" =~ ^export[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+      var="${BASH_REMATCH[1]}"
+      case "$var" in
+        HERMES_HOME|HERMES_MANAGED_DIR) record_tool_env_vars "$var" ;;
+      esac
+    fi
+  done < "$file"
+}
+
+# Drop the legacy hermes-tools block. Marker-balanced (same awk idiom as the
+# managed strip), a no-op when absent. Also called by `--clean hermes` for an rc
+# that was never re-written after the merge.
+strip_legacy_hermes_block() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  grep -qF '# >>> hermes-tools >>>' "$file" || return 0
+  local tmp; tmp="$(mktemp)"
+  awk '/^# >>> hermes-tools >>>/{s=1} s{ if(/^# <<< hermes-tools <<</) s=0; next } {print}' "$file" > "$tmp"
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+  ok "legacy hermes-tools rc block folded into the managed toolchain block"
 }
 
 # Lift the wiring a PRIOR run's managed block wrote (both writers regenerate
@@ -766,15 +841,16 @@ _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
 # Vars the fixed blocks own (registries, the TLS bundle, the workspace-persisted
 # git config). Never re-emit them as tool vars — doing so duplicated the export
 # and let a platform value shadow ours.
-# HERMES_HOME is here too: the hermes-tools block owns it (it exports
-# HERMES_HOME + HERMES_MANAGED_DIR next to the launcher PATH), so emitting it
-# again from the generic tool-var pass would duplicate the line.
+# HERMES_HOME is deliberately NOT listed: it used to be, because the separate
+# hermes-tools rc block emitted it and a second export would have duplicated
+# the line. That block is gone — the var is an ordinary wire-registered tool
+# var now, so the tool-var pass MUST emit it.
 # npm_config_dangerously_allow_all_scripts and NIX_SSL_CERT_FILE are RETIRED:
 # no fixed block sets them any more, and listing them here keeps a stale
 # .replit entry or an inherited platform value from being resurrected as a
 # tool var (the Nix bundle must never come back — see the TLS block).
 _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
-  GIT_CONFIG_GLOBAL HERMES_HOME \
+  GIT_CONFIG_GLOBAL \
   npm_config_dangerously_allow_all_scripts NIX_SSL_CERT_FILE \
   SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
 

@@ -46,7 +46,7 @@ doctor() {
   check_tool "Ollama" ollama
   check_tool "Claude" "$XDG_BIN_HOME/claude"
   # The real launcher (the official installer's .local/bin shim just execs
-  # this) — write_hermes_tools_block puts this dir on PATH.
+  # this) — the managed rc block registers this dir on PATH.
   check_tool "Hermes" "$HERMES_HOME/hermes-agent/.hermes/bin/hermes"
   check_tool "ORI" "$XDG_BIN_HOME/ori"
   check_tool "rclone" "$XDG_BIN_HOME/rclone"
@@ -114,10 +114,15 @@ doctor() {
     wfail=1
   fi
   if [[ -d "$HERMES_HOME/tools" ]]; then
-    if [[ -f "$BASHRC" ]] && grep -qF '# >>> hermes-tools >>>' "$BASHRC"; then
-      ok "hermes-tools rc block in $BASHRC"
+    # Hermes wiring lives in the managed toolchain block now (the separate
+    # hermes-tools block was folded in): HERMES_HOME / HERMES_MANAGED_DIR as
+    # tool vars, the launcher dir as a PATH line.
+    if [[ -f "$BASHRC" ]] \
+       && grep -qE '^export[[:space:]]+HERMES_HOME=' "$BASHRC" \
+       && grep -qF "$HERMES_LAUNCHER_DIR" "$BASHRC"; then
+      ok "hermes env + launcher PATH in the managed block of $BASHRC"
     else
-      warn "hermes-tools PATH block missing — run: bash setup.sh --fix"
+      warn "hermes wiring missing from $BASHRC — run: bash setup.sh --fix"
       wfail=1
     fi
   fi
