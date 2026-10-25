@@ -8,7 +8,8 @@
 # a single binary:
 #   - $BASHRC managed toolchain block (PATH dirs + tool vars, rescue merge
 #     preserves operator edits and unrelated tool lines),
-#   - the hermes-tools PATH block (only when $HERMES_HOME/tools exists),
+#   - the hermes-tools rc block (Hermes env + launcher PATH; only when
+#     $HERMES_HOME/tools exists),
 #   - .replit [userenv.shared] keys (existing keys re-set to canonical
 #     values; keys of tools NOT installed are left alone — never resurrected),
 #   - the workflow shim + REPLIT_BASHRC pin (unconditional in replit mode),

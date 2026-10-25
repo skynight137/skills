@@ -115,7 +115,7 @@ doctor() {
   fi
   if [[ -d "$HERMES_HOME/tools" ]]; then
     if [[ -f "$BASHRC" ]] && grep -qF '# >>> hermes-tools >>>' "$BASHRC"; then
-      ok "hermes-tools PATH block in $BASHRC"
+      ok "hermes-tools rc block in $BASHRC"
     else
       warn "hermes-tools PATH block missing — run: bash setup.sh --fix"
       wfail=1

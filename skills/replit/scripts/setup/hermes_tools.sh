@@ -1,31 +1,38 @@
 # shellcheck shell=bash
-# Hermes PM tools PATH block (write/strip). Sourced by setup.sh.
-# Hermes tool dirs on the user PATH (appended by write_bashrc AFTER the
-# managed block, only when hermes was installed this run) ─────────────────────
-# Hermes stages its own tool binaries under $HERMES_HOME/tools/<name-ver>-
-# linux-x64[/bin] and injects those exact dirs into the agent process PATH.
-# Interactive shells saw a DIFFERENT node (Replit's nix nodejs-24 module)
-# than the one Hermes runs, which made `npm i -g` and version checks
-# confusing. This hook mirrors the agent's PATH set into the user rc so
-# shells and Hermes share one toolset.
+# Hermes env rc block (write/strip). Sourced by setup.sh.
+# Hermes' own environment for user shells (appended by write_bashrc AFTER the
+# managed block, only when a Hermes install is present) ───────────────────────
+# The block owns exactly two things: HERMES_HOME / HERMES_MANAGED_DIR (where a
+# `hermes` call in this shell finds its state) and the launcher dir
+# ($HERMES_HOME/hermes-agent/.hermes/bin) so a bare `hermes` reaches the stable
+# entrypoint that resolves its own environment.
+#
+# $HERMES_HOME/tools/* is deliberately NOT put on PATH. Those binaries are the
+# agent's managed install (node, npm, python, uv, gh, ffmpeg, ripgrep, ...) —
+# versioned dirs that `hermes update` replaces and an uninstall/`--clean hermes`
+# deletes. On a user PATH the install target follows the binary: `npm i -g
+# <pkg>` writes into Hermes' npm prefix and dies with Hermes, `pip` follows
+# Hermes' interpreter, gh extensions land under $HERMES_HOME, and PATH order
+# silently decides which node/python a user's script ran under. User shell and
+# agent keep separate toolchains: the shell gets the platform one (.replit's
+# nodejs-24 / python3.13 modules plus anything setup.sh installs into
+# $XDG_BIN_HOME), while Hermes launches its own binaries from its own PATH and
+# never reads this block.
 #
 # .replit is deliberately NOT touched: nodejs-24 / python3.13 keep installing
-# (the nix profile + pnpm/bun/yarn stay available as fallback). The block is
-# appended AFTER the managed toolchain block so its PREPENDS win PATH order
-# over both XDG_BIN_HOME (managed block prepends first) and the nix dirs.
+# as the nix-profile fallback.
 #
 # OUTSIDE the # >>> toolchain >>> markers on purpose: the managed block is
 # stripped+rewritten on every setup.sh run and rescue_tool_lines/
-# strip_tool_wiring only understand the guarded-line grammar — a lazy-glob
-# block inside it would be eaten or unrescued. With its own marker the block
-# survives every other rewrite; --clean hermes drops it explicitly.
+# strip_tool_wiring only understand the guarded-line grammar — a file with its
+# own explanatory comments would be eaten or unrescued. With its own marker the
+# block survives every other rewrite; --clean hermes drops it explicitly.
 # The block is REGENERATED in place (strip + append) rather than skipped when
 # present: write_bashrc always appends the managed block at the END, so a
 # stale guard would leave this block ABOVE the toolchain block and silently
 # flip PATH precedence (later prepends win). Regenerating keeps it last and
-# lets manual marker edits (e.g. dropping a tool dir from the glob list)
-# survive exactly one run — documented behavior: edit setup.sh, don't
-# hand-edit between the markers.
+# lets manual marker edits survive exactly one run — documented behavior: edit
+# setup.sh, don't hand-edit between the markers.
 write_hermes_tools_block() {
   local TOOLS_DIR="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}/tools"
   local HERMES_ROOT="${HERMES_HOME:-${REPL_HOME:-$HOME}/.hermes}"
@@ -40,37 +47,30 @@ write_hermes_tools_block() {
   cat >> "$rc_tmp" <<RC
 
 $MARK
-# Hermes tool dirs — appended by setup.sh (--hermes). Mirrors the
-# agent process PATH into interactive shells: same node/npm/gh/ffmpeg/rg/
-# uv/tirith/python 3.14 + the hermes launcher, so user and Hermes run ONE
-# toolset. .replit stays as-is (nodejs-24 / python3.13 modules remain
-# installed as the nix-profile fallback); these dirs are PREPENDED after the
-# toolchain block so they win PATH order.
-#
-# HERMES_HOME / HERMES_MANAGED_DIR live here (not the generic toolchain block)
-# because they are only meaningful alongside a Hermes install, and this block
-# is written only when $HERMES_HOME/tools exists. HERMES_MANAGED_DIR relocates
-# the managed-scope directory off its /etc/hermes default: on Replit /etc is a
-# read-only mount and cannot be created without root, so pin it under
-# $HERMES_HOME/managed. Exporting both here means every interactive shell and
-# the gateway/workflow shells inherit them — no manual export needed.
+# Hermes env — appended by setup.sh (--hermes). HERMES_HOME / HERMES_MANAGED_DIR
+# live here (not the generic toolchain block) because they are only meaningful
+# alongside a Hermes install, and this block is written only when
+# $HERMES_HOME/tools exists. HERMES_MANAGED_DIR relocates the managed-scope
+# directory off its /etc/hermes default: on Replit /etc is a read-only mount
+# and cannot be created without root, so pin it under $HERMES_HOME/managed.
+# Exporting both here means every interactive shell and the gateway/workflow
+# shells inherit them — no manual export needed.
 export HERMES_HOME="$HERMES_ROOT"
 export HERMES_MANAGED_DIR="$HERMES_ROOT/managed"
-# Globbing is LAZY: every dir is re-resolved (newest version via sort -V) on
-# each shell start, so 'hermes update' swapping versions needs no rc rewrite
-# and a stale pinned path can never break an existing PATH.
-# Prepend order reproduces the agent's own PATH (agent-browser ... node ...
-# venv, .hermes/bin first): visit in reverse, prepend each. Duplication is
-# bounded (once per shell start). Remove hermes: 'setup.sh --clean hermes'
-# or delete this block (between the markers).
-for sub in \\
-    'agent-browser-*/bin' 'bws-*' 'cua-driver-*' 'ffmpeg-*/bin' 'gh-*/bin' \\
-    'node-*/bin' 'npm-*/bin' 'python-*/bin' 'ripgrep-*' 'tirith-*' 'uv-*'; do
-  d="\$(ls -d "$TOOLS_DIR"/\$sub 2>/dev/null | sort -V | tail -1)"
-  [[ -n "\$d" && -d "\$d" ]] || continue
-  export PATH="\$d:\$PATH"
-done
+# The launcher dir, and nothing else: hermes / hermes-acp reset PYTHONHOME
+# and PYTHONPATH and resolve the environment to run themselves, so this stays
+# correct across hermes update, a version swap and a Recreate.
 [[ -d "$HERMES_ROOT/hermes-agent/.hermes/bin" ]] && export PATH="$HERMES_ROOT/hermes-agent/.hermes/bin:\$PATH"
+# $HERMES_ROOT/tools/* is deliberately NOT on PATH — do not add it back.
+# Those are the agent's managed binaries (node, npm, python, uv, gh, ffmpeg,
+# ripgrep, ...): versioned dirs that hermes update replaces and an
+# uninstall / --clean hermes deletes. A global install follows the binary, so
+# on the user PATH a global npm install would write into Hermes' npm prefix and
+# be removed with Hermes, pip would follow Hermes' interpreter, and PATH order
+# would silently pick which node/python a user's script ran under. The user
+# shell keeps the platform toolchain instead (.replit's nodejs-24 /
+# python3.13 modules, plus anything setup.sh installs into $XDG_BIN_HOME);
+# Hermes runs its own binaries from its own PATH and ignores this block.
 # NOTE: $HERMES_ROOT/installs/*/environments/*/venv/bin and hermes-agent/venv/bin
 # are deliberately NOT put on PATH. Those venvs belong to an isolated session run
 # (installs/<hash>/environments/<hash>/) and are not stable across sessions or
@@ -92,7 +92,7 @@ RC
   fi
   cat "$rc_sq" > "$BASHRC"
   rm -f "$rc_tmp" "$rc_sq"
-  ok "hermes-tools PATH block appended to $BASHRC"
+  ok "hermes-tools rc block written to $BASHRC (HERMES_HOME + launcher PATH)"
 }
 
 # Drop the hermes-tools rc block. Marker-balanced strip (same awk idiom as
@@ -105,5 +105,5 @@ strip_hermes_tools() {
   awk '/^# >>> hermes-tools >>>/{s=1} s{ if(/^# <<< hermes-tools <<</) s=0; next } {print}' "$f" > "$tmp"
   cat "$tmp" > "$f"
   rm -f "$tmp"
-  ok "hermes-tools PATH block stripped from $f"
+  ok "hermes-tools rc block stripped from $f"
 }
