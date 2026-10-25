@@ -112,6 +112,7 @@ main() {
   # reported, collected and re-surfaced in the summary.
   $INSTALL_ANDROID  && run_install_step android-tools      install_android_tools
   $INSTALL_UV       && run_install_step uv                 install_uv
+  $INSTALL_ZSH       && run_install_step zsh                 install_zsh
   $INSTALL_NODE     && run_install_step node               install_node
   $INSTALL_OPENCODE && run_install_step opencode           install_opencode
   $INSTALL_OLLAMA   && run_install_step ollama             install_ollama

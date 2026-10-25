@@ -58,6 +58,16 @@ OPENCODE_CONFIG_DIR="$XDG_CONFIG_HOME/opencode"
 
 HERMES_HOME="${REPL_HOME:-$HOME}/.hermes"
 
+# zsh interactive shell (oh-my-zsh + powerlevel10k). Binaries come from a
+# durable nix profile, the framework and dotfiles from $XDG_DATA_HOME and
+# $XDG_CONFIG_HOME/zsh. ZDOTDIR is what lets a bare `zsh` find them: there
+# is no $HOME/.zshrc, and $HOME is wiped on recreate.
+NIX_PROFILE_DIR="${REPL_HOME:-$HOME}/.local/nix-profiles"
+ZSH_PROFILE="$NIX_PROFILE_DIR/zsh"
+ZSH_DIR="$XDG_DATA_HOME/oh-my-zsh"
+ZSH_DOTDIR="$XDG_CONFIG_HOME/zsh"
+export ZDOTDIR="$ZSH_DOTDIR"
+
 # CLIProxyAPI — persistent app dir. Follows the XDG rule every other tool
 # uses ($XDG_CONFIG_HOME/<tool>), so it does NOT scatter a dir in the
 # workspace root next to the user's repos. A pre-existing legacy manual
@@ -200,6 +210,7 @@ INSTALL_FFMPEG=false
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
 INSTALL_HERMES_CHROMIUM=false
+INSTALL_ZSH=false
 INSTALL_ALL=false
 DOCTOR=false
 FIX=false

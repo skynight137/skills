@@ -20,6 +20,7 @@ Options:
   -a,  --all            Install everything (no menu)
   -at, --android-tools  Install Android toolchain (Java $JAVA_MAJOR + SDK)
   --uv                  Install uv (Python package manager)
+  --zsh                 zsh + oh-my-zsh + powerlevel10k (Nix; Termux-Setup style)
   --node                Install Node.js $NODE_MAJOR (managed tarball)
   -oc, --opencode		    Install OpenCode (direct GitHub release binary into XDG_BIN_HOME)
   -ol, --ollama         Install Ollama (LLM runtime) into XDG_DATA_HOME/ollama
@@ -104,6 +105,7 @@ parse_args() {
       -a|--all)                  INSTALL_ALL=true ;;
       -at|--android-tools)       INSTALL_ANDROID=true ;;
       --uv)                      INSTALL_UV=true ;;
+      --zsh) INSTALL_ZSH=true ;;
       --node)                    INSTALL_NODE=true ;;
       -oc|--opencode)       		 INSTALL_OPENCODE=true ;;
       -ol|--ollama)              INSTALL_OLLAMA=true ;;
@@ -165,6 +167,7 @@ parse_args() {
     INSTALL_ANDROID=true
     INSTALL_NODE=true
     INSTALL_UV=true
+    INSTALL_ZSH=true
     INSTALL_OPENCODE=true
     INSTALL_OLLAMA=true
     INSTALL_CLAUDE=true

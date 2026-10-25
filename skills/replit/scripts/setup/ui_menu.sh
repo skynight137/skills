@@ -22,6 +22,7 @@ need_cmd_or_install() { need_cmd "$1"; }  # reserved for future auto-install of 
 _MENU_ITEMS=(
   "android|Android toolchain (Java $JAVA_MAJOR + SDK)"
   "uv|uv (Python package manager)"
+  "zsh|zsh + oh-my-zsh + powerlevel10k (Termux-Setup style)"
   "node|Node.js $NODE_MAJOR (managed tarball)"
   "opencode|OpenCode (AI Coding — direct GitHub release)"
   "ollama|Ollama (LLM runtime)"
@@ -66,6 +67,7 @@ _status_init() {
     "java|java"
     "python|python"
     "uv|uv"
+    "zsh|zsh"
     "node|node"
     "adb|adb"
     "opencode|opencode"
@@ -219,6 +221,7 @@ _menu_apply() {
     case "$label" in
       android)  INSTALL_ANDROID=true ;;
       uv)       INSTALL_UV=true ;;
+      zsh) INSTALL_ZSH=true ;;
       node)     INSTALL_NODE=true ;;
       opencode) INSTALL_OPENCODE=true ;;
       ollama)   INSTALL_OLLAMA=true ;;
