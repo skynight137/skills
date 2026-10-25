@@ -31,6 +31,7 @@ other lane assumes its persistence rules.
 | bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 | make an HTTPS client (Python, Node, git, uv) trust the Replit proxy without disabling verification | `references/tls-trust.md` | `setup/rc.sh`, `setup/common.sh` (TLS block) |
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
+| own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
 official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md`.
