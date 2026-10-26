@@ -98,6 +98,9 @@ fix_derive_wiring() {
   for b in rclone qbittorrent-nox aria2c ffmpeg cloudflared tailscale sshx; do
     [[ -x "$XDG_BIN_HOME/$b" ]] && record_tool_path_dirs "$XDG_BIN_HOME"
   done
+  # tailscale is the one of these with a generated companion: refresh its
+  # launcher too, so a .replit workflow target is never a stale copy.
+  [[ -x "$XDG_BIN_HOME/tailscaled" ]] && tailscale_write_launcher
   return 0
 }
 

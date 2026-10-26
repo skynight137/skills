@@ -56,16 +56,26 @@ the dev domain is HTTP, and 22 is not a declared port.
 
 ## Tailscale in a Replit sandbox (userspace mode)
 
-Install: `bash setup.sh --tailscale` — binaries into `$XDG_BIN_HOME`, node state
-under `$XDG_DATA_HOME/tailscale` (kept by `--clean tailscale`, so the machine
-stays on the tailnet). The installer verifies the arch tarball against the
-channel's `<tarball>.sha256`. It starts nothing; run the daemon as below.
+Install: `bash setup.sh --tailscale`. It puts `tailscale` + `tailscaled` in
+`$XDG_BIN_HOME`, verifies the arch tarball against the channel's
+`<tarball>.sha256`, and writes a launcher, `$XDG_BIN_HOME/launch-tailscaled` —
+that is the file a `.replit` workflow should run (`waitForPort = 1055`). Node
+state lives under `$XDG_DATA_HOME/tailscale` and is ADOPTED when it is already
+there: a box that was set up by hand joins the tailnet with its existing
+identity, its Funnel/serve config and no re-auth, and only the binary paths
+change. `--clean tailscale` removes the binaries + launcher and keeps the state.
+
+Point the workflow at the launcher, not at a hand-written script: it execs the
+managed binaries, so a version bump or a `--fix` cannot leave the daemon running
+an orphaned older copy (`--fix` rewrites the launcher). Optional Funnel port:
+`launch-tailscaled <port>` or `FUNNEL_PORT=<port>`; with no argument nothing is
+published.
 
 **Pass `--statedir`, not just `--state`.** `--state` names the state *file*;
 without a `--statedir` directory tailscaled has nowhere to write the ACME
 certificate, so every HTTPS handshake for a `funnel`/`serve` hostname fails —
 `no TailscaleVarRoot` in `tailscaled.log`, and the client sees `unexpected eof`
-from `curl`. Run the daemon with both, plus the socket:
+from `curl`. The launcher passes both, plus the socket:
 
 ```bash
 --state=$BASE/state/tailscaled.state --statedir=$BASE/state --socket=$BASE/state/tailscaled.sock
@@ -77,19 +87,29 @@ kernel TUN device is unusable. Run Tailscale with userspace networking: it needs
 no TUN and still accepts INBOUND connections, so a second sandbox's sshd is
 reachable over the tailnet.
 
+By hand (what the launcher does for you — note it is easy to drop `--statedir`,
+which is the bug this section is about):
+
 ```bash
-BASE=$REPL_HOME/.local/share/tailscale; mkdir -p "$BASE/state"
+BASE=$XDG_DATA_HOME/tailscale; mkdir -p "$BASE/state"
 VER=$(curl -sS "https://pkgs.tailscale.com/stable/?mode=json" \
       | python3 -c "import sys,json; print(json.load(sys.stdin)['TarballsVersion'])")
 curl -sSL -o "$BASE/ts.tgz" "https://pkgs.tailscale.com/stable/tailscale_${VER}_amd64.tgz"
 tar xzf "$BASE/ts.tgz" -C "$BASE" --strip-components=1
 
 $BASE/tailscaled --tun=userspace-networking \
-  --state=$BASE/state/tailscaled.state --socket=$BASE/state/tailscaled.sock \
+  --state=$BASE/state/tailscaled.state --statedir=$BASE/state \
+  --socket=$BASE/state/tailscaled.sock \
   --socks5-server=localhost:1055 --outbound-http-proxy-listen=localhost:1055
 
 $BASE/tailscale --socket=$BASE/state/tailscaled.sock up --hostname=<name>
 ```
+
+A liveness probe that does not lie: `pgrep -f "tailscaled --tun=userspace"`
+also matches any shell whose command TEXT contains that string (a workflow that
+greps for it), so an unanchored check can decide the daemon is up when it is not.
+Match the daemon only (`pgrep -f "^[^ ]*tailscaled --tun=userspace"`), or just
+test the socket: `tailscale --socket=$SOCK status`.
 
 `?mode=json` returns `TarballsVersion` as a plain string — a naive
 `['Tarballs']['amd64']['Version']` lookup yields an empty version and a 10-byte
