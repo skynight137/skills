@@ -127,6 +127,7 @@ clean_paths_for() {
     cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
     tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled launch-tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
+    llm-wiki)      echo "${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
     *)             echo "$1" ;;
   esac
 }
@@ -336,6 +337,19 @@ clean_sshx() {
   ok "sshx removed"
 }
 
+# llm-wiki server — removes the app bundle, the AppImage, its extraction and the
+# token file. THE WIKI DATA IS NEVER TOUCHED: the markdown project lives in the
+# workspace (the supervisor's project dir), not inside the install dir.
+clean_llm_wiki() {
+  local dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
+  if ! _present "$dir/run-public.sh"; then
+    nothing_removed "llm-wiki"; return 0
+  fi
+  step "Removing llm-wiki server"
+  rm -rf "$dir"
+  ok "llm-wiki removed ($dir — wiki data untouched)"
+}
+
 # CLIProxyAPI — removes the symlink + binary only. $CLIPROXY_HOME (config.yaml
 # with keys/OAuth logins, server.log, ~/.cli-proxy-api auth dir) is the user's
 # data and is deliberately PRESERVED; delete the dir by hand for a full wipe.
@@ -462,7 +476,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -479,7 +493,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -521,9 +535,10 @@ clean() {
       clean_sshx
       clean_cliproxy
       clean_camofox
+      clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -551,6 +566,7 @@ clean() {
         ori)           clean_ori ;;
         cliproxy)      clean_cliproxy ;;
         camofox)       clean_camofox ;;
+        llm-wiki)      clean_llm_wiki ;;
         hermes-chromium) clean_hermes_chromium ;;
         rclone)        clean_rclone ;;
         qbt)           clean_qbt ;;
@@ -591,6 +607,7 @@ clean() {
           ori)      clean_ori ;;
           cliproxy) clean_cliproxy ;;
           camofox)  clean_camofox ;;
+          llm-wiki) clean_llm_wiki ;;
           rclone)   clean_rclone ;;
           qbt)      clean_qbt ;;
           aria2)    clean_aria2 ;;
@@ -600,7 +617,7 @@ clean() {
       done
       ;;
     *)
-      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, camofox, rclone, qbt, aria2, ffmpeg"
+      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, camofox, llm-wiki, rclone, qbt, aria2, ffmpeg"
       ;;
   esac
   cat <<CLEANMSG

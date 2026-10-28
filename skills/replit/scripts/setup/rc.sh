@@ -57,6 +57,16 @@ Options:
                         Camoufox engine into the persistent cache, applies the Replit
                         lib closure + WebGL auto-skip, then run: camofox-browser
                         (API on http://127.0.0.1:9377)
+  --llm-wiki            Install the llm-wiki server (knowledge base for agents):
+                        scripts/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
+                        AppImage + shared token (llmwiki.env, chmod 600). Start with
+                        run-public.sh (app + REST/MCP, public port \$LLM_WIKI_PORT or
+                        8080, loopback 8199) and run-ui.sh (desktop UI in the browser
+                        via x11vnc + noVNC on 8000). Reports missing system packages
+                        (xvfb, fluxbox, shared-mime-info, x11vnc) instead of installing
+                        them. Not part of --all (the AppImage is ~116 MB; install it
+                        explicitly when a knowledge base is wanted).
+                        See references/llm-wiki-server.md
   --doctor              Verify the toolchain (no install) — prints versions and flags
   --fix                 Rewrite ALL wiring without deleting/reinstalling any
                         tool: shell rc (the single managed toolchain block,
@@ -133,6 +143,7 @@ parse_args() {
       --sshx)                   INSTALL_SSHX=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
+      --llm-wiki)               INSTALL_LLM_WIKI=true ;;
       --doctor)                  DOCTOR=true ;;
       --fix)                     FIX=true ;;
       --list|--show)             LIST_STATE=true ;;
@@ -168,12 +179,15 @@ parse_args() {
   done
 
   # Default to full provisioning when nothing specific was requested.
+  # Every install flag belongs in this guard: one that is missing makes a run
+  # with ONLY that flag fall through to INSTALL_ALL (= installs everything).
   if ! $CLEAN && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
      && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
      && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX \
+     && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi

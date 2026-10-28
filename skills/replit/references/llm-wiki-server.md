@@ -13,21 +13,34 @@ Berlaku di Replit maupun VPS Debian/Ubuntu biasa.
 
 Server Node yang mempublikasikan; API app **tidak** diumbar langsung.
 
-## File bundel (di repo ini: `tools/llmwiki-app/`)
+## File bundel — sekarang dikirim **di dalam skill ini** (`scripts/llm-wiki/`)
 
 `install.sh` (unduh AppImage + ekstrak + bikin token) · `run-public.sh` (supervisor:
-Xvfb → WM → app → server, auto-restart) · `start-app.sh` (launcher app portabel) ·
-`llmwiki-server.js` (server MCP+REST) · `llmwiki.env` (token, chmod 600) ·
-`pixbuf/` (loader PNG opsional) · `.ldpath`/`.libdirs.pre` (dir lib khusus mesin, boleh kosong).
+Xvfb → WM → app → server, auto-restart) · `run-ui.sh` (x11vnc + noVNC: UI desktop
+dibuka dari browser) · `start-app.sh` (launcher app portabel) · `llmwiki-server.js`
+(server MCP+REST) · `llmwiki.env` (token, chmod 600) · `pixbuf/` (loader PNG opsional) ·
+`.ldpath`/`.libdirs.pre` (dir lib khusus mesin, boleh kosong).
 
-Belum dipublikasikan ke repo publik — salin folder ini ke server, atau publish dulu
-kalau mau dipakai pihak ketiga.
-
-## Prasyarat (Debian/Ubuntu)
+Terpasang dengan satu perintah:
 
 ```bash
-apt install -y nodejs curl xvfb fluxbox shared-mime-info dbus-x11
+bash setup.sh --llm-wiki        # bundle -> ${LLM_WIKI_HOME:-$XDG_DATA_HOME/llmwiki-app}, lalu install.sh
 ```
+
+Modulnya (`scripts/setup/llm-wiki.sh`) **melaporkan** paket sistem yang kurang
+(xvfb/fluxbox/shared-mime-info/x11vnc) alih-alih memasangnya sendiri — instalasi paket
+sistem bukan urusan script user-level.
+
+## Prasyarat (Replit = NixOS: pakai nix, bukan apt)
+
+```bash
+nix build nixpkgs#xvfb nixpkgs#fluxbox nixpkgs#shared-mime-info   # app-nya butuh ini
+nix build nixpkgs#x11vnc nixpkgs#novnc                            # hanya kalau mau UI lewat browser
+```
+
+Masukkan nama paket yang sama ke `replit.nix` supaya bertahan setelah repl di-recreate.
+Node ≥ 18 sudah ada di box ini (dipasang `setup.sh --node`); di host non-nix padanannya
+`apt install xvfb fluxbox shared-mime-info x11vnc novnc`.
 
 - **node ≥ 18** — satu-satunya runtime server. **Jangan** pakai node milik Hermes
   (`$HERMES_HOME/tools/node-*`): di luar jalur, butuh `libatomic.so.1`, dan Hermes
@@ -42,24 +55,29 @@ apt install -y nodejs curl xvfb fluxbox shared-mime-info dbus-x11
 ## Jalankan
 
 ```bash
-bash install.sh          # sekali per mesin: AppImage + token
-bash run-public.sh       # supervisor, foreground (systemd / workflow / tmux)
+bash setup.sh --llm-wiki   # sekali per mesin: bundle + AppImage + token
+bash run-public.sh         # supervisor, foreground (systemd / workflow / tmux)
+bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :8000)
 ```
 
 ## Endpoint
 
+`PORT` = `${LLM_WIKI_PORT:-8080}`.
+
 | Endpoint | Auth | Untuk |
 |---|---|---|
-| `http://127.0.0.1:8081/mcp` | `Authorization: Bearer <token>` | agen di mesin yang sama (ini yang dipakai profile Hermes) |
-| `http://127.0.0.1:8199/mcp` | tanpa token (bind loopback) | agen lokal yang tak mau bawa secret |
-| `https://<host>:8081/mcp` | header sama | agen di mesin lain, **kalau** port sudah dirutekan |
-| `https://<host>:8081/api/v1/...` | header sama | script/curl |
-| `https://<host>:8081/health` | tanpa auth | cek server + upstream |
+| `http://127.0.0.1:${PORT}/mcp` | `Authorization: Bearer <token>` | agen di mesin yang sama lewat jalur publik |
+| `http://127.0.0.1:8199/mcp` | tanpa token (bind loopback) | agen lokal yang tak mau bawa secret (ini yang dipakai profile Hermes) |
+| `https://<host>:${PORT}/mcp` | header sama | agen di mesin lain, **kalau** port sudah dirutekan |
+| `https://<host>:${PORT}/api/v1/...` | header sama | script/curl |
+| `https://<host>:${PORT}/health` | tanpa auth | cek server + upstream |
 
-Port publik default **8081**, bukan 8080: di box ini 8080 dipakai
-`hermes -p <profile> dashboard`. Kalau tabrakan, server tidak bisa bind dan `/health`
-justru balas **302 + `{"error":"unauthenticated",...,"login_url":"/login"}`** — itu
-dashboard Hermes, bukan llm-wiki. Cek pemilik port dulu sebelum menuduh server rusak.
+Port publik default **8080** (yang diharapkan klien llm-wiki). Kalau 8080 sudah dipakai
+hal lain — di box ini `hermes -p <profile> dashboard` — set `LLM_WIKI_PORT=8081` di
+`llmwiki.env`; itu satu-satunya tempat override-nya, bukan di kode. Kalau tabrakan,
+server tidak bisa bind dan `/health` justru balas **302 +
+`{"error":"unauthenticated",...,"login_url":"/login"}`**: itu dashboard Hermes, bukan
+llm-wiki. Cek pemilik port dulu sebelum menuduh server rusak.
 
 Di Replit, port yang baru ditambahkan ke `.replit [[ports]]` belum tentu langsung
 dirutekan (butuh Repl restart) — selama itu, klien di mesin yang sama pakai loopback.
@@ -88,7 +106,7 @@ kembali saat menambah profile baru, dan cek dengan `hermes -p <profile> skills l
 ## Daftarkan klien
 
 ```bash
-hermes -p <profile> mcp add llm-wiki --url http://127.0.0.1:8081/mcp
+hermes -p <profile> mcp add llm-wiki --url http://127.0.0.1:8199/mcp
 hermes -p <profile> config set mcp_servers.llm-wiki.headers.Authorization 'Bearer ${LLM_WIKI_API_TOKEN}'
 ```
 
@@ -114,9 +132,18 @@ rescan_sources/embed_page/reviews/chat`).
 
 ## Replit-spesifik
 
-- Taruh semuanya di bawah `$REPL_HOME` (persisten); `$HOME` dan `/tmp` kena wipe.
-  `/tmp/.X11-unix` bisa hilang → app mati `Failed to initialize GTK` → itu sebabnya
-  ada supervisor.
+- Taruh semuanya di bawah `$REPL_HOME` (persisten); `$HOME` dan `/tmp` kena wipe, dan
+  **proses yang dijalankan dari sesi agen mati bersama sesinya** — stack yang tadi hidup
+  bisa sepenuhnya mati di sesi berikutnya. Probe dulu (`19828`, `8081`, `8199`, `8000`)
+  sebelum mendiagnosis apa pun. Daftarkan TIAP supervisor sebagai workflow sendiri di
+  `.replit` (`llm-wiki-public` → `run-public.sh`, `llm-wiki-ui` → `run-ui.sh`); satu
+  workflow per proses panjang, dan JANGAN berbagi `waitForPort` dengan workflow lain.
+- **Supervisor jangan percaya file socket X.** `/tmp/.X11-unix/X99` menipu dua arah:
+  Xvfb yang mati meninggalkan socket-nya, supervisor mengira display hidup, Xvfb tidak
+  pernah dinyalakan, dan app keluar `Failed to initialize GTK` (log hanya berisi panic
+  GTK) sementara supervisor melaporkan dirinya sehat; socket juga bisa hilang saat Xvfb
+  masih hidup. Syaratkan proses Xvfb untuk display itu hidup dan hapus socket + lock
+  basi sebelum start — aturan lengkap + guard WM di skill `headless-gui-linux`.
 - Port harus ada di `.replit [[ports]]` (dan perubahan baru efektif setelah Repl
   restart). Untuk port app `:19828` cukup jangan diumbar — server Node di port yang
   sudah terdaftar (mis. 8081) yang jadi pintunya.
