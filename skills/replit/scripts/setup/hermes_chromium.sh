@@ -45,6 +45,35 @@ hermes_chrome_write_env() {
   ok "hermes-chromium env snippet: $HERMES_CHROME_ENVSNIP"
 }
 
+# resolve-libs.sh's chromium profile covers only the 6 declared deps
+# (nspr/nss/xkbcommon/gbm). Chrome also links the GTK/glib stack — libglib,
+# libgio, libgobject, libcairo, libpango, libatk*, libdbus, libudev, libcups,
+# libexpat, Xcomposite/Xext/Xfixes/Xrandr — which that closure does NOT contain,
+# so a bare chrome still dies with
+#   error while loading shared libraries: libglib-2.0.so.0
+# (this is exactly what browser_exec reports as "Chrome exited early (exit code:
+# 127)"). Resolve whatever ldd still calls missing against the store on THIS
+# machine and append its lib dir; never a hardcoded /nix/store path.
+hermes_chrome_closure_fallback() {
+  local bin="$1" closure="$2" sonames pred found dirs
+  sonames="$(LD_LIBRARY_PATH="$(cat "$closure" 2>/dev/null)" ldd "$bin" 2>/dev/null \
+             | awk '/not found/ {print $1}' | sort -u)"
+  [[ -n "$sonames" ]] || return 0
+  pred=""
+  local s
+  for s in $sonames; do pred="$pred -o -name $s"; done
+  pred="${pred# -o }"
+  # shellcheck disable=SC2086  # $pred is an intentional -name predicate list
+  found="$(timeout 600 find /nix/store -maxdepth 4 \( $pred \) 2>/dev/null)"
+  [[ -n "$found" ]] || { warn "still missing and not in the store: $(echo "$sonames" | tr '\n' ' ')"; return 0; }
+  dirs="$(printf '%s\n' "$found" | xargs -r -n1 dirname | sort -u)"
+  {
+    tr ':' '\n' < "$closure" 2>/dev/null
+    printf '%s\n' "$dirs"
+  } | sed '/^$/d' | awk '!seen[$0]++' | paste -sd: - > "$closure.new" && mv "$closure.new" "$closure"
+  ok "closure extended (GTK/glib fallback): $(tr ':' '\n' < "$closure" | grep -c .) lib dirs"
+}
+
 hermes_chrome_write_launcher() {
   local f="$XDG_BIN_HOME/launch-hermes-chrome"
   mkdir -p "$XDG_BIN_HOME" || return 0
@@ -75,6 +104,7 @@ install_hermes_chromium() {
   # Resolve on THIS machine (never copy a store path between hosts).
   if bash "$SCRIPT_DIR/setup/resolve-libs.sh" "$HERMES_CHROME_CLOSURE" chromium; then
     ok "closure resolved: $HERMES_CHROME_CLOSURE ($(tr ':' '\n' < "$HERMES_CHROME_CLOSURE" | grep -c .) lib dirs)"
+    hermes_chrome_closure_fallback "$bin" "$HERMES_CHROME_CLOSURE"
   else
     warn "closure resolution failed — a bare chrome will not start; install nspr/nss/libxkbcommon/mesa"
     return 0
@@ -83,6 +113,12 @@ install_hermes_chromium() {
   hermes_chrome_write_env "$bin"
   hermes_chrome_write_launcher
   record_tool_path_dirs "$XDG_BIN_HOME"
+  # Hermes' own browser launcher execs $AGENT_BROWSER_EXECUTABLE_PATH directly
+  # (hermes_cli/browser_runtime.py), so point it at the shim: the shim sources
+  # the closure first. Without this the agent's browser starts a chrome that
+  # cannot load libglib and dies as "Chrome exited early (exit code: 127)".
+  export AGENT_BROWSER_EXECUTABLE_PATH="$XDG_BIN_HOME/launch-hermes-chrome"
+  record_tool_env_vars AGENT_BROWSER_EXECUTABLE_PATH
   wire_tool hermes-chromium -- "$XDG_BIN_HOME"
   ok "hermes-chromium ready — run: launch-hermes-chrome --version"
 }

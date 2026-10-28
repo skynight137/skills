@@ -208,6 +208,13 @@ seed_tool_wiring(){
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
     CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"
   wire_tool hermes-chromium HERMES_CHROME_STATE -- "$XDG_BIN_HOME"
+  # Kept in sync with install_hermes_chromium: a --fix run with no staged chrome
+  # never calls the installer, so the export has to be re-derived here or the rc
+  # block loses it and Hermes' browser starts a chrome without the lib closure.
+  if [[ -x "$XDG_BIN_HOME/launch-hermes-chrome" ]]; then
+    export AGENT_BROWSER_EXECUTABLE_PATH="$XDG_BIN_HOME/launch-hermes-chrome"
+    record_tool_env_vars AGENT_BROWSER_EXECUTABLE_PATH
+  fi
 }
 
 # State flags ───────────────────────────────────────────────────────────────
