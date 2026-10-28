@@ -90,6 +90,24 @@ bash setup.sh --clean <tool> -y                  # binary gone, data dir kept
 bash setup.sh --<tool>                           # reinstall after the test
 ```
 
+- **A "fake root" is only fake if you override every root.** The box rc already
+  exports `XDG_BIN_HOME`, `XDG_DATA_HOME`, `HERMES_HOME`, `XDG_CONFIG_HOME` and
+  `WORKSPACE`; passing only `REPL_HOME`/`XDG_DATA_HOME` still installs into the
+  LIVE toolchain, re-runs the Hermes installer's skill sync, and fills the disk.
+  Pass all of them, plus `HOME` and `LLM_WIKI_HOME`/whatever the tool honours:
+  ```bash
+  env REPL_HOME=$RW/repl WORKSPACE=$RW/work XDG_BIN_HOME=$RW/bin \
+      XDG_DATA_HOME=$RW/data XDG_CONFIG_HOME=$RW/cfg HERMES_HOME=$RW/hermes \
+      HOME=$RW/home bash scripts/setup.sh --<tool> -y
+  ```
+  Then check the real `$XDG_BIN_HOME` mtimes if the run was short and suspiciously
+  productive; a fake-root run that installs unrelated tools means the guard in
+  `rc.sh` is missing a flag, not that the test worked.
+- The one-flag run must install ONLY that tool. If it starts provisioning Android,
+  ollama, zsh and friends, an `INSTALL_*` flag is missing from the no-flag guard in
+  `rc.sh` (line ~180) — this is exactly how `--llm-wiki` and, before it,
+  `--hermes-chromium` behaved.
+
 - After `--clean`, confirm a **shared** `$XDG_BIN_HOME` PATH line SURVIVES: it is
   owned by every tool that has a binary there, so `owned_only_by` keeps it and
   removing it would break the others.

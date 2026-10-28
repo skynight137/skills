@@ -42,7 +42,7 @@ main() {
       && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
-      && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM \
+      && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
       && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX; then
       die "No tools selected. Aborting."
     fi
@@ -130,6 +130,7 @@ main() {
   $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
+  $INSTALL_LLM_WIKI && run_install_step llm-wiki        install_llm_wiki
 
   # Fold in wiring registered inside the installers' subshells (spill file), then
   # derive from disk for tools already present but not installed this run.
@@ -190,6 +191,12 @@ SUMMARY
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
+  fi
+
+  # llm-wiki is a server, not a PATH binary: point at the supervisor it installed
+  # instead of pretending it belongs in the "run directly" tool list above.
+  if $INSTALL_LLM_WIKI; then
+    echo "   llm-wiki server: bash ${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}/run-public.sh"
   fi
 
   # Report (and fail on) tools that did not install. Run as the LAST step so

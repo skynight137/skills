@@ -61,6 +61,19 @@ doctor() {
   check_tool "cloudflared" "$XDG_BIN_HOME/cloudflared"
   check_tool "tailscale" "$XDG_BIN_HOME/tailscale" version
   check_tool "sshx" "$XDG_BIN_HOME/sshx"
+  # llm-wiki is a server, not a CLI: there is no --version to probe, so check the
+  # installed bundle instead. Warn-only — the server is opt-in and a box that
+  # does not want a knowledge base must not fail its doctor run over it.
+  local _wiki_dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
+  if [[ -x "$_wiki_dir/run-public.sh" ]]; then
+    if [[ -s "$_wiki_dir/llmwiki.env" ]]; then
+      ok "llm-wiki: server installed ($_wiki_dir)"
+    else
+      warn "llm-wiki: bundle present but $_wiki_dir/llmwiki.env is missing — re-run: bash setup.sh --llm-wiki"
+    fi
+  else
+    warn "llm-wiki: not installed — bash setup.sh --llm-wiki (optional knowledge-base server)"
+  fi
   # Camofox: the npm binary on PATH + engine presence.
   if command -v camofox-browser >/dev/null 2>&1; then
     if [[ -f "$CAMOUFOX_INSTALL_DIR/version.json" ]]; then

@@ -38,6 +38,7 @@ _MENU_ITEMS=(
   "cloudflared|cloudflared (Cloudflare Tunnel client)"
   "tailscale|tailscale (userspace tailnet client)"
   "sshx|sshx (collaborative web terminal)"
+  "llm-wiki|llm-wiki server (knowledge base: MCP/REST + UI lewat noVNC)"
 )
 _MENU_CURSOR=0
 _MENU_TOGGLE=()
@@ -87,6 +88,7 @@ _status_init() {
     "sshx|sshx"
     "cliproxy|cli-proxy-api"
     "camofox|camofox-browser"
+    "llm-wiki|run-public.sh"
   )
   local npm_root; npm_root="$(npm root -g 2>/dev/null || true)"
   _STATUS_LINES=()
@@ -95,7 +97,17 @@ _status_init() {
     path="$XDG_BIN_HOME/$bin"
     [[ -x "$path" ]] || path="$(command -v "$bin" 2>/dev/null || true)"
     ver=""
-    if [[ "$bin" == "camofox-browser" ]]; then
+    if [[ "$bin" == "run-public.sh" ]]; then
+      # llm-wiki ships a server, not a PATH binary: report the bundle and NEVER
+      # exec the supervisor to probe it (that would start the app and the ports).
+      local wiki_dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
+      if [[ -x "$wiki_dir/run-public.sh" ]]; then
+        path="$wiki_dir"
+        ver="llm-wiki server"
+      else
+        path=""
+      fi
+    elif [[ "$bin" == "camofox-browser" ]]; then
       # NEVER exec camofox-browser to probe a version: it has no --version flag
       # and STARTS THE SERVER (binds the port, launches Firefox). Read the
       # shipped package.json instead — fast and side-effect free.
@@ -236,6 +248,7 @@ _menu_apply() {
       ori)      INSTALL_ORI=true ;;
       cliproxy) INSTALL_CLIPROXY=true ;;
       camofox)  INSTALL_CAMOFOX=true ;;
+      llmwiki|llm-wiki) INSTALL_LLM_WIKI=true ;;
       rclone)   INSTALL_RCLONE=true ;;
       qbt)      INSTALL_QBT=true ;;
       aria2)    INSTALL_ARIA2=true ;;

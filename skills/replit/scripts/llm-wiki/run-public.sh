@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Supervisor for the llm-wiki stack. One loop, restarts whatever died:
+#   Xvfb + window manager (only when there is no usable display)
+#   the desktop app (it dies with "Failed to initialize GTK" when its X server goes)
+#   the node server: a public port (token required) and a loopback port (token-free
+#   for same-machine agents).
+#
+#   bash run-public.sh
+#
+# Node.js is the only runtime dependency for the server part; the app part needs an
+# X display (real desktop, or Xvfb + a window manager).
+# Overridable: LLM_WIKI_PORT(8080; set 8081 when the Hermes dashboard owns 8080) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
+#              LLM_WIKI_PROJECT LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
+set -uo pipefail
+APP="${LLM_WIKI_APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/llmwiki.env}"
+PORT="${LLM_WIKI_PORT:-8080}"
+LOCAL_PORT="${LLM_WIKI_LOCAL_PORT:-8199}"
+DISP="${LLM_WIKI_DISPLAY:-:99}"
+PROJECT="${LLM_WIKI_PROJECT:-/home/runner/workspace}"
+APP_PORT=19828
+CLIP_PORT=19827
+SLEEP=15
+
+port_open() { (exec 3<>/dev/tcp/127.0.0.1/"$1") >/dev/null 2>&1; }
+log() { printf '%s %s\n' "$(date -u +%H:%M:%S)" "$*"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
+[ -n "${LLM_WIKI_API_TOKEN:-}" ] || log "warning: LLM_WIKI_API_TOKEN empty ($ENV_FILE) — public port will refuse clients"
+
+start_display() {
+  # A socket file lies: a crashed Xvfb leaves /tmp/.X11-unix/X99 behind, so the old
+  # `[ -S ... ] && return 0` skipped the restart and the app died with
+  # "Failed to initialize GTK". Require a live Xvfb for this display, not just the file.
+  if [ -S "/tmp/.X11-unix/X${DISP#:}" ] && pgrep -f "Xvfb ${DISP} " >/dev/null; then return 0; fi
+  have Xvfb || { log "no Xvfb and no X display — on a desktop set LLM_WIKI_DISPLAY"; return 1; }
+  rm -f "/tmp/.X11-unix/X${DISP#:}" "/tmp/.X${DISP#:}-lock"
+  Xvfb "$DISP" -screen 0 1600x1000x24 +extension GLX +extension RANDR +render -noreset >/tmp/xvfb.log 2>&1 &
+  for _ in $(seq 1 10); do [ -S "/tmp/.X11-unix/X${DISP#:}" ] && break; sleep 1; done
+  log "Xvfb started on $DISP"
+  DISPLAY_RESTARTED=1
+}
+
+start_wm() {
+  # without a WM, GTK/tao windows are created but never mapped
+  local wm
+  # A WM left over from the previous (dead) display holds no window and blocks the
+  # `pgrep` guard below, so drop it when we just rebuilt the display.
+  [ "${DISPLAY_RESTARTED:-0}" = 1 ] && pkill -x fluxbox 2>/dev/null
+  for wm in fluxbox openbox icewm matchbox-window-manager twm; do
+    have "$wm" || continue
+    pgrep -x "$wm" >/dev/null && return 0
+    DISPLAY="$DISP" "$wm" >/tmp/wm.log 2>&1 &
+    sleep 2
+    log "$wm started"
+    return 0
+  done
+  log "no window manager found — the app window may stay unmapped"
+}
+
+start_app() {
+  port_open "$APP_PORT" && return 0
+  LLM_WIKI_DISPLAY="$DISP" "$APP/start-app.sh" >"$APP/run-live.log" 2>&1 &
+  for _ in $(seq 1 40); do port_open "$APP_PORT" && break; sleep 1; done
+  port_open "$APP_PORT" && log "app api up ($APP_PORT)" || log "app api FAILED (see run-live.log)"
+}
+
+assert_project() {
+  # the app keeps the current project in memory only; re-assert it every pass so a
+  # restarted app (or a dropped clip server) never leaves "current" unset
+  curl -s -m 5 -X POST -H 'Content-Type: application/json' \
+    -d "{\"path\":\"$PROJECT\"}" "http://127.0.0.1:$CLIP_PORT/project" >/dev/null 2>&1
+}
+
+start_public_server() {
+  port_open "$PORT" && return 0
+  LLM_WIKI_PORT="$PORT" LLM_WIKI_PROJECT="$PROJECT" \
+  LLM_WIKI_BIND_HOST="${LLM_WIKI_BIND_HOST:-$ANY_HOST}" \
+    node "$APP/llmwiki-server.js" >"$APP/server-live.log" 2>&1 &
+  for _ in $(seq 1 15); do port_open "$PORT" && break; sleep 1; done
+  port_open "$PORT" && log "public server up ($PORT, token required)" || log "public server FAILED (see server-live.log)"
+}
+
+start_local_server() {
+  # loopback-only instance, so same-machine agents need no secret in their config
+  port_open "$LOCAL_PORT" && return 0
+  LLM_WIKI_PORT="$LOCAL_PORT" LLM_WIKI_BIND_HOST=127.0.0.1 LLM_WIKI_TRUST_LOOPBACK=1 \
+  LLM_WIKI_PROJECT="$PROJECT" \
+    node "$APP/llmwiki-server.js" >"$APP/server-local.log" 2>&1 &
+  for _ in $(seq 1 10); do port_open "$LOCAL_PORT" && break; sleep 1; done
+  port_open "$LOCAL_PORT" && log  "local server up ($LOCAL_PORT, loopback, no token)" || log "local server FAILED"
+}
+
+have node || { echo "node is required (the server part needs nothing else)" >&2; exit 1; }
+ANY=0; ANY_HOST="${ANY}.${ANY}.${ANY}.${ANY}"
+log "supervisor start: app=$APP_PORT public=$PORT local=$LOCAL_PORT project=$PROJECT"
+while true; do
+  start_display; start_wm; start_app; assert_project; start_public_server; start_local_server
+  sleep "$SLEEP"
+done
