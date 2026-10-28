@@ -72,9 +72,27 @@ gotchas), `references/web-content-lanes.md` (coarse lane picker).
   Missing libs (from `ldd`): `libnspr4.so libnss3.so libnssutil3.so
   libsmime3.so libxkbcommon.so.0 libgbm.so.1`. The resolver picks the **64-bit**
   store copy automatically — this box also has 32-bit copies and a hand-picked
-  one gives `wrong ELF class: ELFCLASS32`. Hermes itself wires the full closure
-  via `sandbox_host.py`, so `agent-browser`/`browser_exec` usually get this for
-  free; `setup.sh --hermes-browser` makes a bare invocation work too.
+  one gives `wrong ELF class: ELFCLASS32`.
+- **⚠ The 6-lib profile is not the whole story.** `resolve-libs.sh … chromium`
+  resolves only those six, but Chrome also links the GTK/glib stack
+  (`libglib-2.0.so.0`, `libgio`, `libgobject`, `libcairo`, `libpango`, `libatk*`,
+  `libdbus-1`, `libudev`, `libcups`, `libexpat`, `libXcomposite/Xext/Xfixes/Xrandr`).
+  Without them the binary dies at **exit code 127** —
+  `error while loading shared libraries: libglib-2.0.so.0` — and `browser_exec`
+  reports only "Chrome exited early (exit code: 127) without writing
+  DevToolsActivePort". `install_hermes_chromium` now runs
+  `hermes_chrome_closure_fallback`, which appends every still-missing soname's
+  store dir (measured on this box: 20 → 100 lib dirs). If you are on an older
+  copy, run `bash scripts/setup.sh --fix` (it calls the installer) and re-check
+  `LD_LIBRARY_PATH="$(cat ~/.config/hermes-chromium/closure.txt)" ldd <chrome> | grep "not found"`.
+- **Hermes' own browser needs the shim, not just the closure.** `browser_exec`
+  launches `$AGENT_BROWSER_EXECUTABLE_PATH` (or PM's chromium) directly —
+  `hermes_cli/browser_runtime.py`. Point that variable at
+  `$XDG_BIN_HOME/launch-hermes-chrome`, which sources the closure first; the
+  installer registers it, and for a process that started before the fix, add
+  `AGENT_BROWSER_EXECUTABLE_PATH=/home/runner/workspace/.local/bin/launch-hermes-chrome`
+  to the profile `.env` and restart the agent. Verified: `launch-hermes-chrome
+  --version` → `Google Chrome for Testing 145.0.7632.6`.
 - **Display/GPU:** none needed.
 - **Anti-bot:** same as lane 1 — stock Chrome for Testing, `HeadlessChrome`
   token + `navigator.webdriver=true` under CDP. **Not stealthy.**
