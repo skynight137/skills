@@ -91,6 +91,14 @@ workflow entry (a reboot would just bring it back).
   reported (skill dir moved) instead of being silently accepted. The `--wf` check runs only
   after the path check, or a dead path hides behind the "already wired" branch. The skill dir is persistent, which is why the command
   points at `setup.sh` instead of a copied script — no duplicate to drift.
+- **Renaming the node is safe, but only if the skill does not re-assert the OS hostname.**
+  `tailscale up --hostname=$(hostname)` on every start silently undoes a rename made in the
+  admin console, so `--hostname` is now sent only on the first join (authkey path) or when
+  `E2E_TS_HOST` is set. The `100.x` address is keyed to the node identity, not its name, so
+  `~/.ssh/config` entries written against the IP survive a rename untouched. Change the name
+  with `tailscale set --hostname=<name>` or the console; `up` refuses to change one pref
+  without every non-default being restated (`--ssh`, `--exit-node-allow-lan-access`), which
+  is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
   SOCKS path your `ssh` runs over, so a restart issued inline dies with the command still in
   flight. Write the restart to a file on B and launch it detached
@@ -179,9 +187,11 @@ workflow entry (a reboot would just bring it back).
   prepare that only wanted to print a note exits 1 and the runner reports the step as
   failed. Wrap it: `if _e2e_cmd_external; then ok "…"; fi`.
 - **Prove "nothing was launched" with the listener, not `pgrep -f` counts.** The probe
-  shell's own command line contains the pattern, so pgrep sees a fresh PID on every run
-  and a prepare-only run looks like it started something: compare the banner
-  (`SSH-2.0-…` on the port) or `pgrep -af` output before/after instead.
+  shell's own command line contains the pattern, so pgrep reports a fresh PID on every
+  run and a prepare-only run looks like it started something. Compare the banner
+  (`SSH-2.0-…` on the port) before/after, or anchor the pattern so the wrapping shell
+  cannot match: `pgrep -af '^[^ ]*(sshd|tailscaled) '` (the wrapper's cmdline starts
+  with the bash path, so `^[^ ]*sshd` never matches it — `^[^ ]*tailscaled` likewise).
 
 ## Delivery rule (operator preference)
 
@@ -208,3 +218,21 @@ repo is already public.
   isolated `AuthorizedKeysFile`) is what it honours.
 - Outbound-only boxes can never be reached by dialling in; when no port is
   published the fallback is a reverse tunnel or the sshx canvas.
+- **A listed peer is not a reachable machine.** Three things are required, in order:
+  the peer is online in `tailscale status`, sshd was prepared *on that box*
+  (`setup.sh --e2e --start`), and a hop key sits in its `authorized_keys` — which the
+  prep does for you (the `hermes-e2e-hop` key is authorized by default; extend with
+  `E2E_AUTHORIZED_KEYS`). Onboarding a machine is therefore: join it with the auth key,
+  run the prep there, then add a `Host` block here. Answer "can we reach every
+  machine?" as "every machine that has done this", never as "any host on the tailnet".
+- **Probe through the local SOCKS relay, never by hostname.** The tailnet userspace
+  relay listens on `localhost:1055`; `nc -X 5 -x 127.0.0.1:1055 -z <ip> <port>` is the
+  reachability test, and `scripts/probe-tailnet-peers.sh [port]` walks every real peer.
+  `General SOCKS server failure` means the peer is offline or the port is closed — read
+  the `offline` marker in `tailscale status` before editing the ssh config.
+- **A re-registering node changes its `100.x` address**, so a saved `HostName` rots
+  silently and `ssh` fails with `Connection closed by UNKNOWN port 65535` while the
+  config still looks right. Rewrite `HostName` from live `tailscale status` output, and
+  when the relay port changes, fix every `ProxyCommand` with it.
+- `funnel-ingress-node` entries in `tailscale status` are Tailscale's own IPv6-only
+  relay infra, not operator machines — never count them as targets.

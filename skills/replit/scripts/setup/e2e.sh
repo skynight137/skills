@@ -243,11 +243,21 @@ EOF
   fi
   [ -S "$sock" ] || { warn "tailscaled tidak siap (log: $TAILSCALE_DATA_DIR/tailscaled.log)"; return 1; }
 
+  # --hostname is asserted only where it must be: the first join, or when the operator
+  # pins E2E_TS_HOST. A later start that kept re-sending $(hostname) would undo any
+  # rename made on the admin console, so it stays quiet and lets the console win.
+  local hn=()
   if [ -n "${TAILSCALE_AUTH_KEY:-}" ]; then
-    "$tsc" --socket="$sock" up --authkey="$TAILSCALE_AUTH_KEY" --hostname="${E2E_TS_HOST:-$(hostname)}" --accept-routes=false 2>&1 | tail -2
+    hn=(--hostname="${E2E_TS_HOST:-$(hostname)}")
+    "$tsc" --socket="$sock" up --authkey="$TAILSCALE_AUTH_KEY" "${hn[@]}" --accept-routes=false 2>&1 | tail -2
   else
-    "$tsc" --socket="$sock" up --hostname="${E2E_TS_HOST:-$(hostname)}" --accept-routes=false 2>&1 | tail -2 || \
-      warn "login tailnet perlu auth key: TAILSCALE_AUTH_KEY=tskey-... setup.sh --e2e"
+    # Normal boots already carry an identity, and `up` refuses to change one pref
+    # without every non-default being restated; `set` takes them one at a time.
+    # It still fails on a box that was never logged in, so keep `up` as the fallback.
+    [ -n "${E2E_TS_HOST:-}" ] && hn=(--hostname="$E2E_TS_HOST")
+    "$tsc" --socket="$sock" set --accept-routes=false "${hn[@]}" 2>&1 | tail -2 \
+      || "$tsc" --socket="$sock" up --accept-routes=false 2>&1 | tail -2 \
+      || warn "login tailnet perlu auth key: TAILSCALE_AUTH_KEY=tskey-... setup.sh --e2e"
   fi
   local ip
   ip="$("$tsc" --socket="$sock" ip -4 2>/dev/null | head -1)"
