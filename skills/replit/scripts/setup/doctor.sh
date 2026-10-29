@@ -59,7 +59,15 @@ doctor() {
   # Remote access (see references/exposing-ports.md). All three are optional
   # extras; tailscale takes a SUBCOMMAND ('version'), not a flag.
   check_tool "cloudflared" "$XDG_BIN_HOME/cloudflared"
+  # The gate is the EXPORT line, not a marker: tailscale's state dir and socket
+  # are consumed by other scripts, so a missing export breaks them silently.
   check_tool "tailscale" "$XDG_BIN_HOME/tailscale" version
+  # Gate the wiring on the EXPORT line itself: check_tool returns 0 even on a
+  # failure, and these paths are consumed by other scripts, so a lost export
+  # breaks them silently.
+  if [[ -x "$XDG_BIN_HOME/tailscale" ]] && ! grep -q '^export TAILSCALE_SOCKET=' "$BASHRC" 2>/dev/null; then
+    warn "tailscale: TAILSCALE_SOCKET/TAILSCALE_DATA_DIR export missing from the rc block — run 'bash setup.sh --fix'"
+  fi
   check_tool "sshx" "$XDG_BIN_HOME/sshx"
   # llm-wiki is a server, not a CLI: there is no --version to probe, so check the
   # installed bundle instead. Warn-only — the server is opt-in and a box that

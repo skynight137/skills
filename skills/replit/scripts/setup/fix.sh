@@ -99,8 +99,14 @@ fix_derive_wiring() {
     [[ -x "$XDG_BIN_HOME/$b" ]] && record_tool_path_dirs "$XDG_BIN_HOME"
   done
   # tailscale is the one of these with a generated companion: refresh its
-  # launcher too, so a .replit workflow target is never a stale copy.
-  [[ -x "$XDG_BIN_HOME/tailscaled" ]] && tailscale_write_launcher
+  # launcher too, so a .replit workflow target is never a stale copy. Its path
+  # and node-name exports are re-registered here because a --fix run never calls
+  # the installer, and a lost export would strand the socket path in the rc block.
+  if [[ -x "$XDG_BIN_HOME/tailscaled" ]]; then
+    record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME
+    wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME -- "$XDG_BIN_HOME"
+    tailscale_write_launcher
+  fi
   return 0
 }
 

@@ -101,9 +101,9 @@ tailscale_write_launcher() {
 #   published; Cloudflare Tunnel is this box's public path, so Funnel is opt-in.
 set -uo pipefail
 
-BASE="$TAILSCALE_DATA_DIR"
-STATE="\$BASE/state"
-SOCK="\$STATE/tailscaled.sock"
+BASE="\${TAILSCALE_DATA_DIR:-$TAILSCALE_DATA_DIR}"
+STATE="\${TAILSCALE_STATE_DIR:-$TAILSCALE_STATE_DIR}"
+SOCK="\${TAILSCALE_SOCKET:-$TAILSCALE_SOCKET}"
 BIN="$XDG_BIN_HOME"
 TSD="\$BIN/tailscaled"
 TS="\$BIN/tailscale"
@@ -149,7 +149,7 @@ install_tailscale() {
   step "tailscale (userspace tailnet client)"
   need_cmd curl
   need_cmd tar
-  mkdir -p "$XDG_BIN_HOME" "$TAILSCALE_DATA_DIR/state"
+  mkdir -p "$XDG_BIN_HOME" "$TAILSCALE_STATE_DIR"
 
   # awk reads to EOF deliberately: `grep -m1` would close the pipe early and
   # pipefail would then turn curl's SIGPIPE (23) into a hard failure.
@@ -215,7 +215,11 @@ install_tailscale() {
   ok "  start it with: $XDG_BIN_HOME/launch-tailscaled [funnel-port]"
   ok "  (userspace networking + --statedir; state in $TAILSCALE_DATA_DIR — see references/exposing-ports.md)"
   record_tool_path_dirs "$XDG_BIN_HOME"
-  wire_tool tailscale -- "$XDG_BIN_HOME"
+  # Paths AND the node name travel with the tool: every script reads them from the
+  # environment instead of re-spelling the socket dir, and the rc block carries them
+  # across shells so a run never has to be prefixed by hand.
+  record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME
+  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME -- "$XDG_BIN_HOME"
   tailscale_write_launcher
 }
 
