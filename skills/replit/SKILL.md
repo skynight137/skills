@@ -38,7 +38,7 @@ other lane assumes its persistence rules.
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js` |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (sshd key-only + tailnet, persistent `~/.ssh`, own `.replit` workflow); `--wf` = same in workflow mode (streams logs, holds the job open) |
+| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (sshd key-only + tailnet, persistent `~/.ssh`, prints a `.replit` workflow block to paste); `--wf` = same in workflow mode (streams logs, holds the job open) |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,

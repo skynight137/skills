@@ -66,7 +66,10 @@ _e2e_persist_ssh() {
   ln -s "$target" "$home/.ssh" && ok "~/.ssh -> $target (persisten, tak hilang saat restart)"
 }
 
-# .replit workflow, idempotent: the daemon must start once per boot, not per shell.
+# .replit workflow: REPORT ONLY, never written. A boot start belongs in .replit,
+# but the file belongs to the operator: their workflow names, their tasks, their
+# ordering. Appending a block steals a name (a second `name = "e2e"` collides
+# with one they already use) and rewrites a file we do not own.
 _e2e_workflow() {
   local rp="${REPL_HOME:-$HOME/workspace}/.replit"
   [ -f "$rp" ] || { warn ".replit tidak ada — workflow autostart dilewati"; return 0; }
@@ -79,20 +82,27 @@ _e2e_workflow() {
       && { ok "workflow e2e di-upgrade ke --wf (entri lama tanpa --wf)"; return 0; } \
       || warn "entri workflow e2e ada tapi gagal ditambahi --wf — cek $rp baris 'args'"
   fi
-  grep -q 'setup.sh --e2e' "$rp" && { ok "workflow e2e sudah terdaftar"; return 0; }
-  grep -q '^\[workflows\]' "$rp" || printf '\n[workflows]\n' >>"$rp"
-  cat >>"$rp" <<EOF
+  # Already wired by the operator (any name, any wording): nothing to say.
+  grep -qE 'setup\.sh --e2e' "$rp" && { skip "workflow e2e sudah ada di $rp — tidak diubah"; return 0; }
 
-[[workflows.workflow]]
-name = "e2e"
-author = "$(id -un)"
-mode = "sequential"
+  # Suggest a name that cannot collide with their existing workflows.
+  local name="e2e-wf"
+  local n=1
+  while grep -qxE "name = \"$name\"" "$rp"; do name="e2e-wf$((n++))"; done
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e --wf"
-EOF
-  ok "workflow e2e ditambahkan ke .replit (sekali per boot, bukan rc)"
+  echo "  boot start: TIDAK ditulis otomatis — tempel sendiri di $rp (nama bebas):"
+  echo
+  echo '    [[workflows.workflow]]'
+  echo "    name = \"$name\""
+  echo "    author = \"$(id -un)\""
+  echo '    mode = "sequential"'
+  echo
+  echo '    [[workflows.workflow.tasks]]'
+  echo '    task = "shell.exec"'
+  echo "    args = \"bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e --wf\""
+  echo
+  ok "--wf membuat task tidak selesai (tail -F), jadi workflow tetap hidup; tanpa itu job di-reap"
+  ok "  sudah punya workflow sendiri? cukup pakai args di atas di task yang lu punya"
 }
 
 install_e2e() {
