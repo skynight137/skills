@@ -11,8 +11,11 @@
 #   * an autostart line in a shell rc re-fires every time a terminal opens. The
 #     daemon is therefore published as a `.replit` [workflows] entry, which runs
 #     once per boot and is start/stop-able from the UI.
+# --e2e PREPARES only (config, host key, authorized_keys, dirs, binaries). Nothing is
+# launched: a preparing run stays quiet and exits. --start is what launches sshd and
+# tailscaled, so the daemon side is opt-in and never a surprise.
 # The tailnet auth key is NEVER baked in: export TAILSCALE_AUTH_KEY for the first
-# run, afterwards the stored node identity carries the login on its own.
+# start, afterwards the stored node identity carries the login on its own.
 # ─────────────────────────────────────────────────────────────────────────────
 
 : "${E2E_PORT:=6800}"
@@ -20,6 +23,17 @@ E2E_DIR="${E2E_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/e2e-sshd}"
 E2E_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")/../.." 2>/dev/null && pwd)"
 
 _e2e_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }
+
+# The command a user pastes/runs. Relative to the workspace whenever the skill lives
+# inside it: workflows run with the workspace as cwd, so moving or renaming the skill
+# dir cannot leave a dead absolute path behind. Only an outside copy needs the absolute
+# one, and then the caller says so.
+_e2e_cmd() {
+  local base="${REPL_HOME:-$HOME/workspace}" cmd="$E2E_SKILL_ROOT/scripts/setup.sh"
+  [[ "$cmd" == "$base"/* ]] && cmd="${cmd#"$base"/}"
+  printf '%s\n' "$cmd"
+}
+_e2e_cmd_external() { [[ "$(_e2e_cmd)" == /* ]]; }
 
 # sshd/ssh live in different PATH entries per shell; probe absolute candidates.
 _e2e_find() {
@@ -85,13 +99,26 @@ _e2e_workflow() {
     if [[ -n "$wired" && ! -f "$wired" && ! -f "$base/$wired" ]]; then
       warn "entri workflow menunjuk '$wired' yang tak ada (skill dipindah?) — perbarui barisnya"
     else
-      grep -qE 'setup\.sh --e2e --wf' "$rp" && { ok "workflow e2e sudah terdaftar (--wf)"; return 0; }
-      if grep -qE '^args = ".*setup\.sh --e2e"$' "$rp"; then
-        sed -i -E 's|^(args = ".*setup\.sh --e2e)"$|\1 --wf"|' "$rp"
-        grep -qE 'setup\.sh --e2e --wf' "$rp" \
-          && { ok "workflow e2e di-upgrade ke --wf (entri lama tanpa --wf)"; return 0; } \
-          || warn "entri workflow e2e ada tapi gagal ditambahi --wf — cek $rp baris 'args'"
+      local changed=""
+      # An old entry predates --start (and maybe --wf): a workflow MUST start, so both
+      # are appended where missing. Verified afterwards — sed on a file we do not own
+      # gets no trust from us.
+      if ! grep -qE 'setup\.sh --e2e --start' "$rp"; then
+        # Insert right after --e2e, so an entry that already carries --wf keeps it.
+        sed -i -E 's#(setup\.sh --e2e)( |")#\1 --start\2#' "$rp"
+        changed=" --start"
       fi
+      if ! grep -qE 'setup\.sh --e2e( --start)? --wf' "$rp"; then
+        sed -i -E 's#^(args = ".*setup\.sh --e2e( --start)?)"$#\1 --wf"#' "$rp"
+        changed="$changed --wf"
+      fi
+      if [ -n "${changed# }" ]; then
+        grep -qE 'setup\.sh --e2e --start --wf' "$rp" \
+          && { ok "workflow e2e di-upgrade ke$changed (entri lama)"; return 0; } \
+          || warn "entri workflow e2e ada tapi gagal ditambahi$changed — cek $rp baris 'args'"
+        return 0
+      fi
+      grep -qE 'setup\.sh --e2e --start --wf' "$rp" && { ok "workflow e2e sudah terdaftar (--start --wf)"; return 0; }
       skip "workflow e2e sudah ada di $rp — tidak diubah"
       return 0
     fi
@@ -102,13 +129,12 @@ _e2e_workflow() {
   # Relative to the workspace when the skill lives inside it: workflows run with
   # the workspace as cwd, so the command survives the user moving or renaming the
   # skill dir. Only an out-of-workspace copy needs the absolute path.
-  local cmd="$E2E_SKILL_ROOT/scripts/setup.sh"
-  [[ "$cmd" == "$base"/* ]] && cmd="${cmd#"$base"/}"
   echo
   ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
-  echo "    bash $cmd --e2e --wf"
-  ok "  nama workflow & urutannya bebas; --wf menahan task (tail -F) supaya job tidak di-reap"
-  [[ "$cmd" == /* ]] && ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"
+  echo "    bash $(_e2e_cmd) --e2e --start --wf"
+  ok "  nama workflow & urutannya bebas; --start yang menyalakan daemon, --wf menahan task (tail -F) supaya job tidak di-reap"
+  # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
+  if _e2e_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi
 }
 
 install_e2e() {
@@ -168,6 +194,30 @@ LogLevel VERBOSE
 EOF
   "$sshd" -t -f "$E2E_DIR/sshd_config" || { warn "config sshd tidak valid"; return 1; }
 
+  # tailnet binaries: needed to prepare the identity dirs even without --start
+  local bin="$XDG_BIN_HOME" td="$XDG_BIN_HOME/tailscaled" tsc="$XDG_BIN_HOME/tailscale"
+  if [ ! -x "$td" ] || [ ! -x "$tsc" ]; then
+    warn "tailscale belum terpasang — dipasang sekarang (butuh --tailscale sekali saja)"
+    install_tailscale || { warn "tailscale gagal dipasang"; return 1; }
+  fi
+  local state="$TAILSCALE_DATA_DIR/state" sock="$TAILSCALE_DATA_DIR/state/tailscaled.sock"
+  mkdir -p "$state"
+  record_tool_path_dirs "$bin"
+  wire_tool tailscale -- "$bin"
+
+  # ── prepare stops here ──────────────────────────────────────────────────────
+  if ! $START; then
+    echo
+    ok "siap: config sshd, host key, authorized_keys, dir state, biner tailscale"
+    skip "tidak ada proses dinyalakan — itu tugas --start"
+    echo "    bash $(_e2e_cmd) --e2e --start"
+    # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
+    if _e2e_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi
+    _e2e_workflow
+    return 0
+  fi
+
+  # ── start ───────────────────────────────────────────────────────────────────
   if _e2e_banner 127.0.0.1 "$E2E_PORT" | grep -q '^SSH-2.0-'; then
     ok "sshd sudah hidup di $E2E_PORT (tidak dibunuh, sesi berjalan aman)"
   else
@@ -183,23 +233,6 @@ EOF
 
   _e2e_workflow
 
-  # tailnet: binaries and node identity both live in persistent dirs
-  local bin="$XDG_BIN_HOME" td="$XDG_BIN_HOME/tailscaled" tsc="$XDG_BIN_HOME/tailscale"
-  if [ ! -x "$td" ] || [ ! -x "$tsc" ]; then
-    # e2e is useless without the tailnet hop, and --e2e is what a workflow runs
-    # on boot — install it here instead of failing with a "run --tailscale" hint.
-    # install_tailscale skips its own download when the channel version is
-    # already on disk, so this costs one small JSON request on re-runs.
-    warn "tailscale belum terpasang — dipasang sekarang (butuh --tailscale sekali saja)"
-    install_tailscale || { warn "tailscale gagal dipasang"; return 1; }
-  fi
-  local state="$TAILSCALE_DATA_DIR/state" sock="$TAILSCALE_DATA_DIR/state/tailscaled.sock"
-  mkdir -p "$state"
-  # Re-assert PATH wiring: this flag is the one a .replit workflow runs on boot,
-  # and a fresh box may never have seen --tailscale, which is what normally
-  # registers the dir.
-  record_tool_path_dirs "$bin"
-  wire_tool tailscale -- "$bin"
   if ! pgrep -f '^[^ ]*tailscaled --tun=userspace' >/dev/null 2>&1; then
     setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
       --outbound-http-proxy-listen=localhost:1055 \

@@ -38,7 +38,7 @@ other lane assumes its persistence rules.
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js` |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (sshd key-only + tailnet, persistent `~/.ssh`, prints a `.replit` workflow block to paste); `--wf` = same in workflow mode (streams logs, holds the job open) |
+| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (prepares only: sshd key-only config + tailnet identity, persistent `~/.ssh`, prints one workspace-relative workflow task line); `--start` launches the daemons, `--wf` = `--e2e --start` in workflow mode (streams logs, holds the job open) |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -68,7 +68,14 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    go in a `.replit` `[workflows]` entry, which runs once per boot — added in the
    Replit UI by the operator from one printed command, not written into
    `.replit` by the installer: names and ordering stay theirs. rc carries
-   PATH/env only. See `references/shell-rc-and-zsh.md`. Corollary for code: a
+   PATH/env only. See `references/shell-rc-and-zsh.md`.
+   **The installer's whole notice is that one command line, with the path made
+   relative to the workspace** (workflows run with the workspace as cwd, so a
+   moved/renamed skill dir cannot leave a dead absolute path). When an entry
+   already exists, verify the path it names BEFORE checking for its extra flags —
+   otherwise a dead path hides behind the "already wired" branch — and grep only
+   the line that carries the app's own flag, since other workflows point at the
+   same script. Corollary for code: a
    workflow's `args` must point at a **persistent and workspace-relative** path
    (the skill dir under
    `$REPL_HOME`), never at a script copied into `$HOME`, and it must be
@@ -216,7 +223,7 @@ on disk before moving on:
 
 - **Credentials are read from the environment, never baked into a script.** The
   user treats a token quoted into chat or hardcoded in an installer as leaked
-  (they rotate/revoke it right after). Take `TAILSCALE_AUTH_KEY=… setup.sh --e2e`
+  (they rotate/revoke it right after). Take `TAILSCALE_AUTH_KEY=… setup.sh --e2e --start`
   style input, and make everything after the first run work off the stored state
   so no second secret is needed. Printing a usage line with a placeholder
   (`tskey-auth-...`) is correct; printing the value is not.
