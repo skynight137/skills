@@ -74,17 +74,19 @@ workflow entry (a reboot would just bring it back).
   [workflows]
 
   [[workflows.workflow]]
-  name = "e2e"
+  name = "e2e-wf"   # bebas, pakai yang belum dipakai
   author = "runner"
   mode = "sequential"
 
   [[workflows.workflow.tasks]]
   task = "shell.exec"
-  args = "bash /home/runner/workspace/skills/replit/scripts/setup.sh --e2e"
+  args = "bash /home/runner/workspace/skills/replit/scripts/setup.sh --e2e --wf"
   ```
 
-  `install_e2e` writes that entry itself (grepped, so it is added once). The skill dir
-  is persistent too, which is why the workflow points at `setup.sh` instead of a copied
+  `install_e2e` PRINTS that block and leaves `.replit` alone: the file is the operator's,
+  and a second `name` collides with a workflow they already have. Nama, urutan, dan task
+  milik mereka; yang sudah menunjuk `setup.sh --e2e` dianggap beres. The skill dir is
+  persistent too, which is why the workflow points at `setup.sh` instead of a copied
   script — no duplicate to drift.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
   SOCKS path your `ssh` runs over, so a restart issued inline dies with the command still in
