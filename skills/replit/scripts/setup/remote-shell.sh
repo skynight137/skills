@@ -242,7 +242,10 @@ EOF
 
   __rs_workflow
 
-  if ! pgrep -f '^[^ ]*tailscaled --tun=userspace' >/dev/null 2>&1; then
+  # Liveness is the socket answering, not a pid guess: a SECOND daemon on another
+  # socket (a test node, a second tailnet) matches the pattern and would otherwise
+  # suppress the start and leave this socket dead.
+  if ! "$tsc" --socket="$sock" status >/dev/null 2>&1; then
     setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
       --outbound-http-proxy-listen=localhost:1055 \
       --state="$state/tailscaled.state" --statedir="$state" --socket="$sock" \

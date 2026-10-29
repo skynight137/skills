@@ -115,11 +115,10 @@ for b in "\$TSD" "\$TS"; do
 done
 
 mkdir -p "\$STATE"
-# Anchored on the cmdline START so only the daemon matches: an unanchored
-# `pgrep -f "tailscaled --tun=userspace"` also matches any shell whose command
-# TEXT contains that string (a workflow that greps for it, a test harness), which
-# silently skips the start and leaves the socket dead.
-if ! pgrep -f "^[^ ]*tailscaled --tun=userspace" >/dev/null 2>&1; then
+# Liveness is OUR socket answering, not a pid pattern: a second daemon on another
+# socket (test node, second tailnet) matches any reasonable pattern and would
+# silently suppress the start, leaving this socket dead.
+if ! "\$TS" --socket="\$SOCK" status >/dev/null 2>&1; then
   echo "starting tailscaled (userspace networking)"
   nohup "\$TSD" \\
     --tun=userspace-networking \\

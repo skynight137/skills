@@ -28,6 +28,38 @@ The auth key is read from the **environment only** (never baked into the script,
 rotating/revoking it needs no edit). On later boots the stored node identity is
 enough and the key may be omitted; the `.replit` workflow runs the same command.
 
+### Machines missing from the admin console
+
+- **Wrong tailnet outranks every other cause when a fresh join shows nothing in the console you are watching.** An auth key minted in another account joins an EMPTY tailnet: the node reports `Running`, gets a fresh 100.x address, and has `peers: 0`, while every machine you expected is absent. Compare `MagicDNSSuffix` from `tailscale --socket=<sock> status --json` on the joining box with the one on the box you watch from — a different `tailXXXXXX.ts.net` proves an account mismatch, not a broken key. A correct join sees neighbours within seconds, so `peers: 0` is the tell. Only a key from the account that owns the machines fixes it; rejoining never does.
+
+### Try a join without disturbing the live node
+
+Second daemon, own state dir, own socket, a different SOCKS port — the live node keeps its identity and nothing must be re-added afterwards:
+
+```bash
+D=$WORKSPACE/.local/share/tsjoin; mkdir -p "$D/state"
+$WORKSPACE/.local/bin/tailscaled --tun=userspace-networking \
+  --socks5-server=localhost:1056 --outbound-http-proxy-listen=localhost:1056 \
+  --state="$D/state/tailscaled.state" --statedir="$D/state" --socket="$D/state/tailscaled.sock" &
+$WORKSPACE/.local/bin/tailscale --socket="$D/state/tailscaled.sock" up \
+  --authkey="$TAILSCALE_AUTH_KEY" --hostname=<probe> --accept-routes=false
+```
+
+Read `Self.HostName`, `Self.Online`, `BackendState`, `AuthURL` and the peer count back from that same socket; tear down with `down` then `rm -rf "$D"`. Two daemons cannot share the default SOCKS port, hence 1056.
+
+Replit Secrets reach app processes only, never a shell started later: to exercise a key already configured, lift it out of a running process — `tr '\0' '\n' < /proc/<pid>/environ | sed -n 's/^NAME=//p'`, looping the pids and skipping `/proc/1` (permission denied) — rather than asking the operator to retype a secret.
+
+- Revoking an auth key closes the *join* path only. A node that is already joined has its
+  own node key and stays authorized (and listed) until that key expires or is removed —
+  so a vanished machine has another cause and revoking again fixes nothing.
+- Check, in this order: the node is ephemeral (removed seconds after its daemon stops);
+  the box rejoined on an existing tailscaled state, so `up` short-circuits and no new
+  machine entry is created; the key is tagged and no tag owner auto-approves, which leaves
+  the node sitting unauthorized; the box is logged into a different tailnet.
+- A clean new machine entry means stopping the daemon on the box, deleting the state
+  (`$TAILSCALE_DATA_DIR`), then `--start` with a key. That regenerates the NODE identity
+  only — the sshd host key lives in the remote-shell dir and `known_hosts` stays valid.
+
 ### Auth key lifecycle: reusable + ephemeral together
 
 - **Reusable** is what makes one key serve many boxes: it stays valid until it expires
@@ -42,6 +74,20 @@ enough and the key may be omitted; the `.replit` workflow runs the same command.
 - Ephemeral is the wrong choice only where the box must keep a stable identity across
   restarts (the machine you remote FROM, or one with DNS/MagicDNS entries pinned):
   there, join with a non-ephemeral key and let the state dir carry the identity.
+
+### Moving a box to another tailnet
+
+The auth key decides which tailnet a join lands in, and a box already joined keeps its
+old identity no matter what key you hand it. To move: stop the daemon, wipe the state
+dir (`$TAILSCALE_STATE_DIR`, host key included), then `--start` with a key from the
+target tailnet. The node reappears as a new machine there and disappears from the old
+one only after you delete it in that console. `tailscale status` prints the tailnet
+suffix (`.MagicDNSSuffix` in `--json`): if two boxes show different suffixes they are
+not in the same tailnet and will never ping each other, whatever the dashboard says.
+
+Daemon liveness is decided by the socket answering, never by a pid pattern: a second
+daemon on another socket (a test node, a second tailnet) matches any pattern and would
+otherwise suppress the start, leaving the real socket dead.
 
 ### Paths come from the rc var registry, the node name does not
 
