@@ -12,8 +12,10 @@ state under `$XDG_DATA_HOME/tailscale`, so the machine stays on the tailnet.
 
 ## Declared ports only, and the port stays in the URL
 
-Replit's dev domain proxies ONLY the ports listed in `.replit` `[[ports]]` (each
-needs matching `localPort`/`externalPort`), and the URL always carries the port:
+Replit's dev domain proxies ONLY the ports in its own port registry, which
+`.replit` `[[ports]]` mirrors (each entry needs matching
+`localPort`/`externalPort`) — mirror is the word: see "The platform owns the port
+registry" below before trusting a hand-written entry. The URL always carries the port:
 `https://$REPLIT_DEV_DOMAIN:<port>/`. A service on an undeclared port is
 reachable on `127.0.0.1` inside the sandbox and nowhere else.
 
@@ -38,6 +40,49 @@ curl -skS -o /dev/null -w '%{http_code}\n' "https://$REPLIT_DEV_DOMAIN:<port>/" 
   uses that same number.
 - Check a port is actually free before assigning it:
   `awk 'NR>1 && $4=="0A" {split($2,a,":"); print strtonum("0x" a[2])}' /proc/net/tcp /proc/net/tcp6`
+- **A response that is not yours means the port was already taken.** The older
+  process keeps the socket, your listener's bind fails, and every request from
+  outside is answered by the wrong app — while your own log still shows the
+  `listening on …` line from an earlier successful start, which reads as "the
+  service is up but misbehaving". The tell is a body your service cannot produce
+  (a `302` to `/login`, a cookie/session error) where you expected `/health`.
+  Identify the owner before debugging your own code
+  (`curl -s http://127.0.0.1:<port>/ | head -c 200`, `pgrep -af <service>`,
+  `pgrep -af node`), then move to a free declared port **and update every
+  consumer's URL in the same pass** — client configs still pointing at the old
+  port keep talking to the stranger.
+- Prove a LISTENER with a connect test, not with a listing tool:
+  `timeout 3 bash -c 'echo > /dev/tcp/127.0.0.1/<port>' && echo OPEN`. An empty
+  `ss`/`netstat` result is indistinguishable from "nothing listens" (tool absent,
+  or the socket not yet visible), and reports a healthy service as dead.
+
+## The platform owns the port registry
+
+`.replit` `[[ports]]` is written BY the platform, not by you. A hand-appended
+entry can be re-serialized away minutes later — the file's mtime changes with no
+write of yours, the entry vanishes, and the service starts answering `502` while
+the file you edited looks correct. The reverse also holds: a port the platform
+already registered once keeps answering after the entry disappears from the file.
+So the file is a *reflection* of the platform's registry, never the authority.
+
+- Register a port the way the platform expects: start the listener bound
+  `0.0.0.0:<port>`, then load `https://$REPLIT_DEV_DOMAIN:<port>/` (or expose it
+  once in the webview port picker) and let Replit write the entry itself.
+- Treat a successful PROXIED request as the evidence, not `grep <port> .replit`,
+  and re-check both a minute later before reporting a port exposed. An entry that
+  survives one read can still be rewritten later.
+- An entry alone proves nothing: a declared port with no listener answers `502`,
+  while a listener on an undeclared port answers `000` from outside. A status
+  probe can also disagree between similarly-declared ports — chase the proxied
+  response, not the status number's theory.
+
+**Front an unrouted port with a proxy on an already-declared one.** A service bound on
+its own port becomes reachable from outside only once the platform has registered that
+port; until then a tiny reverse proxy on a port the registry already knows makes the
+service testable immediately (open the dev domain on it and a `502` proves routing).
+Forward verbatim — method, path, headers, body — so auth headers reach the upstream
+unchanged, keep the upstream port env-overridable, and probe the *proxied* path, not
+just localhost. Serve a plain-text landing page for `/` if humans will paste the URL.
 
 ## The router is HTTP(S)-only — no public raw TCP
 
@@ -60,10 +105,17 @@ Install: `bash setup.sh --tailscale`. It puts `tailscale` + `tailscaled` in
 `$XDG_BIN_HOME`, verifies the arch tarball against the channel's
 `<tarball>.sha256`, and writes a launcher, `$XDG_BIN_HOME/launch-tailscaled` —
 that is the file a `.replit` workflow should run (`waitForPort = 1055`). Node
-state lives under `$XDG_DATA_HOME/tailscale` and is ADOPTED when it is already
-there: a box that was set up by hand joins the tailnet with its existing
-identity, its Funnel/serve config and no re-auth, and only the binary paths
-change. `--clean tailscale` removes the binaries + launcher and keeps the state.
+state lives under `$TAILSCALE_DATA_DIR` (`${REPL_HOME:-$HOME/workspace}/.local/share/tailscale`)
+and is ADOPTED when it is already there: a box that was set up by hand joins the tailnet
+with its existing identity, its Funnel/serve config and no re-auth, and only the binary
+paths change. `--clean tailscale` removes the binaries + launcher and keeps the state.
+
+**Never under `$HOME`.** The container wipes `$HOME` on every restart, so a node key kept
+there re-registers as a brand-new node each boot: new `100.x` address, new node name, and
+every `.ssh/config` entry, nixenv path or saved URL pointing at the old one rots. That is
+why the state lives in the persistent repl workspace. An existing `$HOME` identity is
+copied there once on first setup, so already-registered boxes keep their address instead
+of orphaning it.
 
 Point the workflow at the launcher, not at a hand-written script: it execs the
 managed binaries, so a version bump or a `--fix` cannot leave the daemon running
@@ -105,11 +157,10 @@ $BASE/tailscaled --tun=userspace-networking \
 $BASE/tailscale --socket=$BASE/state/tailscaled.sock up --hostname=<name>
 ```
 
-A liveness probe that does not lie: `pgrep -f "tailscaled --tun=userspace"`
-also matches any shell whose command TEXT contains that string (a workflow that
-greps for it), so an unanchored check can decide the daemon is up when it is not.
-Match the daemon only (`pgrep -f "^[^ ]*tailscaled --tun=userspace"`), or just
-test the socket: `tailscale --socket=$SOCK status`.
+A daemon probe that does not lie: test its OWN interface
+(`tailscale --socket=$SOCK status`), not a process pattern — see "Stopping these
+services, and probing them" below for the pattern that answers yes for a daemon
+that is not running.
 
 `?mode=json` returns `TarballsVersion` as a plain string — a naive
 `['Tarballs']['amd64']['Version']` lookup yields an empty version and a 10-byte
@@ -310,8 +361,11 @@ uptime and `pgrep` first, then look at configuration.
 Create-token endpoints often answer **201**, not 200. A guard written as
 `if status != 200: print(response)` therefore dumps the fresh token into the
 transcript. Treat any 2xx as success, pull the single field you need, and print
-only a length or a prefix. The same discipline kills the other leak shape: an
-endpoint that echoes back the credential it was handed.
+only a length or a prefix. The same discipline applies to the FILES you inspect, not just the responses you
+produce: before reading a hand-written launcher or config that may embed a token,
+grep it with truncation and count matches (`grep -c -i token <file>`,
+`grep -n cloudflared <file> | cut -c1-100`) instead of printing the file. Anything
+you print lands in the transcript and in the session log.
 
 ## Don't infer success from a 200 — read the handler
 
@@ -331,21 +385,39 @@ change the ingress in the same breath. Pick one port and keep the pair in sync:
 behind a tunnel the local port is invisible from outside, so renumbering buys
 nothing and only adds a place for the two to drift.
 
-## Stopping these services
+## Stopping these services, and probing them
 
-`pkill -f "<pattern>"` kills the command that ran it: the agent's shell wrapper
-carries the whole command line, pattern included, so it matches itself and the
-call returns `exit -15`. Kill by pid instead, and write the pattern so it cannot
-match its own text (`[t]ailscaled`, never `tailscaled`), if `-f` is needed:
+Any `pkill -f` / `pgrep -f` on a pattern also matches the command that ran it:
+the agent's shell wrapper carries the whole command line, pattern included. So
+`pkill -f "<pattern>"` kills itself (`exit -15`), and `pgrep -f "<pattern>"`
+answers YES for any shell whose command *text* merely contains the string — a test
+harness, a workflow that greps for the process — which turns silently into
+"already running" and skips the start. Defences, in order of preference:
+
+- Probe the interface, not the process: a socket or HTTP answer is the only honest
+  liveness check (`tailscale --socket=$SOCK status`).
+- If a pattern is unavoidable: kill by pid, and anchor + bracket it so it cannot
+  match its own text (`^[^ ]*tailscaled --tun`, `[t]ailscaled`, never the bare
+  `tailscaled`):
 
 ```bash
-for p in $(pgrep -f "[t]ailscaled --tun"); do kill "$p"; done
+for p in $(pgrep -f "^[^ ]*[t]ailscaled --tun"); do kill "$p"; done
 ```
+
+- When the service runs through an interpreter there is no binary path to anchor
+  on — `…/python3 -c '…'` or `python3 …/server.py` carries the whole program text
+  in its command line. Put the match logic in a script FILE and scan
+  `/proc/<pid>/cmdline` from it: the pattern then lives in the file, not in the
+  caller's command line, so the scan cannot match itself. Skip your own pid and
+  any wrapper whose text merely contains the pattern, then signal in two passes
+  (SIGTERM, wait, SIGKILL what is left).
 
 ## Persistence: .replit workflow + gitignore
 
-- A service started by hand dies with the sandbox. To make it startable from the
-  Run panel, add a `[[workflows.workflow]]` (task `shell.exec`, `args` = absolute
+- A service started by hand — or launched as an agent's BACKGROUND process — dies with
+  the shell or the session, not only on recreate: a stack that answered yesterday is
+  fully down today with no error anywhere. Give every long-running process its OWN
+  workflow: add a `[[workflows.workflow]]` (task `shell.exec`, `args` = absolute
   launcher path) with `waitForPort = <port>` and `[workflows.workflow.metadata]
   outputType = "webview"` (or `"console"`). That is one-click, NOT boot-time:
   `runButton = "Project"` decides what the Run button fires, and

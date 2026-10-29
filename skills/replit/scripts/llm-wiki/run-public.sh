@@ -13,7 +13,11 @@
 #              LLM_WIKI_PROJECT LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
 set -uo pipefail
 APP="${LLM_WIKI_APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
-ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/llmwiki.env}"
+ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/.env}"
+# instalasi lama menyimpan token di llmwiki.env; pakai itu selama .env belum ada
+if [ -z "${LLM_WIKI_ENV_FILE:-}" ] && [ ! -f "$ENV_FILE" ] && [ -f "$APP/llmwiki.env" ]; then
+  ENV_FILE="$APP/llmwiki.env"
+fi
 PORT="${LLM_WIKI_PORT:-8080}"
 LOCAL_PORT="${LLM_WIKI_LOCAL_PORT:-8199}"
 DISP="${LLM_WIKI_DISPLAY:-:99}"

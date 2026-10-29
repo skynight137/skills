@@ -66,10 +66,10 @@ doctor() {
   # does not want a knowledge base must not fail its doctor run over it.
   local _wiki_dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
   if [[ -x "$_wiki_dir/run-public.sh" ]]; then
-    if [[ -s "$_wiki_dir/llmwiki.env" ]]; then
+    if [[ -s "$_wiki_dir/.env" || -s "$_wiki_dir/llmwiki.env" ]]; then
       ok "llm-wiki: server installed ($_wiki_dir)"
     else
-      warn "llm-wiki: bundle present but $_wiki_dir/llmwiki.env is missing — re-run: bash setup.sh --llm-wiki"
+      warn "llm-wiki: bundle present but no $_wiki_dir/.env — re-run: bash setup.sh --llm-wiki"
     fi
   else
     warn "llm-wiki: not installed — bash setup.sh --llm-wiki (optional knowledge-base server)"

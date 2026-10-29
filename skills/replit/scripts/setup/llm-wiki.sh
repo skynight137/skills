@@ -9,7 +9,7 @@
 #   run-public.sh     supervisor: Xvfb + WM + app + the REST/MCP server
 #                     (19828 app API · public port $LLM_WIKI_PORT or 8080, token required
 #                      · 8199 loopback, no token)
-#   run-ui.sh         supervisor: x11vnc (loopback 5900) + noVNC (public 8000) so the real
+#   run-ui.sh         supervisor: x11vnc (loopback 5900) + noVNC (public 6800) so the real
 #                     desktop UI opens in a browser — the frontend is Tauri, there is no
 #                     web UI to serve
 #   start-app.sh      app launcher with the software-GL / pixbuf env it needs headless
@@ -24,6 +24,48 @@
 #   * a window manager is mandatory — without one GTK windows are created but never mapped
 #   * shared-mime-info must be on XDG_DATA_DIRS, or gdk-pixbuf rejects every image format
 #   * the app needs node >= 18 for the server, and curl for the download
+
+# Xvfb + a window manager are system-ish; the container has neither root nor apt, so
+# they come from nix. Always into a PER-USER store + the nixenv mount namespace, never
+# into /nix/store: `nix build --store /nix/store` happily prints store paths while
+# copying nothing when the dir only looks writable, so every `[ -x ]` then fails and
+# nothing lands on PATH. A wrapper also pins -xkbdir, without which Xvfb dies with
+# "Failed to activate virtual core keyboard". Report-only stays for what is still missing.
+_nix_store_user() { printf '%s' "$HOME/.store"; }
+
+_llm_wiki_provision_display() {
+  { command -v Xvfb >/dev/null 2>&1 && command -v fluxbox >/dev/null 2>&1; } && return 0
+  [ -n "$(nix_bin)" ] || return 0
+  local st p up xkb="" b wrapper
+  st="$(_nix_store_user)"; mkdir -p "$st/nix/store"
+
+  step "llm-wiki: provisioning Xvfb + fluxbox (nix, no root needed)"
+  local outs
+  outs="$(nix_bin_out "$st")" || true
+  [ -n "$outs" ] || { warn "llm-wiki: nix build for Xvfb failed"; return 1; }
+  # nix prints /nix/store/<hash> even for a --store elsewhere, and that path need not
+  # exist on this box: resolve each one inside the per-user store before testing it.
+  for p in $outs; do
+    case "$p" in *xkeyboard-config*) xkb="$st/nix/store/${p##*/}/share/X11/xkb" ;; esac
+  done
+  cp -f "$SCRIPT_DIR/nixenv" "$XDG_BIN_HOME/nixenv"; chmod +x "$XDG_BIN_HOME/nixenv"
+  for p in $outs; do
+    up="$st/nix/store/${p##*/}"
+    for b in "$up/bin/Xvfb" "$up/bin/fluxbox"; do
+      [ -x "$b" ] || continue
+      wrapper="$XDG_BIN_HOME/${b##*/}"
+      { printf '#!/bin/bash\nexec %s %s' "$XDG_BIN_HOME/nixenv" "$b"
+        [ -n "$xkb" ] && printf ' -xkbdir %s' "$xkb"
+        printf ' "$@"\n'; } > "$wrapper"
+      chmod +x "$wrapper"
+    done
+  done
+}
+
+nix_bin_out() {
+  "$(nix_bin)" --store "$1" build --no-link --print-out-paths \
+    nixpkgs#xorg.xvfb nixpkgs#fluxbox nixpkgs#xkeyboard_config 2>/dev/null
+}
 
 install_llm_wiki() {
   local src="$SCRIPT_DIR/llm-wiki" dest note=""
@@ -48,21 +90,59 @@ install_llm_wiki() {
   chmod +x "$dest"/*.sh
   echo "  llm-wiki bundle -> $dest$note"
 
+  _llm_wiki_provision_display || true
   llm_wiki_requirements
   ( cd "$dest" && bash install.sh ) || return 1
+
+  # install.sh can succeed at "nothing to do" while the app was never extracted
+  # (a failed download, the wrong architecture's AppImage). Catch it here, where the
+  # one-fla  # one-flag run can report a real failure instead of the supervisor dying later.
+  if [ ! -x "$dest/squashfs-root/usr/bin/llm-wiki" ]; then
+    warn "llm-wiki: app binary missing after install ($dest/squashfs-root/usr/bin/llm-wiki)"
+    warn "  see $dest/extract.log, or re-run: bash $dest/install.sh"
+    return 1
+  fi
+
+  # NixOS has no /usr/lib/x86_64-linux-gnu, and a nix-store lib is invisible to ld.so
+  # unless its /lib is listed in .ldpath — so the binary extracts fine and then dies
+  # with "libX11.so.6: cannot open shared object file". install.sh cannot know which
+  # libs the bundle wants; resolve them from the binary's own "not found" list.
+  local bin="$dest/squashfs-root/usr/bin/llm-wiki" miss dirs="" p d lib
+  miss=$(ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u)
+  if [ -n "$miss" ] && [ -n "$(nix_bin)" ]; then
+    step "llm-wiki: resolving $(wc -l <<<"$miss") shared libs from nix"
+    for p in $(nix_run build --no-link --print-out-paths \
+      nixpkgs#xorg.libX11 nixpkgs#xorg.libxcb nixpkgs#libdrm nixpkgs#mesa nixpkgs#expat \
+      nixpkgs#fribidi nixpkgs#harfbuzz nixpkgs#zlib nixpkgs#libgpg-error \
+      nixpkgs#stdenv.cc.cc.lib 2>/dev/null); do
+      [ -d "$p/lib" ] && dirs="${dirs:+$dirs:}$p/lib"
+    done
+    # Some libs sit in a non-default output (libcom_err in e2fsprogs), so nothing above
+    # covers them: locate the file by name in the store and take its directory.
+    for lib in $(LD_LIBRARY_PATH="$dirs" ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u); do
+      d=$(ls -d /nix/store/*/lib/"$lib" 2>/dev/null | head -1)
+      [ -n "$d" ] && dirs="${dirs:+$dirs:}$(dirname "$d")"
+    done
+    # start-app reads this with `read -a`, which returns non-zero at EOF without a
+    # trailing newline — and the read is chained with `&&`, so a missing newline would
+    # silently drop every entry.
+    [ -n "$dirs" ] && printf '%s\n' "$dirs" >"$dest/.ldpath"
+    miss=$(LD_LIBRARY_PATH="$dirs" ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u | tr '\n' ' ')
+    [ -n "$miss" ] && warn "llm-wiki: still unresolved: $miss (add the dir to $dest/.ldpath)"
+  fi
 
   local port="${LLM_WIKI_PORT:-8080}"
   cat <<NEXT
 
   llm-wiki is installed. Start it:
     bash $dest/run-public.sh        # app + REST/MCP server (public :$port, loopback :8199)
-    bash $dest/run-ui.sh            # optional: the desktop UI in a browser (noVNC :8000)
+    bash $dest/run-ui.sh            # optional: the desktop UI in a browser (noVNC :6800)
 
   Add this URL to your MCP client:
     http://127.0.0.1:8199/mcp                # loopback, no token (agents on this machine)
     https://<host>:$port/mcp                 # other machines; header Authorization: Bearer <token>
 
-  Token: $dest/llmwiki.env (chmod 600) — share that file's value when access is needed.
+  Token: $dest/.env (chmod 600) — share that file's value when access is needed.
 NEXT
 }
 
@@ -90,7 +170,7 @@ llm_wiki_requirements() {
     warn "llm-wiki: missing on this machine —"
     local m
     for m in "${missing[@]}"; do printf '    - %s\n' "$m"; done
-    printf '    nix build nixpkgs#xvfb nixpkgs#fluxbox nixpkgs#x11vnc nixpkgs#novnc\n'
+    printf '    nix_run build nixpkgs#xorg.xvfb nixpkgs#fluxbox nixpkgs#x11vnc nixpkgs#novnc\n'
     printf '    (or the same names in replit.nix, so they survive a recreate)\n'
   fi
   return 0

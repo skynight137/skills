@@ -7,6 +7,11 @@
   agent/workflow shells set `REPLIT_MODE`, so they see nothing until the
   `REPLIT_BASHRC` shim (`unset REPLIT_MODE; source ~/.bashrc`) runs. Check
   `printenv REPLIT_MODE` before assuming an rc line reached a shell.
+- **Daemons do not belong in any rc.** `.bashrc`/`.profile`/`.config/bashrc` are
+  re-sourced every time a terminal opens, so an autostart line there re-fires per
+  terminal and needs its own guard in every shell. Put long-running services
+  (`sshd`, `tailscaled`, the llm-wiki stack) in a `.replit` `[workflows]` entry,
+  which runs once per boot. rc is for PATH/env only.
 - Never hand-append to a generated `$REPL_HOME/.config/bashrc`. The emitter
   rebuilds the file from its registry plus a rescue pass that recognizes only
   plain `export NAME="value"` lines, so a multi-line `if` guard or `case` block
@@ -137,3 +142,21 @@ Install: `bash setup.sh --zsh` (or the interactive menu's `zsh` item) —
 - `setup` / `fix` re-emit from the checkout they are launched from, so run them
   from the branch under test. A `main` checkout re-emits the old block and the
   live rc will not show the change.
+- Drop a merged branch with `git branch -D`, not `-d`: a squash merge leaves no
+  commit ancestry, so `-d` refuses and its "not fully merged" hint is a false
+  alarm. Verify the CONTENT landed before deleting — grep `main` for the lines
+  the branch added and confirm the lines it removed are absent. Read the
+  direction of `git diff main <branch>` first: it shows main's newer commits as
+  REMOVALS from the branch's point of view, which reads like the branch is ahead
+  when it is behind.
+- Clean the remote in the same pass: `git fetch --prune` first (GitHub deletes
+  some merged heads itself, and the stale `refs/remotes/origin/*` it leaves
+  behind look like live branches), then delete only heads whose PR reports
+  `MERGED` — `gh pr list --head <branch> --state all --json number,state`.
+- A leftover `.worktrees/<name>` is not automatically work to port. It can be far
+  behind `main` carrying uncommitted WIP that main has since superseded or
+  deliberately reverted (a reverted policy, an old TLS wiring). Diff that
+  worktree against `main` and read what its WIP actually contains before
+  treating it as pending; with `git log <branch> ^main` empty and the content
+  superseded, `git worktree remove --force` it (the force is for its dirty WIP)
+  and delete the branch.
