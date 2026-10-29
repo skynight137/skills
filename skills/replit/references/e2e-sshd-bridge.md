@@ -164,6 +164,11 @@ workflow entry (a reboot would just bring it back).
   the bind race and you debug the bind failure instead of the real error.
 - `pkill -f "sshd -f …"` also matches the wrapper of the very command you are
   running and kills it; use `pkill -x sshd`.
+- `pkill -f 'e2e-sshd/sshd_config'` kills **every** e2e listener on the box, not just
+  the port you meant: the pattern is the shared config path. Restart the one you still
+  need with `--e2e --start` (and `E2E_PORT=` if it is not the default) right after.
+- GNU sed here rejects `|` as the `s` delimiter on these `args`/quote patterns
+  ("unknown option to `s'"); use `s#…#…#`.
 
 ## Delivery rule (operator preference)
 
