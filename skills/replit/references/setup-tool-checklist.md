@@ -10,11 +10,20 @@ Touch the sites in this order.
 ```bash
 grep -n "INSTALL_<an analogous tool>" scripts/setup/*.sh setup.sh
 grep -n "<tool-binary-name>" scripts/setup/*.sh
+grep -n "<tool-binary-name>" "$REPL_HOME/.replit"      # a workflow may already run it
 ```
 
 Pick the closest existing analogue (a new direct-binary download mirrors
 rclone/aria2c) and copy its shape. The first grep finds every flag site, the
 second the fix/doctor/cleanup rows.
+
+The third grep is the one that is easy to skip and expensive to miss. The box may
+already run the tool from a `.replit` workflow pointing at a hand-installed copy
+in an arbitrary directory. Repoint that workflow at the managed binary (or at the
+generated launcher, when the tool needs a daemon), or — when the workflow runs the
+operator's own script, which holds their runtime config — make that script prefer
+the managed path and keep their copy as a fallback. Skip this and the installer
+reports success while the old copy keeps serving.
 
 ## 1. Version / URL constants — `scripts/setup.sh`
 
@@ -45,6 +54,31 @@ verify, extract, place in `$XDG_BIN_HOME`, `ok` with the version, then
   change between a bare file and a wrapper directory.
 - Print the first command a human has to run (auth, daemon start) — none of
   these installers starts a service.
+- A hand-installed copy is usually a SYMLINK onto PATH from some random
+directory, so check the target before replacing it: name the symlink and where it
+pointed before overwriting, and replace a plain file quietly (that is almost
+always your own previous install). A symlink is the fingerprint of an install
+made outside `setup.sh`.
+
+### Repo-import installers (a bundle dir, not a download)
+
+Some tools ship as a directory of files from this repo (`scripts/<tool>/`) and their
+own `install.sh` performs the download — `--llm-wiki` is the working example.
+
+- Never create a SECOND copy on a box that already runs one: resolve the target
+  first (`<TOOL>_HOME`, then an existing `$WORKSPACE/tools/<tool>`, then
+  `$XDG_DATA_HOME/<tool>`). A re-run that forks the install leaves the old copy
+  serving whatever the workflow starts.
+- `install.sh` can exit `done` while the app never runs: on NixOS there is no
+  `/usr/lib/x86_64-linux-gnu`, so the binary extracts and then dies on
+  `libX11.so.6: cannot open shared object file`. After any extract, `ldd` the
+  binary and resolve the misses from the store (`xorg.libX11`, `xorg.libxcb`,
+  `libdrm`, `mesa`, `expat`, `fribidi`, `harfbuzz`, `zlib`, `libgpg-error`,
+  `stdenv.cc.cc.lib`, plus a by-filename `ls /nix/store/*/lib/<lib>` fallback for
+  split outputs such as `libcom_err`), and write the dirs to `.ldpath`.
+- A lib-list file consumed as `read -a ... && for` needs a **trailing newline**:
+  `read` returns non-zero at EOF without one, which short-circuits the `&&` chain,
+  so every entry vanishes silently.
 
 ## 4. Make the flag real — `rc.sh`, `cli.sh`, `ui_menu.sh`
 
@@ -116,6 +150,14 @@ bash setup.sh --<tool>                           # reinstall after the test
   shared dir line (same set, different order, because registration and rescue
   order feed the emitter). `diff` the two files and check the line set before
   calling it a regression.
+- Assert a daemon came up from its OWN interface (socket, HTTP), never from
+  `pgrep -f <text>`: an unanchored pattern also matches a shell whose command
+  text contains it, so it answers "already running" and skips the start. See
+  `references/exposing-ports.md` §"Stopping these services, and probing them".
+- After the change lands on `main`, pull it and re-run `--fix` against the live
+  box, expecting the same rc `md5sum` as before. Identical output means the
+  merged code reproduces what is installed; any drift is a regression the PR
+  introduced, not local state.
 
 ## Harness for the rc writer (when the change touches emission)
 

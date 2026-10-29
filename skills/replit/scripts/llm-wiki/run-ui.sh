@@ -3,8 +3,8 @@
 #
 #   bash run-ui.sh            # foreground supervisor (idempotent, restarts what died)
 #
-# Ports:  VNC 127.0.0.1:5900 (never public) · noVNC 0.0.0.0:8000 (public, VNC password required)
-# Open:   https://<host>:8000/vnc.html     (password in $STATE/vnc-password.txt)
+# Ports:  VNC 127.0.0.1:5900 (never public) · noVNC 0.0.0.0:6800 (public, VNC password required)
+# Open:   https://<host>:6800/vnc.html     (password in $STATE/vnc-password.txt)
 #
 # Why not expose the app directly: the frontend is Tauri (invoke), so there is no
 # web UI to serve; VNC is the only way to see the real desktop window in a browser.
@@ -13,7 +13,7 @@ APP="$(cd "$(dirname "$0")" && pwd)"
 STATE="${XDG_CONFIG_HOME:-$HOME/.config}/llmwiki-ui"
 DISP="${LLM_WIKI_DISPLAY:-:99}"
 VNC_PORT="${LLM_WIKI_VNC_PORT:-5900}"
-WEB_PORT="${LLM_WIKI_UI_PORT:-8000}"
+WEB_PORT="${LLM_WIKI_UI_PORT:-6800}"
 SLEEP="${LLM_WIKI_UI_SLEEP:-15}"
 
 mkdir -p "$STATE"; chmod 700 "$STATE"

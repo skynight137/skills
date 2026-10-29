@@ -49,9 +49,16 @@ Options:
                         no checksum published upstream). See references/exposing-ports.md
   --tailscale           Install tailscale + tailscaled (userspace tailnet client;
                         SHA256-verified from pkgs.tailscale.com). Binaries land in
-                        XDG_BIN_HOME, node state in \$XDG_DATA_HOME/tailscale
-                        (PRESERVED by --clean tailscale)
+                        XDG_BIN_HOME, node state in \$TAILSCALE_DATA_DIR
+                        (= \$REPL_HOME/.local/share/tailscale, PRESERVED by
+                        --clean tailscale; NOT under \$HOME, which is wiped)
   --sshx                Install sshx (collaborative web terminal; direct binary)
+  --e2e                 sshd key-only di port $E2E_PORT + tailnet supaya mesin lain
+                        bisa ssh masuk buat run e2e. ~/.ssh DI-SYMLINK ke
+                        \$REPL_HOME/.ssh (persisten) dan daemon diterbitkan sebagai
+                        entri .replit [workflows] — bukan rc. Run pertama butuh
+                        TAILSCALE_AUTH_KEY=tskey-... di depannya; boot berikutnya
+                        pakai identitas node yang tersimpan.
   --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
                         Firefox server + MCP adapter). Provisions the package-pinned
                         Camoufox engine into the persistent cache, applies the Replit
@@ -59,10 +66,10 @@ Options:
                         (API on http://127.0.0.1:9377)
   --llm-wiki            Install the llm-wiki server (knowledge base for agents):
                         scripts/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
-                        AppImage + shared token (llmwiki.env, chmod 600). Start with
+                        AppImage + shared token (.env, chmod 600). Start with
                         run-public.sh (app + REST/MCP, public port \$LLM_WIKI_PORT or
                         8080, loopback 8199) and run-ui.sh (desktop UI in the browser
-                        via x11vnc + noVNC on 8000). Reports missing system packages
+                        via x11vnc + noVNC on 6800). Reports missing system packages
                         (xvfb, fluxbox, shared-mime-info, x11vnc) instead of installing
                         them. Not part of --all (the AppImage is ~116 MB; install it
                         explicitly when a knowledge base is wanted).
@@ -85,7 +92,7 @@ Options:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
                         claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|
-                        cloudflared|tailscale|sshx removes one
+                        cloudflared|tailscale|sshx|e2e removes one
                         tool. Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
                         USER DATA: tools that own it are handled safely —
@@ -141,6 +148,7 @@ parse_args() {
       --cloudflared)            INSTALL_CLOUDFLARED=true ;;
       --tailscale)              INSTALL_TAILSCALE=true ;;
       --sshx)                   INSTALL_SSHX=true ;;
+      --e2e)                    INSTALL_E2E=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --llm-wiki)               INSTALL_LLM_WIKI=true ;;
@@ -186,7 +194,7 @@ parse_args() {
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
-     && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX \
+     && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_E2E \
      && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
@@ -209,6 +217,7 @@ parse_args() {
     INSTALL_CLOUDFLARED=true
     INSTALL_TAILSCALE=true
     INSTALL_SSHX=true
+    INSTALL_E2E=true
     INSTALL_CLIPROXY=true
     INSTALL_CAMOFOX=true
     INSTALL_HERMES_CHROMIUM=true
@@ -303,7 +312,18 @@ ensure_libatomic() {
   # aarch64/ppc64 too. file -L dereferences the SONAME symlink (plain `file`
   # would print "symbolic link to ..." and fail the grep); missing file(1)
   # fails closed (nonzero -> re-scan).
-  _la_is_x86_64() { file -L "$1" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'; }
+  _la_is_x86_64() {
+    if command -v file >/dev/null 2>&1; then
+      file -L "$1" 2>/dev/null | grep -q 'ELF 64-bit LSB shared object, x86-64'
+      return
+    fi
+    # The Ubuntu-based container ships no file(1), so every candidate failed the
+    # check and libatomic was never staged ("no usable libatomic staged"). Read
+    # the ELF header instead: magic, class 2 = 64-bit, data 1 = little-endian,
+    # e_machine 0x3e = x86-64.
+    local h; h="$(od -An -tx1 -N20 "$1" 2>/dev/null | tr -s ' \n' '  ')"
+    [[ "$h" == *"7f 45 4c 46 02 01"* && "$h" == *" 3e 00 "* ]]
+  }
   # Marker cache: /nix/store is a NETWORK filesystem on Replit — every glob
   # here costs minutes on a cold store (measured: one /*gcc-*-lib/ pass =
   # 70s). The marker makes repeat runs instant — but ONLY as EVIDENCE, not

@@ -38,6 +38,7 @@ _MENU_ITEMS=(
   "cloudflared|cloudflared (Cloudflare Tunnel client)"
   "tailscale|tailscale (userspace tailnet client)"
   "sshx|sshx (collaborative web terminal)"
+  "e2e|e2e (sshd via tailnet, remote run)"
   "llm-wiki|llm-wiki server (knowledge base: MCP/REST + UI lewat noVNC)"
 )
 _MENU_CURSOR=0
@@ -86,6 +87,7 @@ _status_init() {
     "cloudflared|cloudflared"
     "tailscale|tailscale"
     "sshx|sshx"
+    "e2e|e2e"
     "cliproxy|cli-proxy-api"
     "camofox|camofox-browser"
     "llm-wiki|run-public.sh"
@@ -256,6 +258,7 @@ _menu_apply() {
       cloudflared) INSTALL_CLOUDFLARED=true ;;
       tailscale)   INSTALL_TAILSCALE=true ;;
       sshx)        INSTALL_SSHX=true ;;
+      e2e)         INSTALL_E2E=true; INSTALL_TAILSCALE=true ;;
     esac
   done
 }

@@ -30,6 +30,13 @@ trailing-slash failures, `libatomic` for official Node ≥22 tarballs):
 Rules:
 
 - Store persistent data under `$REPL_HOME`, never `$HOME` (and never `/run`).
+- When a tool hardcodes a `$HOME` path you cannot move (`~/.ssh`, `~/.gnupg`,
+  `~/.aws`), make it a **symlink** into `$REPL_HOME` and move the existing
+  contents in first (`mv ~/.ssh "$REPL_HOME/.ssh" && ln -s "$REPL_HOME/.ssh" ~/.ssh`).
+  The tool keeps its contract, the data survives the wipe, and a re-run only has
+  to re-assert the link (cheap) — a `cp` loop loses the other side's edits.
+  Also true for `.ssh` even though it is re-created at boot: it comes back as an
+  empty dir (mtime = boot time), which is why the symlink, not a copy, is the fix.
 - **XDG pre-set by platform** — `XDG_*_HOME` point at workspace paths
   (verified: `XDG_DATA_HOME=/home/runner/workspace/.local/share`,
   `XDG_CONFIG_HOME=/home/runner/workspace/.config`; check with

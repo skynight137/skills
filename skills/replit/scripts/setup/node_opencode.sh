@@ -5,7 +5,7 @@ install_node() {
   step "Node.js (managed tarball)"
   mkdir -p "$XDG_BIN_HOME" "$XDG_DATA_HOME"
 
-  need_cmd wget
+  # wget is not on every box (the Ubuntu-based Replit container ships curl only)
   need_cmd curl
   local idx="https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/"
   local tar
@@ -15,7 +15,11 @@ install_node() {
   local tmp="$XDG_DATA_HOME/_node.tar.xz"
 
   echo "  Downloading $tar..."
-  wget -q --show-progress -O "$tmp" "$url" || die "Node.js download failed"
+  if command -v wget >/dev/null 2>&1; then
+    wget -q --show-progress -O "$tmp" "$url" || die "Node.js download failed"
+  else
+    curl -fL --progress-bar -o "$tmp" "$url" || die "Node.js download failed"
+  fi
 
   rm -rf "$NODE_DIR"
   mkdir -p "$NODE_DIR"

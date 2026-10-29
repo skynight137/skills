@@ -18,7 +18,7 @@ Server Node yang mempublikasikan; API app **tidak** diumbar langsung.
 `install.sh` (unduh AppImage + ekstrak + bikin token) · `run-public.sh` (supervisor:
 Xvfb → WM → app → server, auto-restart) · `run-ui.sh` (x11vnc + noVNC: UI desktop
 dibuka dari browser) · `start-app.sh` (launcher app portabel) · `llmwiki-server.js`
-(server MCP+REST) · `llmwiki.env` (token, chmod 600) · `pixbuf/` (loader PNG opsional) ·
+(server MCP+REST) · `.env` (token, chmod 600) · `pixbuf/` (loader PNG opsional) ·
 `.ldpath`/`.libdirs.pre` (dir lib khusus mesin, boleh kosong).
 
 Terpasang dengan satu perintah:
@@ -52,12 +52,26 @@ Node ≥ 18 sudah ada di box ini (dipasang `setup.sh --node`); di host non-nix p
 - AppImage ini **tidak** menyertakan loader PNG; kalau GTK mati karena ikon, pakai
   `pixbuf/loaders.cache` (loader harus cocok ABI: header 2.42.8 untuk lib bundle 2.42.8).
 
+### Xvfb/fluxbox otomatis (`_llm_wiki_provision_display`)
+
+`setup.sh --llm-wiki` menyediakannya sendiri; tak perlu langkah manual di atas kalau
+flag itu dipakai. Dua jebakan yang sudah ditangani dan **jangan** dihilangkan:
+
+- `/nix/store` bisa tampak writable (mode 777) sementara `nix build --store /nix/store`
+  hanya *mencetak* path tanpa menyalin apa pun. Karena itu build **selalu** ke store
+  per-user `~/.store`; path hasil build di-resolve ke `~/.store/nix/store/<hash>` sebelum
+  diuji (nix tetap mencetak `/nix/store/<hash>` yang belum tentu ada di box).
+- Biner store punya `PT_INTERP` + `RUNPATH` ke `/nix/store`, jadi store per-user tak
+  terlihat loader. Wrapper `~/.local/bin/Xvfb` menjalankannya lewat `nixenv` (mount
+  namespace: symlink store sistem + `~/.store`; `unshare -r`, tanpa root) dan menyisipkan
+  `-xkbdir` — tanpa itu Xvfb mati `Failed to activate virtual core keyboard`.
+
 ## Jalankan
 
 ```bash
 bash setup.sh --llm-wiki   # sekali per mesin: bundle + AppImage + token
 bash run-public.sh         # supervisor, foreground (systemd / workflow / tmux)
-bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :8000)
+bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :6800)
 ```
 
 ## Endpoint
@@ -74,7 +88,7 @@ bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :8000)
 
 Port publik default **8080** (yang diharapkan klien llm-wiki). Kalau 8080 sudah dipakai
 hal lain — di box ini `hermes -p <profile> dashboard` — set `LLM_WIKI_PORT=8081` di
-`llmwiki.env`; itu satu-satunya tempat override-nya, bukan di kode. Kalau tabrakan,
+`.env`; itu satu-satunya tempat override-nya, bukan di kode. Kalau tabrakan,
 server tidak bisa bind dan `/health` justru balas **302 +
 `{"error":"unauthenticated",...,"login_url":"/login"}`**: itu dashboard Hermes, bukan
 llm-wiki. Cek pemilik port dulu sebelum menuduh server rusak.
@@ -89,7 +103,7 @@ dirutekan (butuh Repl restart) — selama itu, klien di mesin yang sama pakai lo
 | `LLM_WIKI_API_TOKEN` | penuh (tulis, embed, rescan, chat) |
 | `LLM_WIKI_READONLY_TOKEN` | read-only: REST GET + `search`/`graph`; tool MCP baca saja (tool tulis → `-32003`) |
 
-Keduanya dibaca dari `llmwiki.env`, dipakai dengan header yang sama, dan token read-only
+Keduanya dibaca dari `.env`, dipakai dengan header yang sama, dan token read-only
 boleh dibagikan ke agen tamu. Kalau `LLM_WIKI_READONLY_TOKEN` kosong → perilaku lama.
 
 Instance publik **selalu** butuh token; `LLM_WIKI_TRUST_LOOPBACK=1` ditolak kalau bind
@@ -117,6 +131,28 @@ tetap **`LLM_WIKI_API_TOKEN`** (alias `MCP_<NAMA>_API_KEY` cuma dipakai kalau me
 (`llm_wiki_status/projects/set_project/files/read_file/write_page/search/graph/
 rescan_sources/embed_page/reviews/chat`).
 
+Uji tulis/baca via curl (tanpa klien MCP, sudah diverifikasi di instalasi bersih):
+
+```bash
+T=$(sed -n 's/^LLM_WIKI_API_TOKEN=//p' /path/ke/app/.env)
+# tulis — field-nya `content`, bukan `body`; tool-nya `llm_wiki_write_page`
+curl -s -X POST localhost:8199/mcp -H "x-llm-wiki-token: $T" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"llm_wiki_write_page",
+       "arguments":{"path":"wiki/queries/uji.md","title":"Uji","content":"# Uji\n"}}}'
+# baca balik
+curl -s -X POST localhost:8199/mcp -H "x-llm-wiki-token: $T" \
+  -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"llm_wiki_read_file",
+       "arguments":{"path":"wiki/queries/uji.md"}}}'
+```
+
+Port: MCP hanya di server (`8199` loopback, `${PORT}` publik) — **`19828` itu API app**,
+`POST /mcp` ke situ dijawab `{"error":"Not found"}`. Token diterima sebagai
+`x-llm-wiki-token` maupun `Authorization: Bearer`; balasan `400 missing field ... content`
+artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` memuat
+`"ok": true` dan `bytes`.
+
 ## Model project & kategori (pertanyaan yang sering muncul)
 
 - App punya **satu “current project”** (disimpan di clip server, hanya di memori).
@@ -134,7 +170,7 @@ rescan_sources/embed_page/reviews/chat`).
 
 - Taruh semuanya di bawah `$REPL_HOME` (persisten); `$HOME` dan `/tmp` kena wipe, dan
   **proses yang dijalankan dari sesi agen mati bersama sesinya** — stack yang tadi hidup
-  bisa sepenuhnya mati di sesi berikutnya. Probe dulu (`19828`, `8081`, `8199`, `8000`)
+  bisa sepenuhnya mati di sesi berikutnya. Probe dulu (`19828`, `8081`, `8199`, `6800`)
   sebelum mendiagnosis apa pun. Daftarkan TIAP supervisor sebagai workflow sendiri di
   `.replit` (`llm-wiki-public` → `run-public.sh`, `llm-wiki-ui` → `run-ui.sh`); satu
   workflow per proses panjang, dan JANGAN berbagi `waitForPort` dengan workflow lain.
@@ -167,7 +203,7 @@ rescan_sources/embed_page/reviews/chat`).
 ## Yang tidak bisa diharapkan
 
 - UI desktop dibuka lewat browser: **tidak bisa langsung** — frontend Tauri (`invoke`),
-  jadi pakai noVNC (`run-ui.sh`: x11vnc loopback + noVNC publik `:8000`, VNC password).
+  jadi pakai noVNC (`run-ui.sh`: x11vnc loopback + noVNC publik `:6800`, VNC password).
 - Pilih project lewat file chooser GTK: enumerasi GIO kosong di box ini.
 - Multi-user/login: tidak ada; satu token, satu current project.
 - Vector search butuh `embeddingConfig` (provider + model + baseUrl, bisa

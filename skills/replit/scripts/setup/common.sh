@@ -94,7 +94,23 @@ OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
 # tailscale user data (node key + login) — preserved by `--clean tailscale`.
 # The binaries themselves live in $XDG_BIN_HOME, like the other direct-download
 # tools (see setup/expose.sh).
-TAILSCALE_DATA_DIR="$XDG_DATA_HOME/tailscale"
+# NOT under $HOME: the container wipes $HOME on every restart, so a node key kept
+# there re-registers as a NEW node each boot — new 100.x address, new node name, and
+# every .ssh/config entry or saved URL pointing at the old one rots. Park the identity
+# in the persistent repl workspace (REPL_HOME) instead, and adopt a pre-existing
+# $HOME identity once so already-registered boxes keep their address.
+E2E_PORT="${E2E_PORT:-6800}"
+TAILSCALE_DATA_DIR="${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/share/tailscale}"
+if [[ ! -e "$TAILSCALE_DATA_DIR/state/tailscaled.state" ]]; then
+  for _ts_old in "$XDG_DATA_HOME/tailscale/state/tailscaled.state" "$HOME/.ts/state.json"; do
+    [[ -f "$_ts_old" ]] || continue
+    mkdir -p "$TAILSCALE_DATA_DIR/state"
+    if cp -f "$_ts_old" "$TAILSCALE_DATA_DIR/state/tailscaled.state"; then
+      echo "tailscale: adopted node identity from $_ts_old" >&2
+    fi
+    break
+  done
+fi
 
 # Tool dirs exported ONCE for child processes — the rest of the script
 # uses the values directly (no re-exporting inline in install functions).
@@ -233,6 +249,7 @@ INSTALL_FFMPEG=false
 INSTALL_CLOUDFLARED=false
 INSTALL_TAILSCALE=false
 INSTALL_SSHX=false
+INSTALL_E2E=false
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
 INSTALL_HERMES_CHROMIUM=false
@@ -309,4 +326,15 @@ install_fail_summary() {
   warn "Some tools did NOT install: ${_INSTALL_FAILURES[*]}"
   warn "Re-run just those, e.g.  bash setup.sh --${_INSTALL_FAILURES[0]}"
   return 1
+}
+
+# nix exists only in the store on Replit containers (never on PATH), and the shipped
+# local-overlay store config points at a root-owned lower dir — /nix/store is the
+# writable one. Both traps are invisible to `command -v nix`.
+nix_bin() { command -v nix 2>/dev/null || ls -d /nix/store/*-nix-2*/bin/nix 2>/dev/null | tail -1; }
+nix_run() {
+  local n; n="$(nix_bin)"; [ -n "$n" ] || return 127
+  # shellcheck disable=SC2046
+  grep -q local-overlay /etc/nix/nix.conf 2>/dev/null && set -- --store /nix/store "$@"
+  "$n" "$@"
 }

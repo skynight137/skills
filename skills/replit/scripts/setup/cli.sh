@@ -43,7 +43,7 @@ main() {
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
       && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
-      && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX; then
+      && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_E2E; then
       die "No tools selected. Aborting."
     fi
   else
@@ -127,9 +127,18 @@ main() {
   $INSTALL_CLOUDFLARED && run_install_step cloudflared      install_cloudflared
   $INSTALL_TAILSCALE && run_install_step tailscale         install_tailscale
   $INSTALL_SSHX     && run_install_step sshx               install_sshx
+  if $INSTALL_E2E; then
+    $INSTALL_TAILSCALE || run_install_step tailscale install_tailscale
+    run_install_step e2e install_e2e
+  fi
   $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
+  # llm-wiki's server half is plain Node: on a fresh box without node the install used to
+  # finish and then run-public.sh died with "node is required". Install it here instead.
+  if $INSTALL_LLM_WIKI && ! command -v node >/dev/null 2>&1; then
+    run_install_step node install_node
+  fi
   $INSTALL_LLM_WIKI && run_install_step llm-wiki        install_llm_wiki
 
   # Fold in wiring registered inside the installers' subshells (spill file), then
@@ -167,7 +176,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cloudflared  tailscale  sshx
+   cloudflared  tailscale  sshx  e2e
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
@@ -187,7 +196,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cloudflared  tailscale  sshx
+   cloudflared  tailscale  sshx  e2e
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
