@@ -904,10 +904,15 @@ _REGISTRY_ENV_VARS=(YARN_REGISTRY YARN_NPM_REGISTRY_SERVER PIP_INDEX_URL \
 # no fixed block sets them any more, and listing them here keeps a stale
 # .replit entry or an inherited platform value from being resurrected as a
 # tool var (the Nix bundle must never come back — see the TLS block).
+# TAILSCALE_NODE_NAME is retired from the rc on purpose: which name a box answers
+# to is the operator's per-machine choice, pinned on the workflow args (or a Replit
+# secret). The managed block would otherwise re-adopt its own old line forever and
+# re-export a stale name into every shell.
 _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
   GIT_CONFIG_GLOBAL \
   npm_config_dangerously_allow_all_scripts NIX_SSL_CERT_FILE \
-  SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
+  SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE \
+  TAILSCALE_NODE_NAME)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
 # needing their installer to re-run this time. Candidates are restricted to

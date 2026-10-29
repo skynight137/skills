@@ -43,14 +43,17 @@ enough and the key may be omitted; the `.replit` workflow runs the same command.
   restarts (the machine you remote FROM, or one with DNS/MagicDNS entries pinned):
   there, join with a non-ephemeral key and let the state dir carry the identity.
 
-### Names and paths live in the rc var registry
+### Paths come from the rc var registry, the node name does not
 
-`TAILSCALE_DATA_DIR`, `TAILSCALE_STATE_DIR`, `TAILSCALE_SOCKET` and
-`TAILSCALE_NODE_NAME` are registered by `install_tailscale` (and re-registered by
-`--fix`), so the managed rc block exports them for every shell: scripts read the
-socket path from the environment instead of re-spelling it, and the node name does
-not have to be prefixed onto each run once it is set that way. An in-line
-`TAILSCALE_NODE_NAME=<name>` on the workflow `args` still wins for that one run.
+`TAILSCALE_DATA_DIR`, `TAILSCALE_STATE_DIR` and `TAILSCALE_SOCKET` are registered by
+`install_tailscale` (and re-registered by `--fix`), so the managed rc block exports
+them: every consumer reads the socket path from the environment instead of
+re-spelling it.
+
+`TAILSCALE_NODE_NAME` stays out of the rc on purpose. Which name a machine answers to
+is the operator's decision per machine, so it is pinned where the machine is described
+— in-line on the workflow `args` (`TAILSCALE_NODE_NAME=<name> bash ... --remote-shell
+--start --wf`) or in a Replit secret — not exported to every shell of the box.
 
 ### Why the flag says `remote-shell` and the dir still says `e2e-sshd`
 

@@ -103,8 +103,8 @@ fix_derive_wiring() {
   # and node-name exports are re-registered here because a --fix run never calls
   # the installer, and a lost export would strand the socket path in the rc block.
   if [[ -x "$XDG_BIN_HOME/tailscaled" ]]; then
-    record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME
-    wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME -- "$XDG_BIN_HOME"
+    record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET
+    wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET -- "$XDG_BIN_HOME"
     tailscale_write_launcher
   fi
   return 0

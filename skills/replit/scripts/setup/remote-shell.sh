@@ -96,30 +96,6 @@ __rs_workflow() {
       && ok "entri workflow lama: --e2e di-rename ke --remote-shell"
   fi
 
-  # The task NAME they typed may still say "e2e" too. Rename it only when it is exactly
-  # that and nobody else holds "remote-shell" — two entries with one name collide.
-  if ! grep -qF 'name = "remote-shell"' "$rp" && grep -qF 'name = "e2e"' "$rp"; then
-    python3 - "$rp" <<'PY' && ok "nama task lama 'e2e' di-rename ke 'remote-shell'"
-import re, sys
-p = sys.argv[1]
-lines = open(p).read().split("\n")
-cur = None
-for i, ln in enumerate(lines):
-    if ln.strip() == "[[workflows.workflow]]":
-        cur = None
-    m = re.match(r'\s*name\s*=\s*"([^"]*)"', ln)
-    if m:
-        cur = m.group(1)
-    if cur == "e2e" and re.search(r'setup\.sh --remote-shell', ln):
-        for j in range(i, -1, -1):
-            if re.match(r'\s*name\s*=\s*"e2e"', lines[j]):
-                lines[j] = lines[j].replace('"e2e"', '"remote-shell"')
-                open(p, "w").write("\n".join(lines))
-                sys.exit(0)
-sys.exit(1)
-PY
-  fi
-
   # Already wired? Then only two things matter: does the command it points at still
   # exist, and does it carry --wf. Path first — a moved skill dir must not be masked
   # by the --wf check, or a dead absolute path sits there forever.
@@ -282,7 +258,9 @@ EOF
   local hn=()
   if [ -n "${TAILSCALE_AUTH_KEY:-}" ]; then
     hn=(--hostname="${TAILSCALE_NODE_NAME:-$(hostname)}")
-    "$tsc" --socket="$sock" up --authkey="$TAILSCALE_AUTH_KEY" "${hn[@]}" --accept-routes=false 2>&1 | tail -2
+    # The key itself never needs printing twice; mask it in the echoed command line.
+    "$tsc" --socket="$sock" up --authkey="$TAILSCALE_AUTH_KEY" "${hn[@]}" --accept-routes=false 2>&1 \
+      | sed -E 's/(tskey-)[A-Za-z0-9_-]+/\1***/g' | tail -2
   else
     # Normal boots already carry an identity, and `up` refuses to change one pref
     # without every non-default being restated; `set` takes them one at a time.
