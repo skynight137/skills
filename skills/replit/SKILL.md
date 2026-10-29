@@ -186,6 +186,7 @@ without ripgrep.
 - Close the loop on a merged PR: delete its branch locally and on the remote, and remove any worktree it used. The user treats leftover branches and worktrees as clutter to be cleared, not as history to keep.
 - Adding or changing a tool flag touches roughly two dozen places in eight files. Work `references/setup-tool-checklist.md` in order and run its test sequence: a half-wired flag does not error, it is invisible, or the tool installs and then cannot be repaired or cleaned.
 - Never write a silent fallback (`except ImportError: pass`, a default that hides a failed dependency or trust store). Fail with the name of what is missing; a silent pass hid the real TLS cause here.
+- **Deleting a directory the box used to run starts with a config sweep, not `rm`.** Grep the config surface for absolute paths into it — `.replit` workflow `args` and `waitForPort`, `$REPLIT_BASHRC`/rc files, `~/.ssh/config`, operator scripts — because a workflow pointing at a removed script still reads as wired and fails only at the next boot, silently (the job is reaped at once). Check whether the path was already dead before the delete: a directory can be gone while two workflows still name it, which is how stale wiring hides. Move the identity/config that must survive (a pinned node name, a port) into the surviving workflow's `args`, never into an rc.
 
 When one batch touches many files or repeats an `old_string`, VERIFY the effect
 on disk before moving on:
