@@ -188,6 +188,11 @@ on disk before moving on:
 - `rg` the new text (a "failed"/"no match" line can be a benign duplicate-key
   retry) and confirm it appears the expected number of times — twice means the
   edit applied twice.
+- **Never compose a `sed -E` script by hand once it contains quotes or `\1`**: run the
+  exact expression on a scratch copy first. Two failures in a row (`|` rejected as the
+  delimiter; `(--start)?` written where the text has a space, so the pattern silently
+  never matched while `rc=0` claimed success) look identical to a logic bug, and the
+  script "succeeds" without editing anything.
 - Pass **absolute** paths: a `cd` from a previous terminal call persists, so a
   relative path can resolve against the wrong directory.
 - Trust base after any edit: `bash -n` on every module (the setup.sh syntax gate
@@ -227,6 +232,13 @@ on disk before moving on:
   style input, and make everything after the first run work off the stored state
   so no second secret is needed. Printing a usage line with a placeholder
   (`tskey-auth-...`) is correct; printing the value is not.
+- **A flag that launches a daemon must be separable from the one that prepares.**
+  Bundling both means every prepare re-fires listeners and nothing can be inspected or
+  repeated without side effects. Split it: the preparing flag (`--e2e`) writes config,
+  keys, dirs and binaries, prints the follow-up command and exits; the launching flag
+  (`--start`) is what brings daemons up; workflow mode (`--wf`) asserts both. A guard file
+  or a "skip if alive" check is not a substitute — after the split, the prepare path must
+  not call `setsid`, `start_*` or anything else that binds a port.
 - Export only what the script owns. Replit already provides `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME`; re-exporting them adds nothing. `XDG_BIN_HOME` is the one PATH entry the toolchain owns, always `$REPL_HOME/.local/bin`.
 - `HERMES_HOME`, `HERMES_MANAGED_DIR` and the launcher dir are ORDINARY wire-registered tool wiring in the single managed toolchain block (`wire_tool hermes` + `record_tool_env_vars` / `record_tool_path_dirs`, mirrored in `install_hermes` and `fix_derive_wiring`). Never give a tool its own rc block outside the managed markers: a second block has to be re-appended after EVERY rewrite to keep PATH precedence stable, `strip_tool_wiring` cannot see it, and a run that does not install that tool silently drops its lines (the pre-merge `hermes-tools` block had all three problems; `lift_legacy_hermes_wiring` / `strip_legacy_hermes_block` migrate such an rc in one pass). The managed-scope dir defaults to `/etc/hermes`, which does not exist and cannot be created on Replit (`/etc` is a read-only mount, no root), so it is pinned under `$HERMES_HOME/managed`. Keep `HERMES_HOME` OUT of `_FIXED_RC_ENV_VARS`: that list suppresses the tool-var export, which is now the only thing that emits it.
 - The only Hermes PATH entry is `$HERMES_HOME/hermes-agent/.hermes/bin` (the stable launcher; it resolves the correct environment itself). Never add `installs/*/environments/*/venv/bin` or `hermes-agent/venv/bin`: those venvs belong to an isolated session run, are not stable across sessions or updates, and a public shell that picks one up calls a binary from a session that may not exist.
