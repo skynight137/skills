@@ -85,24 +85,12 @@ _e2e_workflow() {
   # Already wired by the operator (any name, any wording): nothing to say.
   grep -qE 'setup\.sh --e2e' "$rp" && { skip "workflow e2e sudah ada di $rp — tidak diubah"; return 0; }
 
-  # Suggest a name that cannot collide with their existing workflows.
-  local name="e2e-wf"
-  local n=1
-  while grep -qxE "name = \"$name\"" "$rp"; do name="e2e-wf$((n++))"; done
-
-  echo "  boot start: TIDAK ditulis otomatis — tempel sendiri di $rp (nama bebas):"
+  # One line to hand over, nothing to paste wholesale: the Replit UI adds the
+  # task for them, the name and the ordering stay theirs at no cost.
   echo
-  echo '    [[workflows.workflow]]'
-  echo "    name = \"$name\""
-  echo "    author = \"$(id -un)\""
-  echo '    mode = "sequential"'
-  echo
-  echo '    [[workflows.workflow.tasks]]'
-  echo '    task = "shell.exec"'
-  echo "    args = \"bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e --wf\""
-  echo
-  ok "--wf membuat task tidak selesai (tail -F), jadi workflow tetap hidup; tanpa itu job di-reap"
-  ok "  sudah punya workflow sendiri? cukup pakai args di atas di task yang lu punya"
+  ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
+  echo "    bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e --wf"
+  ok "  nama workflow & urutannya bebas; --wf menahan task (tail -F) supaya job tidak di-reap"
 }
 
 install_e2e() {

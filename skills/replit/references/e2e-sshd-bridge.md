@@ -68,26 +68,20 @@ workflow entry (a reboot would just bring it back).
   persistent key keeps the address.
 - **autostart belongs to `.replit`, never to a shell rc.** A daemon started from `.bashrc`
   or `.profile` re-fires every time the operator opens a terminal, and the guard for it has
-  to be re-derived in each of those shells. Use a `.replit` workflow instead:
+  to be re-derived in each of those shells. Add it in the Replit UI instead — new task,
+  type `shell.exec`, command:
 
-  ```toml
-  [workflows]
-
-  [[workflows.workflow]]
-  name = "e2e-wf"   # bebas, pakai yang belum dipakai
-  author = "runner"
-  mode = "sequential"
-
-  [[workflows.workflow.tasks]]
-  task = "shell.exec"
-  args = "bash /home/runner/workspace/skills/replit/scripts/setup.sh --e2e --wf"
+  ```
+  bash /home/runner/workspace/skills/replit/scripts/setup.sh --e2e --wf
   ```
 
-  `install_e2e` PRINTS that block and leaves `.replit` alone: the file is the operator's,
-  and a second `name` collides with a workflow they already have. Nama, urutan, dan task
-  milik mereka; yang sudah menunjuk `setup.sh --e2e` dianggap beres. The skill dir is
-  persistent too, which is why the workflow points at `setup.sh` instead of a copied
-  script — no duplicate to drift.
+  `install_e2e` prints that one line and leaves `.replit` alone. A whole block is more
+  than the operator needs: the UI creates the workflow, and the name and ordering stay
+  theirs without touching the file (a pasted second `name` collides with a workflow they
+  already have, and `[workflows]` sits in a different place on every host). Anything that
+  already points at `setup.sh --e2e` counts as wired; an old entry is upgraded in place by
+  appending `--wf` to its `args`. The skill dir is persistent, which is why the command
+  points at `setup.sh` instead of a copied script — no duplicate to drift.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
   SOCKS path your `ssh` runs over, so a restart issued inline dies with the command still in
   flight. Write the restart to a file on B and launch it detached
