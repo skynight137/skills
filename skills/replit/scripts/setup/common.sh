@@ -105,9 +105,9 @@ TAILSCALE_DATA_DIR="${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/s
 # install_tailscale), so no script has to re-spell the socket path and get it wrong.
 TAILSCALE_STATE_DIR="${TAILSCALE_STATE_DIR:-$TAILSCALE_DATA_DIR/state}"
 TAILSCALE_SOCKET="${TAILSCALE_SOCKET:-$TAILSCALE_STATE_DIR/tailscaled.sock}"
-# Node name asserted at join. Empty = leave whatever the admin console says.
-# E2E_TS_HOST is the pre-rename name of this variable; still honoured.
-TAILSCALE_NODE_NAME="${TAILSCALE_NODE_NAME:-${E2E_TS_HOST:-}}"
+# Node name asserted at join, empty = leave whatever the console says. Not a registry
+# var: which name a machine gets is the operator's choice, pinned per run (args/secret).
+TAILSCALE_NODE_NAME="${TAILSCALE_NODE_NAME:-}"
 if [[ ! -e "$TAILSCALE_STATE_DIR/tailscaled.state" ]]; then
   for _ts_old in "$XDG_DATA_HOME/tailscale/state/tailscaled.state" "$HOME/.ts/state.json"; do
     [[ -f "$_ts_old" ]] || continue
@@ -225,7 +225,7 @@ seed_tool_wiring(){
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
   wire_tool cloudflared -- "$XDG_BIN_HOME"
-  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME -- "$XDG_BIN_HOME"
+  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET -- "$XDG_BIN_HOME"
   wire_tool sshx -- "$XDG_BIN_HOME"
   wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \

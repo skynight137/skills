@@ -218,8 +218,8 @@ install_tailscale() {
   # Paths AND the node name travel with the tool: every script reads them from the
   # environment instead of re-spelling the socket dir, and the rc block carries them
   # across shells so a run never has to be prefixed by hand.
-  record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME
-  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME -- "$XDG_BIN_HOME"
+  record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET
+  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET -- "$XDG_BIN_HOME"
   tailscale_write_launcher
 }
 

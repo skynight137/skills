@@ -145,7 +145,7 @@ bash setup.sh --<tool>                           # reinstall after the test
 - After `--clean`, confirm a **shared** `$XDG_BIN_HOME` PATH line SURVIVES: it is
   owned by every tool that has a binary there, so `owned_only_by` keeps it and
   removing it would break the others.
-- Run `--fix` twice and require an identical `md5sum` of the rc.
+- Run `--fix` twice and require an identical `md5sum` of the rc. When the md5 flaps while the content looks right, `sort` both copies and `diff` the line sets: the shared PATH `case` line also flips position between two `--fix` runs, so a changed line *set* is the only real regression — check the same pair on a clean tree before blaming your change.
 - An install run and a `--fix` run can differ **only** by the position of that
   shared dir line (same set, different order, because registration and rescue
   order feed the emitter). `diff` the two files and check the line set before
