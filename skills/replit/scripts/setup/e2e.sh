@@ -70,7 +70,16 @@ _e2e_persist_ssh() {
 _e2e_workflow() {
   local rp="${REPL_HOME:-$HOME/workspace}/.replit"
   [ -f "$rp" ] || { warn ".replit tidak ada — workflow autostart dilewati"; return 0; }
-  grep -q "setup.sh --e2e" "$rp" && { ok "workflow e2e sudah terdaftar"; return 0; }
+  grep -qE 'setup\.sh --e2e --wf' "$rp" && { ok "workflow e2e sudah terdaftar (--wf)"; return 0; }
+  # An entry written before --wf existed would otherwise match the old guard
+  # forever and keep the job-reaping behaviour. Rewrite just that args line.
+  if grep -qE '^args = ".*setup\.sh --e2e"$' "$rp"; then
+    sed -i -E 's|^(args = ".*setup\.sh --e2e)"$|\1 --wf"|' "$rp"
+    grep -qE 'setup\.sh --e2e --wf' "$rp" \
+      && { ok "workflow e2e di-upgrade ke --wf (entri lama tanpa --wf)"; return 0; } \
+      || warn "entri workflow e2e ada tapi gagal ditambahi --wf — cek $rp baris 'args'"
+  fi
+  grep -q 'setup.sh --e2e' "$rp" && { ok "workflow e2e sudah terdaftar"; return 0; }
   grep -q '^\[workflows\]' "$rp" || printf '\n[workflows]\n' >>"$rp"
   cat >>"$rp" <<EOF
 
