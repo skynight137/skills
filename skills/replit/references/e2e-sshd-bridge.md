@@ -38,7 +38,8 @@ What `install_e2e` does, in order (all idempotent, re-run to repair):
    can start.
 5. tailscaled userspace + SOCKS5 on `localhost:1055`, state in
    `$TAILSCALE_DATA_DIR/state` — `tailscale up` runs only after the socket answers.
-6. the `.replit` `[workflows]` entry (`name = "e2e"`), appended once.
+6. a ready-to-paste `[[workflows.workflow]]` block, PRINTED not written (see below),
+   with a suggested name that does not collide (`e2e-wf`, `e2e-wf1`, ...).
 7. prints the client-side hop in every form, best first: `tailscale nc %h %p`,
    `tailscale --socket=<sock> nc`, `ncat --proxy … --proxy-type socks5`, and only
    then `nc -X 5 -x`. `nc` is not portable: netcat-openbsd has `-X`, netcat-traditional
@@ -93,6 +94,12 @@ workflow entry (a reboot would just bring it back).
 - **A re-registered node gets a `-1` / `-2` suffix** (`server2-1`, `server2-2`) and a NEW
   `100.x` address; the old name stays listed as offline long after it is dead. Match by the
   live suffix, then rewrite the local `ProxyCommand`/`HostName`, never the stale entry.
+- **The `.replit` workflow is report-only.** Appending a block means owning a file that is
+  not ours: a second `name = "e2e"` collides with a workflow the operator already uses, and
+  every host differs in where `[workflows]` sits. So `--e2e` prints the block and leaves the
+  file alone; the operator names it and decides the ordering. Anything already pointing at
+  `setup.sh --e2e` counts as wired (no nagging), and an old entry is upgraded in place by
+  appending `--wf` to its `args` line.
 - **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
   command returns, taking the daemons with it, and a run whose output is redirected to a
   file shows nothing. `--wf` (= `--e2e` in workflow mode) prints the steps to the terminal
