@@ -1,5 +1,10 @@
 # SSH e2e hop into a second box (key-only sshd on a high port)
 
+> **Which file?** `references/e2e-sshd-bridge.md` is the current lane: `setup.sh --e2e --start`
+> does all of this itself (persistent `~/.ssh` symlink, tailnet hop, workflow notice). Read this
+> one for the manual-bootstrap variant and the raw non-root sshd config, then follow the bridge
+> file for anything that has to survive a restart.
+
 Goal: give the agent a real terminal on a **second** box (a fresh sandbox for
 testing a skill) so it can run setup there, instead of driving a browser xterm
 by mouse-simulated keystrokes. Works on a fresh Replit/Nix box as a normal
