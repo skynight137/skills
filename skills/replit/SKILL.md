@@ -65,7 +65,9 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    `$REPL_HOME/.config/bashrc` re-source on every terminal the operator opens,
    so a service line there re-fires per terminal and needs a fresh guard in
    each shell. Long-running services (`sshd`, `tailscaled`, the llm-wiki stack)
-   go in a `.replit` `[workflows]` entry, which runs once per boot. rc carries
+   go in a `.replit` `[workflows]` entry, which runs once per boot — but the
+   block is PRINTED by the installer, not written into `.replit`: names and
+   ordering stay with the operator. rc carries
    PATH/env only. See `references/shell-rc-and-zsh.md`. Corollary for code: a
    workflow's `args` must point at a **persistent** path (the skill dir under
    `$REPL_HOME`), never at a script copied into `$HOME`, and it must be
