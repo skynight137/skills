@@ -80,7 +80,8 @@ _e2e_workflow() {
   # by the --wf check, or a dead absolute path sits there forever.
   if grep -qE 'setup\.sh --e2e' "$rp"; then
     local wired
-    wired="$(grep -oE 'bash +[^"]*setup\.sh' "$rp" | head -1 | sed -E 's/^bash +//')"
+    # Only the line that carries --e2e: other workflows point at the same script.
+    wired="$(grep -oE 'bash +[^"]*setup\.sh --e2e' "$rp" | head -1 | sed -E 's/^bash +//; s/ --e2e$//')"
     if [[ -n "$wired" && ! -f "$wired" && ! -f "$base/$wired" ]]; then
       warn "entri workflow menunjuk '$wired' yang tak ada (skill dipindah?) — perbarui barisnya"
     else
