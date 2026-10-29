@@ -75,7 +75,7 @@ workflow entry (a reboot would just bring it back).
   type `shell.exec`, command:
 
   ```
-  bash <skill-dir>/scripts/setup.sh --e2e --wf      # path relatif ke workspace
+  bash <skill-dir>/scripts/setup.sh --e2e --start --wf      # path relatif ke workspace
   ```
 
   `install_e2e` prints that one line and leaves `.replit` alone. The path is made
@@ -136,7 +136,13 @@ workflow entry (a reboot would just bring it back).
   `cp -a <skill> /tmp/ws/replit` with `REPL_HOME=/tmp/ws` and a hand-written `.replit`
   gives all four paths in one pass — inside the workspace (relative), outside
   (absolute + note), stale entry (warning), valid entry (silent skip) — and leaves the
-  live `.replit` untouched (assert it with an `md5sum` before/after).
+  live `.replit` untouched (assert it with an `md5sum` before/after). Also override
+  `E2E_PORT`, `XDG_BIN_HOME` and `TAILSCALE_DATA_DIR` per case, or the run installs
+  tailscale and binds the operator's real port from a test copy. Every upgrade case is
+  run **twice**: the second pass must answer "already registered" byte-identically,
+  which is the only proof the rewrite is a fixed point. A shared helper script in the
+  scratch dir beats pasting the loop, and quote `$args` inside it — an unescaped `"`
+  from the sample `args` line ends the outer string.
 - **Print the log before dying.** A `die()` that exits before `tail -n 8 $LOG`
   hides the cause and the operator can only quote the last line back.
   Order: dump tail → then exit.
@@ -169,6 +175,13 @@ workflow entry (a reboot would just bring it back).
   need with `--e2e --start` (and `E2E_PORT=` if it is not the default) right after.
 - GNU sed here rejects `|` as the `s` delimiter on these `args`/quote patterns
   ("unknown option to `s'"); use `s#…#…#`.
+- **`cmd && cmd` as the last statement of a branch returns 1 under `errexit`**, so a
+  prepare that only wanted to print a note exits 1 and the runner reports the step as
+  failed. Wrap it: `if _e2e_cmd_external; then ok "…"; fi`.
+- **Prove "nothing was launched" with the listener, not `pgrep -f` counts.** The probe
+  shell's own command line contains the pattern, so pgrep sees a fresh PID on every run
+  and a prepare-only run looks like it started something: compare the banner
+  (`SSH-2.0-…` on the port) or `pgrep -af` output before/after instead.
 
 ## Delivery rule (operator preference)
 
