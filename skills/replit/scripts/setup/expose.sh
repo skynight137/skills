@@ -162,6 +162,17 @@ install_tailscale() {
   tmp="$XDG_DATA_HOME/_tailscale.tgz"
   tmpdir="$XDG_DATA_HOME/_tailscale-extract"
 
+  # Already at the channel version: no tarball, no checksum fetch, no rewiring —
+  # only the launcher is re-asserted. Re-running an installer is the repair path,
+  # so it must be cheap and quiet, not a re-download every boot.
+  if [[ -x "$XDG_BIN_HOME/tailscale" && -x "$XDG_BIN_HOME/tailscaled" ]] \
+     && "$XDG_BIN_HOME/tailscale" version 2>/dev/null | grep -qF "$ver"; then
+    skip "tailscale $ver sudah terpasang (tidak unduh ulang)"
+    record_tool_path_dirs "$XDG_BIN_HOME"
+    tailscale_write_launcher
+    return 0
+  fi
+
   echo "  Downloading $asset"
   curl -fsSL "$url" -o "$tmp" || die "tailscale download failed: $url"
 

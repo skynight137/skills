@@ -35,6 +35,20 @@ _e2e_banner() {
   timeout 3 bash -c "exec 3<>/dev/tcp/$h/$p; IFS= read -r -t 2 l <&3 && printf '%s' \"\$l\"" 2>/dev/null
 }
 
+# Client-side hop. `nc` is not portable: netcat-openbsd has -X/-x, but
+# netcat-traditional and busybox nc reject -X ("invalid option -- 'X'"). Print
+# every form, best first, so the operator never has to guess which nc they own.
+_e2e_ssh_hint() {
+  local u="$1" ip="$2" h="${2:-<ip-tailnet>}"
+  echo "  dari mesin lain (pilih yang ada di klien itu):"
+  echo "    tailscale (socket default): ssh -o ProxyCommand='tailscale nc %h %p' -p $E2E_PORT $u@$h"
+  echo "    tailscale userspace:        ssh -o ProxyCommand='tailscale --socket=<sock tailscaled klien> nc %h %p' -p $E2E_PORT $u@$h"
+  echo "    ncat:                       ssh -o ProxyCommand='ncat --proxy 127.0.0.1:1055 --proxy-type socks5 %h %p' -p $E2E_PORT $u@$h"
+  echo "    netcat-openbsd:             ssh -o ProxyCommand='nc -X 5 -x 127.0.0.1:1055 %h %p' -p $E2E_PORT $u@$h"
+  echo "    busybox/traditional nc tidak punya -X → pakai tailscale atau ncat"
+  [ -n "$ip" ] || echo "    alamat tailnet belum ada: isi TAILSCALE_AUTH_KEY lalu jalankan ulang"
+}
+
 # ~/.ssh -> persistent. Runs before anything writes a key, so an existing
 # hand-installed ~/.ssh is moved into the persistent dir instead of discarded.
 _e2e_persist_ssh() {
@@ -67,7 +81,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e"
+args = "bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e --wf"
 EOF
   ok "workflow e2e ditambahkan ke .replit (sekali per boot, bukan rc)"
 }
@@ -147,11 +161,20 @@ EOF
   # tailnet: binaries and node identity both live in persistent dirs
   local bin="$XDG_BIN_HOME" td="$XDG_BIN_HOME/tailscaled" tsc="$XDG_BIN_HOME/tailscale"
   if [ ! -x "$td" ] || [ ! -x "$tsc" ]; then
-    warn "tailscale belum terpasang — jalankan: $(basename "${BASH_SOURCE[0]:-setup.sh}") --tailscale"
-    return 0
+    # e2e is useless without the tailnet hop, and --e2e is what a workflow runs
+    # on boot — install it here instead of failing with a "run --tailscale" hint.
+    # install_tailscale skips its own download when the channel version is
+    # already on disk, so this costs one small JSON request on re-runs.
+    warn "tailscale belum terpasang — dipasang sekarang (butuh --tailscale sekali saja)"
+    install_tailscale || { warn "tailscale gagal dipasang"; return 1; }
   fi
   local state="$TAILSCALE_DATA_DIR/state" sock="$TAILSCALE_DATA_DIR/state/tailscaled.sock"
   mkdir -p "$state"
+  # Re-assert PATH wiring: this flag is the one a .replit workflow runs on boot,
+  # and a fresh box may never have seen --tailscale, which is what normally
+  # registers the dir.
+  record_tool_path_dirs "$bin"
+  wire_tool tailscale -- "$bin"
   if ! pgrep -f '^[^ ]*tailscaled --tun=userspace' >/dev/null 2>&1; then
     setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
       --outbound-http-proxy-listen=localhost:1055 \
@@ -171,5 +194,15 @@ EOF
   local ip
   ip="$("$tsc" --socket="$sock" ip -4 2>/dev/null | head -1)"
   [ -n "$ip" ] && ok "tailnet: $ip" || warn "node belum punya alamat tailnet"
-  ok "dari mesin lain: ssh -o ProxyCommand='nc -X 5 -x 127.0.0.1:1055 %h %p' -p $E2E_PORT $user@${ip:-<ip-tailnet>}"
+  _e2e_ssh_hint "$user" "$ip"
+
+
+  # Workflow mode: a task whose command exits counts as DONE and the job is
+  # reaped, so the daemons die with it. Streaming the log keeps one foreground
+  # process (and visible output) for as long as the workflow should run.
+  if $WF; then
+    echo
+    ok "mode workflow: log tailscaled mengalir di terminal (Ctrl-C untuk lepas)"
+    exec tail -n 20 -F "$TAILSCALE_DATA_DIR/tailscaled.log"
+  fi
 }
