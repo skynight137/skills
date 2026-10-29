@@ -30,6 +30,48 @@ enough and the key may be omitted; the `.replit` workflow runs the same command.
 
 ### Machines missing from the admin console
 
+- **Revoking an auth key does not remove machines.** The key only authorises a join; every
+  node then holds its own node key and stays listed until you delete it. A box that never
+  appears was not "blocked by the revoked key".
+- **A re-join reuses the identity already on disk.** If the state dir carries a node key,
+  `up` short-circuits: the box stays exactly as it was and no new machine entry is created.
+  Wipe `$TAILSCALE_STATE_DIR` first when the point of the join is a fresh machine.
+- **Ephemeral nodes are deleted seconds after the daemon stops** — they exist only while the
+  box lives, so they are the wrong choice for anything you must find in the console later.
+  Disable Ephemeral on every machine you need to keep.
+- **A tagged key without a tag owner that auto-approves** leaves the node unauthorized: it
+  never reaches the machine list. Check for an `AuthURL` in `status --json`.
+
+### Reading the auth key from a Secret without a restart
+
+Replit Secrets reach only processes started AFTER they were set — the agent's own shell
+predates the change and sees nothing, and grepping `.replit` finds nothing either (Secrets
+are a different store from `[userenv.shared]`). Recover the value from a live process
+environment instead of asking the operator to paste it:
+
+```bash
+for f in /proc/*/environ; do
+  tr '\0' '\n' <"$f" 2>/dev/null | grep -q '^TAILSCALE_AUTH_KEY=.' && { tr '\0' '\n' <"$f"; break; }
+done
+```
+
+`/proc/1/environ` is often denied; same-uid processes are readable. Restarting the workflow
+is the alternative, not a prerequisite.
+
+### Syncing a changed skill to the far box
+
+`rsync` is usually absent there (`bash: rsync: command not found`). Use tar over ssh, with
+`--strip-components=1` so the archive's own `skills/` prefix does not nest (`skills/skills/
+replit`) — the failure is silent and the far copy keeps the OLD scripts:
+
+```bash
+tar cz skills/replit | ssh "$host" 'tar xzf - -C ~/workspace/.agents/skills --strip-components=1'
+```
+
+Then prove the copy landed by grepping a string only the new version has, and only then run
+`--start` there. Delete the stale sibling dir if a bad extract already nested one.
+
+
 - **Wrong tailnet outranks every other cause when a fresh join shows nothing in the console you are watching.** An auth key minted in another account joins an EMPTY tailnet: the node reports `Running`, gets a fresh 100.x address, and has `peers: 0`, while every machine you expected is absent. Compare `MagicDNSSuffix` from `tailscale --socket=<sock> status --json` on the joining box with the one on the box you watch from — a different `tailXXXXXX.ts.net` proves an account mismatch, not a broken key. A correct join sees neighbours within seconds, so `peers: 0` is the tell. Only a key from the account that owns the machines fixes it; rejoining never does.
 
 ### Try a join without disturbing the live node
@@ -74,6 +116,14 @@ Replit Secrets reach app processes only, never a shell started later: to exercis
 - Ephemeral is the wrong choice only where the box must keep a stable identity across
   restarts (the machine you remote FROM, or one with DNS/MagicDNS entries pinned):
   there, join with a non-ephemeral key and let the state dir carry the identity.
+
+### The node name rides in the workflow args
+
+An existing workflow entry is upgraded, never blindly rewritten, so the node name has to
+be carried explicitly: with `TAILSCALE_NODE_NAME` set the task line is pinned to
+`TAILSCALE_NODE_NAME=<name> bash … --remote-shell --start --wf`, and a rename rewrites
+the pin instead of appending a second one. Unpinned, the console keeps the last say —
+which is what a box whose name you rename on the dashboard wants.
 
 ### Moving a box to another tailnet
 
