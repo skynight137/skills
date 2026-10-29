@@ -14,7 +14,10 @@ metadata:
 
 Lane 5 pointer: reaching a *second* box from this one (sshd bootstrap, proxy
 port reality, `command -v`/banner-probe traps, path-not-paste delivery) lives in
-`references/e2e-sshd-bridge.md`.
+`references/e2e-sshd-bridge.md`. Reachability is **per node, not per tailnet**: a
+listed peer answers only once it has joined, run the prep there and carries the hop
+key. Survey with `scripts/probe-tailnet-peers.sh [port]` and never promise "any
+machine on the tailnet".
 
 Everything here is specific to running **on a Replit/Nix workspace**. The
 platform breaks normal Linux assumptions ($HOME wiped, /nix/store GC, npm
