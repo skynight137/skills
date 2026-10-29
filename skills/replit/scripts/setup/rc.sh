@@ -53,15 +53,16 @@ Options:
                         (= \$REPL_HOME/.local/share/tailscale, PRESERVED by
                         --clean tailscale; NOT under \$HOME, which is wiped)
   --sshx                Install sshx (collaborative web terminal; direct binary)
-  --wf                  = --e2e dalam mode workflow: log dialirkan ke terminal
-                        (tidak ke file) dan proses TIDAK keluar, jadi job
+  --wf                  = --e2e --start dalam mode workflow: log dialirkan ke
+                        terminal (tidak ke file) dan proses TIDAK keluar, jadi job
                         .replit [workflows] tidak dianggap selesai
-  --e2e                 sshd key-only di port $E2E_PORT + tailnet supaya mesin lain
-                        bisa ssh masuk buat run e2e. ~/.ssh DI-SYMLINK ke
-                        \$REPL_HOME/.ssh (persisten) dan daemon diterbitkan sebagai
-                        entri .replit [workflows] — bukan rc. Run pertama butuh
-                        TAILSCALE_AUTH_KEY=tskey-... di depannya; boot berikutnya
-                        pakai identitas node yang tersimpan.
+  --e2e                 SIAPKAN sshd key-only ($E2E_PORT) + tailnet: host key,
+                        authorized_keys, config, dir state. TIDAK menyalakan proses.
+                        ~/.ssh DI-SYMLINK ke \$REPL_HOME/.ssh (persisten). Selesai
+                        menyiapkan, perintah `--e2e --start` dicetak.
+  --start               = --e2e lalu NYALAKAN sshd + tailscaled dan sambung tailnet.
+                        Run pertama butuh TAILSCALE_AUTH_KEY=tskey-... di depannya;
+                        boot berikutnya pakai identitas node yang tersimpan.
   --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
                         Firefox server + MCP adapter). Provisions the package-pinned
                         Camoufox engine into the persistent cache, applies the Replit
@@ -152,7 +153,8 @@ parse_args() {
       --tailscale)              INSTALL_TAILSCALE=true ;;
       --sshx)                   INSTALL_SSHX=true ;;
       --e2e)                    INSTALL_E2E=true ;;
-      --wf)                     INSTALL_E2E=true; WF=true ;;
+      --wf)                     INSTALL_E2E=true; WF=true; START=true ;;
+      --start)                  INSTALL_E2E=true; START=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --llm-wiki)               INSTALL_LLM_WIKI=true ;;

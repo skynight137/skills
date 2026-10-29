@@ -12,13 +12,16 @@ the transport.
 - Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
 works from its own terminal.
 
-## Procedure (`setup.sh --e2e`)
+## Procedure (`setup.sh --e2e`, then `--start`)
 
 Everything below is already in the skill — the operator runs **one** command on B,
-no script to copy, no key to hardcode:
+no script to copy, no key to hardcode. `--e2e` alone only PREPARES (host key, config,
+`authorized_keys`, dirs, binaries, `~/.ssh` symlink) and launches nothing; `--start`
+is what brings the daemons up, so a preparing run never leaves a surprise listener
+behind:
 
 ```bash
-TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --e2e
+TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --e2e --start
 ```
 
 The auth key is read from the **environment only** (never baked into the script, so
@@ -38,8 +41,8 @@ What `install_e2e` does, in order (all idempotent, re-run to repair):
    can start.
 5. tailscaled userspace + SOCKS5 on `localhost:1055`, state in
    `$TAILSCALE_DATA_DIR/state` — `tailscale up` runs only after the socket answers.
-6. a ready-to-paste `[[workflows.workflow]]` block, PRINTED not written (see below),
-   with a suggested name that does not collide (`e2e-wf`, `e2e-wf1`, ...).
+6. ONE command line for the operator to add as a Replit-UI workflow task, PRINTED not
+   written, path relative to the workspace (see below).
 7. prints the client-side hop in every form, best first: `tailscale nc %h %p`,
    `tailscale --socket=<sock> nc`, `ncat --proxy … --proxy-type socks5`, and only
    then `nc -X 5 -x`. `nc` is not portable: netcat-openbsd has `-X`, netcat-traditional
@@ -96,18 +99,32 @@ workflow entry (a reboot would just bring it back).
 - **A re-registered node gets a `-1` / `-2` suffix** (`server2-1`, `server2-2`) and a NEW
   `100.x` address; the old name stays listed as offline long after it is dead. Match by the
   live suffix, then rewrite the local `ProxyCommand`/`HostName`, never the stale entry.
-- **The `.replit` workflow is report-only.** Appending a block means owning a file that is
-  not ours: a second `name = "e2e"` collides with a workflow the operator already uses, and
-  every host differs in where `[workflows]` sits. So `--e2e` prints the block and leaves the
-  file alone; the operator names it and decides the ordering. Anything already pointing at
-  `setup.sh --e2e` counts as wired (no nagging), and an old entry is upgraded in place by
-  appending `--wf` to its `args` line.
+- **The `.replit` workflow is report-only, and one line is the whole notice.** Writing the
+  file means owning something that is not ours: a second `name = "e2e"` collides with a
+  workflow the operator already uses, and `[workflows]` sits in a different place on every
+  host. But a full `[[workflows.workflow]]` block is also more than needed — the UI creates
+  the task for them — so `--e2e` prints just `bash <skill-dir>/scripts/setup.sh --e2e --start --wf`
+  and leaves the file alone; name and ordering stay theirs.
+- **Print the `args` path workspace-relative, never absolute.** Workflows run with the
+  workspace as cwd, so a relative path survives the operator moving or renaming the skill
+  dir; an absolute `$E2E_SKILL_ROOT` breaks on the next move. Only a copy outside the
+  workspace is printed absolute, with a note to move it in.
+- **When an entry already points at `setup.sh --e2e`, check its path BEFORE the `--wf`
+  check.** Order the other way and a dead path hides behind the "already wired" branch
+  forever: report `skill dipindah?` and print the current line instead of skipping. Also
+  grep only the line that carries `--e2e` (`grep -oE 'bash +[^"]*setup\.sh --e2e' | head -1`)
+  — other workflows in the same file (`--camofox`, …) point at that very script, so a bare
+  `head -1` of all `setup.sh` lines reads the wrong one and flags a healthy entry.
+  Upgrading an old entry in place is additive and idempotent: `--start` is inserted
+  straight after `--e2e` (so an existing `--wf` survives) and `--wf` is appended when
+  missing, both then verified by grep. Note GNU sed rejects `|` as the delimiter on these
+  patterns — use `s#…#…#`.
 - **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
   command returns, taking the daemons with it, and a run whose output is redirected to a
-  file shows nothing. `--wf` (= `--e2e` in workflow mode) prints the steps to the terminal
+  file shows nothing. `--wf` (implies `--e2e --start`) prints the steps to the terminal
   and ends with `tail -F` on the tailscaled log, so one foreground process (and visible
   output) holds the job open. Every other flag is a one-shot install: use `--e2e` by hand,
-  `--e2e --wf` in `.replit [workflows]`.
+  `--e2e --start --wf` in `.replit [workflows]`.
 - **The SOCKS relay fails intermittently** (`General SOCKS server failure` while the same
   probe answered a minute earlier). Retry the probe 2–3× before declaring the port dead, and
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success
@@ -115,6 +132,11 @@ workflow entry (a reboot would just bring it back).
 
 ## Pitfalls (each cost a round trip)
 
+- **Test the workflow notice against throwaway copies, not the live workspace.**
+  `cp -a <skill> /tmp/ws/replit` with `REPL_HOME=/tmp/ws` and a hand-written `.replit`
+  gives all four paths in one pass — inside the workspace (relative), outside
+  (absolute + note), stale entry (warning), valid entry (silent skip) — and leaves the
+  live `.replit` untouched (assert it with an `md5sum` before/after).
 - **Print the log before dying.** A `die()` that exits before `tail -n 8 $LOG`
   hides the cause and the operator can only quote the last line back.
   Order: dump tail → then exit.
