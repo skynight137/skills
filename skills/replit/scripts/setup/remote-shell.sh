@@ -96,6 +96,30 @@ __rs_workflow() {
       && ok "entri workflow lama: --e2e di-rename ke --remote-shell"
   fi
 
+  # The task NAME they typed may still say "e2e" too. Rename it only when it is exactly
+  # that and nobody else holds "remote-shell" — two entries with one name collide.
+  if ! grep -qF 'name = "remote-shell"' "$rp" && grep -qF 'name = "e2e"' "$rp"; then
+    python3 - "$rp" <<'PY' && ok "nama task lama 'e2e' di-rename ke 'remote-shell'"
+import re, sys
+p = sys.argv[1]
+lines = open(p).read().split("\n")
+cur = None
+for i, ln in enumerate(lines):
+    if ln.strip() == "[[workflows.workflow]]":
+        cur = None
+    m = re.match(r'\s*name\s*=\s*"([^"]*)"', ln)
+    if m:
+        cur = m.group(1)
+    if cur == "e2e" and re.search(r'setup\.sh --remote-shell', ln):
+        for j in range(i, -1, -1):
+            if re.match(r'\s*name\s*=\s*"e2e"', lines[j]):
+                lines[j] = lines[j].replace('"e2e"', '"remote-shell"')
+                open(p, "w").write("\n".join(lines))
+                sys.exit(0)
+sys.exit(1)
+PY
+  fi
+
   # Already wired? Then only two things matter: does the command it points at still
   # exist, and does it carry --wf. Path first — a moved skill dir must not be masked
   # by the --wf check, or a dead absolute path sits there forever.
@@ -121,7 +145,7 @@ __rs_workflow() {
       fi
       if [ -n "${changed# }" ]; then
         grep -qE 'setup\.sh --remote-shell --start --wf' "$rp" \
-          && { ok "workflow remote-shell di-upgrpgrade ke$changed (entri lama)"; return 0; } \
+          && { ok "workflow remote-shell di-upgrade ke$changed (entri lama)"; return 0; } \
           || warn "entri workflow remote-shell ada tapi gagal ditambahi$changed — cek $rp baris 'args'"
         return 0
       fi
