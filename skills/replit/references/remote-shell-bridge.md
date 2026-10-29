@@ -133,8 +133,11 @@ workflow entry (a reboot would just bring it back).
   Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
   `--start` asserts it, so pin it in the workflow `args`
   (`TAILSCALE_NODE_NAME=hermesagent bash <skill>/scripts/setup.sh --remote-shell --start --wf`) rather than trusting
-  the OS hostname. A retired name can linger in `tailscale status` until removed in the
-  console; the live node is the one under `self`.
+  the OS hostname — and not in an rc, which re-fires per terminal. A retired name can linger
+  in `tailscale status` until removed in the console; the live node is the one under `self`.
+  `tailscale set --hostname=` returns before the control plane has applied it, so POLL the
+  JSON `Self.HostName` (a few seconds) instead of reading once — a single read right after the
+  call still shows the old name and looks like the call failed.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
   SOCKS path your `ssh` runs over, so a restart issued inline dies with the command still in
   flight. Write the restart to a file on B and launch it detached
