@@ -99,6 +99,11 @@ workflow entry (a reboot would just bring it back).
   with `tailscale set --hostname=<name>` or the console; `up` refuses to change one pref
   without every non-default being restated (`--ssh`, `--exit-node-allow-lan-access`), which
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
+  Setting `E2E_TS_HOST` is how the skill side makes a name stick: when exported, every
+  `--start` asserts it, so pin it in the workflow `args`
+  (`E2E_TS_HOST=hermes bash <skill>/scripts/setup.sh --e2e --start --wf`) rather than trusting
+  the OS hostname. A retired name can linger in `tailscale status` until removed in the
+  console; the live node is the one under `self`.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
   SOCKS path your `ssh` runs over, so a restart issued inline dies with the command still in
   flight. Write the restart to a file on B and launch it detached
@@ -234,5 +239,16 @@ repo is already public.
   silently and `ssh` fails with `Connection closed by UNKNOWN port 65535` while the
   config still looks right. Rewrite `HostName` from live `tailscale status` output, and
   when the relay port changes, fix every `ProxyCommand` with it.
+- **Resolve "which node is this machine" from the JSON `Self`, never from the status table.**
+  `tailscale status` prints an unlabelled IP/name/owner/os table — the box's own row looks
+  exactly like a peer's, so a name remembered from chat gets pinned onto the wrong machine
+  (`hermes-syad` reads like "the box", and is a stranger peer that has been offline for
+  hours). `tailscale status --json | python3 -c 'import json,sys;print(json.load(sys.stdin)["Self"]["HostName"])'`
+  answers it, and `scripts/probe-tailnet-peers.sh` prints that row as `self` first.
+- **Prove a rename by the address, not by the name.** Compare the self `100.x` from
+  `status --json` before and after, then run `ssh -o BatchMode=yes <host> 'echo OK'` against
+  a peer you already hold a `Host` block for. The address is keyed to the node identity, so
+  an unchanged IP plus a working session is the evidence; a changed or renamed node in the
+  table proves nothing on its own.
 - `funnel-ingress-node` entries in `tailscale status` are Tailscale's own IPv6-only
   relay infra, not operator machines — never count them as targets.

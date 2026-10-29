@@ -17,7 +17,9 @@ port reality, `command -v`/banner-probe traps, path-not-paste delivery) lives in
 `references/e2e-sshd-bridge.md`. Reachability is **per node, not per tailnet**: a
 listed peer answers only once it has joined, run the prep there and carries the hop
 key. Survey with `scripts/probe-tailnet-peers.sh [port]` and never promise "any
-machine on the tailnet".
+machine on the tailnet". The box's own row is printed as `self` there — resolve self
+from the JSON `Self` field, never from a name you remember, since the plain `status`
+table labels no row.
 
 Everything here is specific to running **on a Replit/Nix workspace**. The
 platform breaks normal Linux assumptions ($HOME wiped, /nix/store GC, npm
@@ -41,7 +43,7 @@ other lane assumes its persistence rules.
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js` |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (prepares only: sshd key-only config + tailnet identity, persistent `~/.ssh`, prints one workspace-relative workflow task line); `--start` launches the daemons, `--wf` = `--e2e --start` in workflow mode (streams logs, holds the job open) |
+| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (prepares only: sshd key-only config + tailnet identity, persistent `~/.ssh`, prints one workspace-relative workflow task line); `--start` launches the daemons, `--wf` = `--e2e --start` in workflow mode (streams logs, holds the job open); export `E2E_TS_HOST=<name>` to pin the tailnet node name (otherwise the console's name is left alone) |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,

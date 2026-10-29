@@ -23,8 +23,9 @@ nc_bin="$(command -v nc || printf '%s' /repl/tools/bin/nc)"
 "$tsc" --socket="$sock" status --json 2>/dev/null | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
-self_name = (d.get("Self") or {}).get("HostName", "?")
-print("SELF %s" % self_name)
+self_node = d.get("Self") or {}
+self_ips = [i for i in (self_node.get("TailscaleIPs") or []) if ":" not in i]
+print("SELF %s %s" % (self_node.get("HostName", "?"), (self_ips or ["?"])[0]))
 for p in (d.get("Peer") or {}).values():
     if p.get("HostName", "").startswith("funnel-ingress-node"):
         continue
