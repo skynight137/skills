@@ -72,15 +72,21 @@ workflow entry (a reboot would just bring it back).
   type `shell.exec`, command:
 
   ```
-  bash /home/runner/workspace/skills/replit/scripts/setup.sh --e2e --wf
+  bash <skill-dir>/scripts/setup.sh --e2e --wf      # path relatif ke workspace
   ```
 
-  `install_e2e` prints that one line and leaves `.replit` alone. A whole block is more
+  `install_e2e` prints that one line and leaves `.replit` alone. The path is made
+  relative to the workspace whenever the skill lives inside it, because a workflow runs
+  with the workspace as cwd — moving or renaming the skill dir then cannot leave a dead
+  absolute path behind; only a copy outside the workspace is printed absolute, with a
+  note to move it in. A whole block is more
   than the operator needs: the UI creates the workflow, and the name and ordering stay
   theirs without touching the file (a pasted second `name` collides with a workflow they
   already have, and `[workflows]` sits in a different place on every host). Anything that
   already points at `setup.sh --e2e` counts as wired; an old entry is upgraded in place by
-  appending `--wf` to its `args`. The skill dir is persistent, which is why the command
+  appending `--wf` to its `args`, and one that points at a path which no longer exists is
+  reported (skill dir moved) instead of being silently accepted. The `--wf` check runs only
+  after the path check, or a dead path hides behind the "already wired" branch. The skill dir is persistent, which is why the command
   points at `setup.sh` instead of a copied script — no duplicate to drift.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
   SOCKS path your `ssh` runs over, so a restart issued inline dies with the command still in
