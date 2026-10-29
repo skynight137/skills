@@ -69,7 +69,8 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    Replit UI by the operator from one printed command, not written into
    `.replit` by the installer: names and ordering stay theirs. rc carries
    PATH/env only. See `references/shell-rc-and-zsh.md`. Corollary for code: a
-   workflow's `args` must point at a **persistent** path (the skill dir under
+   workflow's `args` must point at a **persistent and workspace-relative** path
+   (the skill dir under
    `$REPL_HOME`), never at a script copied into `$HOME`, and it must be
    idempotent — re-running is the normal repair path, so skip a live daemon
    instead of killing it (killing `tailscaled` cuts the very SOCKS hop the

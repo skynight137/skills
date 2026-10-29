@@ -73,24 +73,41 @@ _e2e_persist_ssh() {
 _e2e_workflow() {
   local rp="${REPL_HOME:-$HOME/workspace}/.replit"
   [ -f "$rp" ] || { warn ".replit tidak ada — workflow autostart dilewati"; return 0; }
-  grep -qE 'setup\.sh --e2e --wf' "$rp" && { ok "workflow e2e sudah terdaftar (--wf)"; return 0; }
-  # An entry written before --wf existed would otherwise match the old guard
-  # forever and keep the job-reaping behaviour. Rewrite just that args line.
-  if grep -qE '^args = ".*setup\.sh --e2e"$' "$rp"; then
-    sed -i -E 's|^(args = ".*setup\.sh --e2e)"$|\1 --wf"|' "$rp"
-    grep -qE 'setup\.sh --e2e --wf' "$rp" \
-      && { ok "workflow e2e di-upgrade ke --wf (entri lama tanpa --wf)"; return 0; } \
-      || warn "entri workflow e2e ada tapi gagal ditambahi --wf — cek $rp baris 'args'"
+  local base="${REPL_HOME:-$HOME/workspace}"
+
+  # Already wired? Then only two things matter: does the command it points at still
+  # exist, and does it carry --wf. Path first — a moved skill dir must not be masked
+  # by the --wf check, or a dead absolute path sits there forever.
+  if grep -qE 'setup\.sh --e2e' "$rp"; then
+    local wired
+    wired="$(grep -oE 'bash +[^"]*setup\.sh' "$rp" | head -1 | sed -E 's/^bash +//')"
+    if [[ -n "$wired" && ! -f "$wired" && ! -f "$base/$wired" ]]; then
+      warn "entri workflow menunjuk '$wired' yang tak ada (skill dipindah?) — perbarui barisnya"
+    else
+      grep -qE 'setup\.sh --e2e --wf' "$rp" && { ok "workflow e2e sudah terdaftar (--wf)"; return 0; }
+      if grep -qE '^args = ".*setup\.sh --e2e"$' "$rp"; then
+        sed -i -E 's|^(args = ".*setup\.sh --e2e)"$|\1 --wf"|' "$rp"
+        grep -qE 'setup\.sh --e2e --wf' "$rp" \
+          && { ok "workflow e2e di-upgrade ke --wf (entri lama tanpa --wf)"; return 0; } \
+          || warn "entri workflow e2e ada tapi gagal ditambahi --wf — cek $rp baris 'args'"
+      fi
+      skip "workflow e2e sudah ada di $rp — tidak diubah"
+      return 0
+    fi
   fi
-  # Already wired by the operator (any name, any wording): nothing to say.
-  grep -qE 'setup\.sh --e2e' "$rp" && { skip "workflow e2e sudah ada di $rp — tidak diubah"; return 0; }
 
   # One line to hand over, nothing to paste wholesale: the Replit UI adds the
   # task for them, the name and the ordering stay theirs at no cost.
+  # Relative to the workspace when the skill lives inside it: workflows run with
+  # the workspace as cwd, so the command survives the user moving or renaming the
+  # skill dir. Only an out-of-workspace copy needs the absolute path.
+  local cmd="$E2E_SKILL_ROOT/scripts/setup.sh"
+  [[ "$cmd" == "$base"/* ]] && cmd="${cmd#"$base"/}"
   echo
   ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
-  echo "    bash $E2E_SKILL_ROOT/scripts/setup.sh --e2e --wf"
+  echo "    bash $cmd --e2e --wf"
   ok "  nama workflow & urutannya bebas; --wf menahan task (tail -F) supaya job tidak di-reap"
+  [[ "$cmd" == /* ]] && ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"
 }
 
 install_e2e() {
