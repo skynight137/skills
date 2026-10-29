@@ -250,6 +250,7 @@ INSTALL_CLOUDFLARED=false
 INSTALL_TAILSCALE=false
 INSTALL_SSHX=false
 INSTALL_E2E=false
+WF=false   # --wf: workflow mode (stream logs to the terminal, keep the job alive)
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
 INSTALL_HERMES_CHROMIUM=false

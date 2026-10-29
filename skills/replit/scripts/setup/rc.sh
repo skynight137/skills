@@ -53,6 +53,9 @@ Options:
                         (= \$REPL_HOME/.local/share/tailscale, PRESERVED by
                         --clean tailscale; NOT under \$HOME, which is wiped)
   --sshx                Install sshx (collaborative web terminal; direct binary)
+  --wf                  = --e2e dalam mode workflow: log dialirkan ke terminal
+                        (tidak ke file) dan proses TIDAK keluar, jadi job
+                        .replit [workflows] tidak dianggap selesai
   --e2e                 sshd key-only di port $E2E_PORT + tailnet supaya mesin lain
                         bisa ssh masuk buat run e2e. ~/.ssh DI-SYMLINK ke
                         \$REPL_HOME/.ssh (persisten) dan daemon diterbitkan sebagai
@@ -149,6 +152,7 @@ parse_args() {
       --tailscale)              INSTALL_TAILSCALE=true ;;
       --sshx)                   INSTALL_SSHX=true ;;
       --e2e)                    INSTALL_E2E=true ;;
+      --wf)                     INSTALL_E2E=true; WF=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --llm-wiki)               INSTALL_LLM_WIKI=true ;;

@@ -39,8 +39,10 @@ What `install_e2e` does, in order (all idempotent, re-run to repair):
 5. tailscaled userspace + SOCKS5 on `localhost:1055`, state in
    `$TAILSCALE_DATA_DIR/state` — `tailscale up` runs only after the socket answers.
 6. the `.replit` `[workflows]` entry (`name = "e2e"`), appended once.
-7. prints the exact client-side `ssh -o ProxyCommand='nc -X 5 -x 127.0.0.1:1055 …'`
-   line with the tailnet address.
+7. prints the client-side hop in every form, best first: `tailscale nc %h %p`,
+   `tailscale --socket=<sock> nc`, `ncat --proxy … --proxy-type socks5`, and only
+   then `nc -X 5 -x`. `nc` is not portable: netcat-openbsd has `-X`, netcat-traditional
+   and busybox `nc` answer `invalid option -- 'X'`, so never print that form alone.
 
 Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
@@ -91,6 +93,12 @@ workflow entry (a reboot would just bring it back).
 - **A re-registered node gets a `-1` / `-2` suffix** (`server2-1`, `server2-2`) and a NEW
   `100.x` address; the old name stays listed as offline long after it is dead. Match by the
   live suffix, then rewrite the local `ProxyCommand`/`HostName`, never the stale entry.
+- **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
+  command returns, taking the daemons with it, and a run whose output is redirected to a
+  file shows nothing. `--wf` (= `--e2e` in workflow mode) prints the steps to the terminal
+  and ends with `tail -F` on the tailscaled log, so one foreground process (and visible
+  output) holds the job open. Every other flag is a one-shot install: use `--e2e` by hand,
+  `--e2e --wf` in `.replit [workflows]`.
 - **The SOCKS relay fails intermittently** (`General SOCKS server failure` while the same
   probe answered a minute earlier). Retry the probe 2–3× before declaring the port dead, and
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success
