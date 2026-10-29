@@ -53,14 +53,14 @@ Options:
                         (= \$REPL_HOME/.local/share/tailscale, PRESERVED by
                         --clean tailscale; NOT under \$HOME, which is wiped)
   --sshx                Install sshx (collaborative web terminal; direct binary)
-  --wf                  = --e2e --start dalam mode workflow: log dialirkan ke
+  --wf                  = --remote-shell --start dalam mode workflow: log dialirkan ke
                         terminal (tidak ke file) dan proses TIDAK keluar, jadi job
                         .replit [workflows] tidak dianggap selesai
-  --e2e                 SIAPKAN sshd key-only ($E2E_PORT) + tailnet: host key,
+  --remote-shell        SIAPKAN sshd key-only ($RS_PORT) + tailnet: host key,
                         authorized_keys, config, dir state. TIDAK menyalakan proses.
                         ~/.ssh DI-SYMLINK ke \$REPL_HOME/.ssh (persisten). Selesai
-                        menyiapkan, perintah `--e2e --start` dicetak.
-  --start               = --e2e lalu NYALAKAN sshd + tailscaled dan sambung tailnet.
+                        menyiapkan, perintah `--remote-shell --start` dicetak.
+  --start               = --remote-shell lalu NYALAKAN sshd + tailscaled dan sambung tailnet.
                         Run pertama butuh TAILSCALE_AUTH_KEY=tskey-... di depannya;
                         boot berikutnya pakai identitas node yang tersimpan.
   --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
@@ -96,7 +96,7 @@ Options:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
                         claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|
-                        cloudflared|tailscale|sshx|e2e removes one
+                        cloudflared|tailscale|sshx|remote-shell removes one
                         tool. Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
                         USER DATA: tools that own it are handled safely —
@@ -152,9 +152,9 @@ parse_args() {
       --cloudflared)            INSTALL_CLOUDFLARED=true ;;
       --tailscale)              INSTALL_TAILSCALE=true ;;
       --sshx)                   INSTALL_SSHX=true ;;
-      --e2e)                    INSTALL_E2E=true ;;
-      --wf)                     INSTALL_E2E=true; WF=true; START=true ;;
-      --start)                  INSTALL_E2E=true; START=true ;;
+      --remote-shell|--e2e)    INSTALL_REMOTE_SHELL=true ;;
+      --wf)                     INSTALL_REMOTE_SHELL=true; WF=true; START=true ;;
+      --start)                  INSTALL_REMOTE_SHELL=true; START=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --llm-wiki)               INSTALL_LLM_WIKI=true ;;
@@ -200,7 +200,7 @@ parse_args() {
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
-     && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_E2E \
+     && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_REMOTE_SHELL \
      && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
@@ -223,7 +223,7 @@ parse_args() {
     INSTALL_CLOUDFLARED=true
     INSTALL_TAILSCALE=true
     INSTALL_SSHX=true
-    INSTALL_E2E=true
+    INSTALL_REMOTE_SHELL=true
     INSTALL_CLIPROXY=true
     INSTALL_CAMOFOX=true
     INSTALL_HERMES_CHROMIUM=true

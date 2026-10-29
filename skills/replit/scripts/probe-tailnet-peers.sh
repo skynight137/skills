@@ -3,7 +3,7 @@
 # usage: probe-tailnet-peers.sh [port] [socks-port]
 #
 # Answers "which machines can we actually remote into" with evidence instead of a
-# promise: a peer is only a target once it is online, has run `setup.sh --e2e
+# promise: a peer is only a target once it is online, has run `setup.sh --remote-shell
 # --start` there, and carries the hop key. Tailscale's own funnel-ingress nodes are
 # skipped. Survey, not a gate: always exits 0.
 #
@@ -14,7 +14,7 @@ set -uo pipefail
 port="${1:-6800}"
 socks="${2:-1055}"
 state="${TAILSCALE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/tailscale}"
-sock="$state/state/tailscaled.sock"
+sock="${TAILSCALE_SOCKET:-$state/state/tailscaled.sock}"
 tsc="$(command -v tailscale || printf '%s' "${XDG_BIN_HOME:-$HOME/.local/bin}/tailscale")"
 nc_bin="$(command -v nc || printf '%s' /repl/tools/bin/nc)"
 

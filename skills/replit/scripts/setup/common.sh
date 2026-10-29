@@ -99,13 +99,20 @@ OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
 # every .ssh/config entry or saved URL pointing at the old one rots. Park the identity
 # in the persistent repl workspace (REPL_HOME) instead, and adopt a pre-existing
 # $HOME identity once so already-registered boxes keep their address.
-E2E_PORT="${E2E_PORT:-6800}"
+RS_PORT="${RS_PORT:-6800}"
 TAILSCALE_DATA_DIR="${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/share/tailscale}"
-if [[ ! -e "$TAILSCALE_DATA_DIR/state/tailscaled.state" ]]; then
+# Derived once here and exported by the tools registry (below, and in
+# install_tailscale), so no script has to re-spell the socket path and get it wrong.
+TAILSCALE_STATE_DIR="${TAILSCALE_STATE_DIR:-$TAILSCALE_DATA_DIR/state}"
+TAILSCALE_SOCKET="${TAILSCALE_SOCKET:-$TAILSCALE_STATE_DIR/tailscaled.sock}"
+# Node name asserted at join. Empty = leave whatever the admin console says.
+# E2E_TS_HOST is the pre-rename name of this variable; still honoured.
+TAILSCALE_NODE_NAME="${TAILSCALE_NODE_NAME:-${E2E_TS_HOST:-}}"
+if [[ ! -e "$TAILSCALE_STATE_DIR/tailscaled.state" ]]; then
   for _ts_old in "$XDG_DATA_HOME/tailscale/state/tailscaled.state" "$HOME/.ts/state.json"; do
     [[ -f "$_ts_old" ]] || continue
-    mkdir -p "$TAILSCALE_DATA_DIR/state"
-    if cp -f "$_ts_old" "$TAILSCALE_DATA_DIR/state/tailscaled.state"; then
+    mkdir -p "$TAILSCALE_STATE_DIR"
+    if cp -f "$_ts_old" "$TAILSCALE_STATE_DIR/tailscaled.state"; then
       echo "tailscale: adopted node identity from $_ts_old" >&2
     fi
     break
@@ -218,7 +225,7 @@ seed_tool_wiring(){
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
   wire_tool cloudflared -- "$XDG_BIN_HOME"
-  wire_tool tailscale -- "$XDG_BIN_HOME"
+  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_NODE_NAME -- "$XDG_BIN_HOME"
   wire_tool sshx -- "$XDG_BIN_HOME"
   wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
@@ -249,9 +256,9 @@ INSTALL_FFMPEG=false
 INSTALL_CLOUDFLARED=false
 INSTALL_TAILSCALE=false
 INSTALL_SSHX=false
-INSTALL_E2E=false
+INSTALL_REMOTE_SHELL=false
 WF=false    # --wf: workflow mode (stream logs to the terminal, keep the job alive)
-START=false # --start: really launch sshd+tailscaled; without it --e2e only prepares
+START=false # --start: really launch sshd+tailscaled; without it --remote-shell only prepares
 INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
 INSTALL_HERMES_CHROMIUM=false

@@ -14,7 +14,7 @@ metadata:
 
 Lane 5 pointer: reaching a *second* box from this one (sshd bootstrap, proxy
 port reality, `command -v`/banner-probe traps, path-not-paste delivery) lives in
-`references/e2e-sshd-bridge.md`. Reachability is **per node, not per tailnet**: a
+`references/remote-shell-bridge.md`. Reachability is **per node, not per tailnet**: a
 listed peer answers only once it has joined, run the prep there and carries the hop
 key. Survey with `scripts/probe-tailnet-peers.sh [port]` and never promise "any
 machine on the tailnet". The box's own row is printed as `self` there — resolve self
@@ -43,7 +43,7 @@ other lane assumes its persistence rules.
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js` |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box | `references/e2e-sshd-bridge.md` | `scripts/setup.sh --e2e` (prepares only: sshd key-only config + tailnet identity, persistent `~/.ssh`, prints one workspace-relative workflow task line); `--start` launches the daemons, `--wf` = `--e2e --start` in workflow mode (streams logs, holds the job open); export `E2E_TS_HOST=<name>` to pin the tailnet node name (otherwise the console's name is left alone) |
+| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/remote-shell-bridge.md` | `scripts/setup.sh --remote-shell` (alias `--e2e`; prepares only: sshd key-only config + tailnet identity, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--start` launches the daemons, `--wf` = `--remote-shell --start` in workflow mode; set `TAILSCALE_NODE_NAME=<name>` (exported from the rc tool-var registry) to pin the tailnet node name, otherwise the console name is left alone |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -62,7 +62,7 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    `$HOME` therefore re-registers on every boot (new `100.x`, new node name)
    and every saved URL / `.ssh/config` entry rots; keep node state in
    `$TAILSCALE_DATA_DIR` (`$REPL_HOME/.local/share/tailscale`), which
-   `setup.sh --tailscale` / `--e2e` already use. A tool that insists on a
+   `setup.sh --tailscale` / `--remote-shell` already use. A tool that insists on a
    `$HOME` path (`~/.ssh`, `~/.gnupg`) is **symlinked** into `$REPL_HOME`
    (move the existing dir's contents in first, then `ln -s`) — see
    `references/platform.md` §1.
@@ -233,13 +233,13 @@ on disk before moving on:
 
 - **Credentials are read from the environment, never baked into a script.** The
   user treats a token quoted into chat or hardcoded in an installer as leaked
-  (they rotate/revoke it right after). Take `TAILSCALE_AUTH_KEY=… setup.sh --e2e --start`
+  (they rotate/revoke it right after). Take `TAILSCALE_AUTH_KEY=… setup.sh --remote-shell --start`
   style input, and make everything after the first run work off the stored state
   so no second secret is needed. Printing a usage line with a placeholder
   (`tskey-auth-...`) is correct; printing the value is not.
 - **A flag that launches a daemon must be separable from the one that prepares.**
   Bundling both means every prepare re-fires listeners and nothing can be inspected or
-  repeated without side effects. Split it: the preparing flag (`--e2e`) writes config,
+  repeated without side effects. Split it: the preparing flag (`--remote-shell`) writes config,
   keys, dirs and binaries, prints the follow-up command and exits; the launching flag
   (`--start`) is what brings daemons up; workflow mode (`--wf`) asserts both. A guard file
   or a "skip if alive" check is not a substitute — after the split, the prepare path must

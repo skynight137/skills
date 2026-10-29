@@ -12,23 +12,54 @@ the transport.
 - Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
 works from its own terminal.
 
-## Procedure (`setup.sh --e2e`, then `--start`)
+## Procedure (`setup.sh --remote-shell`, then `--start`)
 
 Everything below is already in the skill — the operator runs **one** command on B,
-no script to copy, no key to hardcode. `--e2e` alone only PREPARES (host key, config,
+no script to copy, no key to hardcode. `--remote-shell` alone only PREPARES (host key, config,
 `authorized_keys`, dirs, binaries, `~/.ssh` symlink) and launches nothing; `--start`
 is what brings the daemons up, so a preparing run never leaves a surprise listener
 behind:
 
 ```bash
-TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --e2e --start
+TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --remote-shell --start
 ```
 
 The auth key is read from the **environment only** (never baked into the script, so
 rotating/revoking it needs no edit). On later boots the stored node identity is
 enough and the key may be omitted; the `.replit` workflow runs the same command.
 
-What `install_e2e` does, in order (all idempotent, re-run to repair):
+### Auth key lifecycle: reusable + ephemeral together
+
+- **Reusable** is what makes one key serve many boxes: it stays valid until it expires
+  or is revoked, so every fresh disposable box can join without a new key per box.
+- **Ephemeral** removes the node from the tailnet on its own shortly after the daemon
+  stops. For disposable Replit boxes that is the whole point: a wiped box leaves no
+  ghost node, no `-1`/`-2` suffix chain, and nothing to prune by hand.
+- So for dev targets: keep BOTH on. Set an explicit `--expiry` on the reusable key and
+  revoke it when the cycle ends; if the key is tag-scoped, ephemeral cleanup relies on
+  the node being tagged, so tag it (`--tags tag:repl-test`) and never leave ephemeral
+  nodes untagged.
+- Ephemeral is the wrong choice only where the box must keep a stable identity across
+  restarts (the machine you remote FROM, or one with DNS/MagicDNS entries pinned):
+  there, join with a non-ephemeral key and let the state dir carry the identity.
+
+### Names and paths live in the rc var registry
+
+`TAILSCALE_DATA_DIR`, `TAILSCALE_STATE_DIR`, `TAILSCALE_SOCKET` and
+`TAILSCALE_NODE_NAME` are registered by `install_tailscale` (and re-registered by
+`--fix`), so the managed rc block exports them for every shell: scripts read the
+socket path from the environment instead of re-spelling it, and the node name does
+not have to be prefixed onto each run once it is set that way. An in-line
+`TAILSCALE_NODE_NAME=<name>` on the workflow `args` still wins for that one run.
+
+### Why the flag says `remote-shell` and the dir still says `e2e-sshd`
+
+`--e2e` described a test phase, but the tool is the box's inbound shell: `--remote-shell`
+(alias `--e2e`, still accepted) is what it does. The state dir keeps the old name on
+purpose — moving it would mint a new sshd host key, and every client's `known_hosts`
+would warn on the next connect.
+
+What `install_remote_shell` does, in order (all idempotent, re-run to repair):
 
 1. `~/.ssh` → symlink to `$REPL_HOME/.ssh` (persistent). An existing `~/.ssh` is
    moved in first, not discarded, so the operator's own `config`/keys survive a
@@ -52,14 +83,14 @@ Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
 proxy answered and the port is not published.
 
-`--clean e2e` removes the sshd dir and stops it, keeps the `~/.ssh` symlink and the
+`--clean remote-shell` removes the sshd dir and stops it, keeps the `~/.ssh` symlink and the
 workflow entry (a reboot would just bring it back).
 
 ## Surviving a restart (Replit)
 
 `$HOME` is **wiped** on every restart (`.ssh`, `.bashrc`, `.local/bin`, `~/.ts` all go);
 `$REPL_HOME` (the repl workspace) alone persists. Consequences, both already handled by
-`install_e2e`:
+`install_remote_shell`:
 
 - `~/.ssh` itself is a symlink into `$REPL_HOME/.ssh` (persistent, so ssh `config`
   and `known_hosts` also survive); host key, sshd config, authorized key, log →
@@ -75,10 +106,10 @@ workflow entry (a reboot would just bring it back).
   type `shell.exec`, command:
 
   ```
-  bash <skill-dir>/scripts/setup.sh --e2e --start --wf      # path relatif ke workspace
+  bash <skill-dir>/scripts/setup.sh --remote-shell --start --wf      # path relatif ke workspace
   ```
 
-  `install_e2e` prints that one line and leaves `.replit` alone. The path is made
+  `install_remote_shell` prints that one line and leaves `.replit` alone. The path is made
   relative to the workspace whenever the skill lives inside it, because a workflow runs
   with the workspace as cwd — moving or renaming the skill dir then cannot leave a dead
   absolute path behind; only a copy outside the workspace is printed absolute, with a
@@ -86,7 +117,7 @@ workflow entry (a reboot would just bring it back).
   than the operator needs: the UI creates the workflow, and the name and ordering stay
   theirs without touching the file (a pasted second `name` collides with a workflow they
   already have, and `[workflows]` sits in a different place on every host). Anything that
-  already points at `setup.sh --e2e` counts as wired; an old entry is upgraded in place by
+  already points at `setup.sh --remote-shell` counts as wired; an old entry is upgraded in place by
   appending `--wf` to its `args`, and one that points at a path which no longer exists is
   reported (skill dir moved) instead of being silently accepted. The `--wf` check runs only
   after the path check, or a dead path hides behind the "already wired" branch. The skill dir is persistent, which is why the command
@@ -94,14 +125,14 @@ workflow entry (a reboot would just bring it back).
 - **Renaming the node is safe, but only if the skill does not re-assert the OS hostname.**
   `tailscale up --hostname=$(hostname)` on every start silently undoes a rename made in the
   admin console, so `--hostname` is now sent only on the first join (authkey path) or when
-  `E2E_TS_HOST` is set. The `100.x` address is keyed to the node identity, not its name, so
+  `TAILSCALE_NODE_NAME` is set. The `100.x` address is keyed to the node identity, not its name, so
   `~/.ssh/config` entries written against the IP survive a rename untouched. Change the name
   with `tailscale set --hostname=<name>` or the console; `up` refuses to change one pref
   without every non-default being restated (`--ssh`, `--exit-node-allow-lan-access`), which
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
-  Setting `E2E_TS_HOST` is how the skill side makes a name stick: when exported, every
+  Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
   `--start` asserts it, so pin it in the workflow `args`
-  (`E2E_TS_HOST=hermes bash <skill>/scripts/setup.sh --e2e --start --wf`) rather than trusting
+  (`TAILSCALE_NODE_NAME=hermesagent bash <skill>/scripts/setup.sh --remote-shell --start --wf`) rather than trusting
   the OS hostname. A retired name can linger in `tailscale status` until removed in the
   console; the live node is the one under `self`.
 - **Restarting a daemon that carries your own tunnel severs it.** `tailscaled` backs the
@@ -113,31 +144,31 @@ workflow entry (a reboot would just bring it back).
   `100.x` address; the old name stays listed as offline long after it is dead. Match by the
   live suffix, then rewrite the local `ProxyCommand`/`HostName`, never the stale entry.
 - **The `.replit` workflow is report-only, and one line is the whole notice.** Writing the
-  file means owning something that is not ours: a second `name = "e2e"` collides with a
+  file means owning something that is not ours: a second `name = "remote-shell"` collides with a
   workflow the operator already uses, and `[workflows]` sits in a different place on every
   host. But a full `[[workflows.workflow]]` block is also more than needed — the UI creates
-  the task for them — so `--e2e` prints just `bash <skill-dir>/scripts/setup.sh --e2e --start --wf`
+  the task for them — so `--remote-shell` prints just `bash <skill-dir>/scripts/setup.sh --remote-shell --start --wf`
   and leaves the file alone; name and ordering stay theirs.
 - **Print the `args` path workspace-relative, never absolute.** Workflows run with the
   workspace as cwd, so a relative path survives the operator moving or renaming the skill
-  dir; an absolute `$E2E_SKILL_ROOT` breaks on the next move. Only a copy outside the
+  dir; an absolute `$RS_SKILL_ROOT` breaks on the next move. Only a copy outside the
   workspace is printed absolute, with a note to move it in.
-- **When an entry already points at `setup.sh --e2e`, check its path BEFORE the `--wf`
+- **When an entry already points at `setup.sh --remote-shell`, check its path BEFORE the `--wf`
   check.** Order the other way and a dead path hides behind the "already wired" branch
   forever: report `skill dipindah?` and print the current line instead of skipping. Also
-  grep only the line that carries `--e2e` (`grep -oE 'bash +[^"]*setup\.sh --e2e' | head -1`)
+  grep only the line that carries `--remote-shell` (`grep -oE 'bash +[^"]*setup\.sh --remote-shell' | head -1`)
   — other workflows in the same file (`--camofox`, …) point at that very script, so a bare
   `head -1` of all `setup.sh` lines reads the wrong one and flags a healthy entry.
   Upgrading an old entry in place is additive and idempotent: `--start` is inserted
-  straight after `--e2e` (so an existing `--wf` survives) and `--wf` is appended when
+  straight after `--remote-shell` (so an existing `--wf` survives) and `--wf` is appended when
   missing, both then verified by grep. Note GNU sed rejects `|` as the delimiter on these
   patterns — use `s#…#…#`.
 - **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
   command returns, taking the daemons with it, and a run whose output is redirected to a
-  file shows nothing. `--wf` (implies `--e2e --start`) prints the steps to the terminal
+  file shows nothing. `--wf` (implies `--remote-shell --start`) prints the steps to the terminal
   and ends with `tail -F` on the tailscaled log, so one foreground process (and visible
-  output) holds the job open. Every other flag is a one-shot install: use `--e2e` by hand,
-  `--e2e --start --wf` in `.replit [workflows]`.
+  output) holds the job open. Every other flag is a one-shot install: use `--remote-shell` by hand,
+  `--remote-shell --start --wf` in `.replit [workflows]`.
 - **The SOCKS relay fails intermittently** (`General SOCKS server failure` while the same
   probe answered a minute earlier). Retry the probe 2–3× before declaring the port dead, and
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success
@@ -150,7 +181,7 @@ workflow entry (a reboot would just bring it back).
   gives all four paths in one pass — inside the workspace (relative), outside
   (absolute + note), stale entry (warning), valid entry (silent skip) — and leaves the
   live `.replit` untouched (assert it with an `md5sum` before/after). Also override
-  `E2E_PORT`, `XDG_BIN_HOME` and `TAILSCALE_DATA_DIR` per case, or the run installs
+  `RS_PORT`, `XDG_BIN_HOME` and `TAILSCALE_DATA_DIR` per case, or the run installs
   tailscale and binds the operator's real port from a test copy. Every upgrade case is
   run **twice**: the second pass must answer "already registered" byte-identically,
   which is the only proof the rewrite is a fixed point. A shared helper script in the
@@ -185,12 +216,12 @@ workflow entry (a reboot would just bring it back).
   running and kills it; use `pkill -x sshd`.
 - `pkill -f 'e2e-sshd/sshd_config'` kills **every** e2e listener on the box, not just
   the port you meant: the pattern is the shared config path. Restart the one you still
-  need with `--e2e --start` (and `E2E_PORT=` if it is not the default) right after.
+  need with `--remote-shell --start` (and `RS_PORT=` if it is not the default) right after.
 - GNU sed here rejects `|` as the `s` delimiter on these `args`/quote patterns
   ("unknown option to `s'"); use `s#…#…#`.
 - **`cmd && cmd` as the last statement of a branch returns 1 under `errexit`**, so a
   prepare that only wanted to print a note exits 1 and the runner reports the step as
-  failed. Wrap it: `if _e2e_cmd_external; then ok "…"; fi`.
+  failed. Wrap it: `if _rs_cmd_external; then ok "…"; fi`.
 - **Prove "nothing was launched" with the listener, not `pgrep -f` counts.** The probe
   shell's own command line contains the pattern, so pgrep reports a fresh PID on every
   run and a prepare-only run looks like it started something. Compare the banner
@@ -206,7 +237,7 @@ and let the operator copy it themselves; quote only a short hash/size for parity
 — the terminal line is identical on every failure, only the diagnostics differ.
 
 An absolute local path is only reachable on the SAME box. The skill therefore has
-to exist on B before `--e2e` can run there — clone/copy the skill dir once (it is
+to exist on B before `--remote-shell` can run there — clone/copy the skill dir once (it is
 persistent), then the whole setup is one command and stays re-runnable. If a file on
 B must be delivered by URL, pin it at the commit SHA
 (`.../<sha>/skills/replit/scripts/setup.sh`): a branch name drifts, a SHA cannot.
@@ -225,9 +256,9 @@ repo is already public.
   published the fallback is a reverse tunnel or the sshx canvas.
 - **A listed peer is not a reachable machine.** Three things are required, in order:
   the peer is online in `tailscale status`, sshd was prepared *on that box*
-  (`setup.sh --e2e --start`), and a hop key sits in its `authorized_keys` — which the
+  (`setup.sh --remote-shell --start`), and a hop key sits in its `authorized_keys` — which the
   prep does for you (the `hermes-e2e-hop` key is authorized by default; extend with
-  `E2E_AUTHORIZED_KEYS`). Onboarding a machine is therefore: join it with the auth key,
+  `RS_AUTHORIZED_KEYS`). Onboarding a machine is therefore: join it with the auth key,
   run the prep there, then add a `Host` block here. Answer "can we reach every
   machine?" as "every machine that has done this", never as "any host on the tailnet".
 - **Probe through the local SOCKS relay, never by hostname.** The tailnet userspace
