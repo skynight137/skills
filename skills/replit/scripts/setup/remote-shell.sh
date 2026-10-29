@@ -107,6 +107,25 @@ __rs_workflow() {
       warn "entri workflow menunjuk '$wired' yang tak ada (skill dipindah?) — perbarui barisnya"
     else
       local changed=""
+      # Pin the node name on the args line (and keep it in step on a rename): the
+      # workflow is what rejoins the box, so the name has to travel with it. Only
+      # when the operator pinned one — an unpinned box lets the console win.
+      if [ -n "${TAILSCALE_NODE_NAME:-}" ]; then
+        local pinned
+        pinned="$(grep -oE '^args = "TAILSCALE_NODE_NAME=[^ ]+' "$rp" | head -1 | sed 's/.*=//')"
+        if [ "$pinned" != "$TAILSCALE_NODE_NAME" ]; then
+          if [ -n "$pinned" ]; then
+            sed -i -E "s#^args = \"TAILSCALE_NODE_NAME=$pinned #args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME #" "$rp"
+            changed="$changed nama-node"
+          else
+            sed -i -E "s#^args = \"(bash [^\"]*setup\.sh --remote-shell)#args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME \1#" "$rp"
+            changed="$changed nama-node"
+          fi
+          grep -qE "^args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME " "$rp" \
+            && ok "nama node dipin di args workflow: $TAILSCALE_NODE_NAME" \
+            || warn "gagal mem-pin TAILSCALE_NODE_NAME di $rp"
+        fi
+      fi
       # An old entry predates --start (and maybe --wf): a workflow MUST start, so both
       # are appended where missing. Verified afterwards — sed on a file we do not own
       # gets no trust from us.
