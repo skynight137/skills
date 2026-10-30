@@ -266,3 +266,14 @@ Token penuh dari `~/.local/share/llmwiki-app/.env` di mesin server. Bukti koneks
 `hermes mcp test llm-wiki` harus menampilkan daftar tool, bukan "Connection failed".
 Tunnel mati bersama sesinya — jalankan di supervisor (`persist`) atau workflow kalau
 butuh permanen.
+
+## Publik lewat dev domain
+
+Port 8319 tidak ada di daftar port yang bisa dibuka Replit, jadi untuk akses publik
+pakai 8081 (`LLM_WIKI_PORT=8081` di `.env`) dan deklarasikan di `.replit`
+(`[[ports]] localPort = 8081` + `externalPort = 8081`). Edge baru membuka port itu
+setelah Repl di-restart; detail dan daftar port ada di `references/public-ports.md`.
+URL klien: `https://$REPLIT_DEV_DOMAIN:8081/mcp` + header `Authorization: Bearer`.
+
+Tunnel ssh tetap dipakai kalau port publik belum terbuka atau butuh akses stabil:
+`ssh -N -L 127.0.0.1:8081:localhost:8081 repl-test` lalu url loopback.

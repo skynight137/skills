@@ -18,6 +18,8 @@ ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/.env}"
 if [ -z "${LLM_WIKI_ENV_FILE:-}" ] && [ ! -f "$ENV_FILE" ] && [ -f "$APP/llmwiki.env" ]; then
   ENV_FILE="$APP/llmwiki.env"
 fi
+# port (dan kredensial) ikut .env supaya restart jarak jauh tak perlu env manual
+if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
 PORT="${LLM_WIKI_PORT:-8319}"
 
 # Replit merouting port hanya kalau sudah terdaftar, dan registry itu ditulis platform —
