@@ -10,7 +10,7 @@
 # Node.js is the only runtime dependency for the server part; the app part needs an
 # X display (real desktop, or Xvfb + a window manager).
 # Overridable: LLM_WIKI_PORT(80 -> https://$REPLIT_DEV_DOMAIN/mcp tanpa sufiks) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
-#              LLM_WIKI_PROJECT LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
+#              LLM_WIKI_PROJECT(default <app dir>/project) LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
 set -uo pipefail
 APP="${LLM_WIKI_APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/.env}"
@@ -40,7 +40,10 @@ register_public_port() {
 }
 LOCAL_PORT="${LLM_WIKI_LOCAL_PORT:-8199}"
 DISP="${LLM_WIKI_DISPLAY:-:99}"
-PROJECT="${LLM_WIKI_PROJECT:-/home/runner/workspace}"
+# wiki menempel di direktori app supaya app+wiki terhapus sekaligus; arahkan
+# LLM_WIKI_PROJECT kalau mau proyek lain. Semua request MCP menerima `project` juga.
+PROJECT="${LLM_WIKI_PROJECT:-$APP/project}"
+mkdir -p "$PROJECT/wiki"
 APP_PORT=19828
 CLIP_PORT=19827
 SLEEP=15

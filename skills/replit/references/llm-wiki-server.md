@@ -179,6 +179,11 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
   `LLM_WIKI_PROJECT` menetapkan defaultnya; `llm_wiki_set_project` mengubahnya
   **global untuk instance itu** — jadi dua agen yang berbagi satu app menulis ke
   project yang sama kecuali mereka mengirim `project=<id>` eksplisit per panggilan.
+- **Root wiki = `<dir app>/project`**, menempel di instalasi supaya app dan isinya
+  terhapus sekaligus (`rm -rf <dir app>`). Ubah lewat `LLM_WIKI_PROJECT` di `.env`
+  (default ditulis `install.sh`), atau per panggilan MCP dengan `project=<path absolut>`;
+  `llm_wiki_projects` mendaftar id yang dikenal. Isi wiki selalu `<root>/wiki/**`, jadi
+  saat menulis cukup path relatif: `wiki/queries/x.md`.
 - Pisah topik pakai **folder + tag + frontmatter** di dalam satu project
   (`wiki/concepts`, `wiki/entities`, `wiki/comparisons`, `wiki/queries`, `wiki/ops`,
   `wiki/life`, katalog di `wiki/index.md`) — itu "kategori"-nya.
