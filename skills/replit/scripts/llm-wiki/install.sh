@@ -185,6 +185,14 @@ if ! grep -q '^LLM_WIKI_PORT=' "$ENV_FILE" 2>/dev/null; then
     && say "public port: $PORT (tersimpan sebagai LLM_WIKI_PORT di $ENV_FILE)"
 fi
 PORT="$(sed -n 's/^LLM_WIKI_PORT=//p' "$ENV_FILE" 2>/dev/null | head -1)"
+# Wiki root default menempel di direktori app (mudah dihapus bersama app); override
+# lewat LLM_WIKI_PROJECT, dan tiap request MCP juga menerima parameter `project`.
+if ! grep -q '^LLM_WIKI_PROJECT=' "$ENV_FILE" 2>/dev/null; then
+  printf 'LLM_WIKI_PROJECT=%s\n' "$APP/project" >>"$ENV_FILE" \
+    && say "wiki root: $APP/project (override: LLM_WIKI_PROJECT)"
+fi
+mkdir -p "$APP/project/wiki"
+
 # Deklarasikan port publik di .replit (idempotent): edge hanya memetakan port yang
 # tertulis di situ. Port 80 otomatis tanpa sufiks lewat dev domain.
 REPL_FILE="${REPL_HOME:-$HOME}/.replit"
