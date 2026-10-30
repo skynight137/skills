@@ -5,13 +5,16 @@ port yang **dideklarasikan** di `.replit`:
 
 ```
 [[ports]]
-localPort = 8081
-externalPort = 8081
+localPort = 80
+externalPort = 80
 ```
 
 dan perubahan itu baru berlaku setelah Repl di-restart (Stop lalu Run, atau tombol Run
-dari workflow). Mengedit `.replit` lalu menembak `https://$REPLIT_DEV_DOMAIN:8081/`
-tanpa restart berakhir `000` karena edge masih menolak port itu. Flush DNS/`curl` tidak
+dari workflow). Peta port dibaca saat boot: port yang listenernya baru hidup setelah
+boot (mis. dari workflow yang di-Run belakangan) tidak ikut dipetakan — buktinya `8081`
+deklarasi + listener ada tapi edge tetap `000`, sementara `8080`/`6800` yang sudah hidup
+saat boot balas `502`. Pakai **80** untuk app yang memang mau publik: URL jadi
+`https://$REPLIT_DEV_DOMAIN/` tanpa sufiks. Flush DNS/`curl` tidak
 menolong. Bukti cepat:
 
 ```
@@ -22,9 +25,10 @@ for p in 80 443 8080 8081; do timeout 6 bash -c "echo > /dev/tcp/$IP/$p" 2>/dev/
 
 ## Port yang boleh dipakai sebagai port publik
 
-:80, :3000-:3003, :4200, :5000, :5173, :6000, :6800, :8000, :8008, :8080, :8081,
-:8099, :9000. Port di luar daftar (mis. 8319, 64316) hanya hidup di loopback atau
-lewat tunnel, tidak pernah tersaji dari edge.
+:80, :3000-:3003, :4200, :5000, :5173, :6000, :6800, :8000, :8008, :8080, :8099,
+:9000. Port di luar daftar (mis. 8319, 64316) hanya hidup di loopback atau lewat tunnel,
+tidak pernah tersaji dari edge. `8081` juga tak terpetakan di repl-test walau di atas
+kertas boleh — jangan andalkan, pakai `80`.
 
 ## Pola pemakaian
 

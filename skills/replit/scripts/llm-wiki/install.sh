@@ -6,7 +6,7 @@
 #   LLM_WIKI_APPIMAGE_URL=https://.../app.AppImage bash install.sh
 #
 # After it finishes:  bash run-public.sh   (supervisor: Xvfb + WM + app + node server)
-# Server endpoint:    https://<host>:${PORT:-8319}/mcp        header: x-llm-wiki-token: <token>
+# Server endpoint:    https://<host>${PORT:+:$PORT}/mcp      header: x-llm-wiki-token: <token>
 # Local agents:       http://127.0.0.1:8199/mcp      (loopback, no token)
 #
 # Requirements: curl for the download, node >= 18 for the REST/MCP server, and an X
@@ -182,9 +182,16 @@ command -v Xvfb >/dev/null 2>&1 || say "note: no Xvfb — the app needs a displa
 
 if ! grep -q '^LLM_WIKI_PORT=' "$ENV_FILE" 2>/dev/null; then
   PORT="$(_pick_port)" && printf 'LLM_WIKI_PORT=%s\n' "$PORT" >>"$ENV_FILE" \
-    && say "public port: $PORT (tersimpan sebagai LLM_WIKI_PORT di $ENV_FILE — 8080 dipakai dashboard Hermes)"
+    && say "public port: $PORT (tersimpan sebagai LLM_WIKI_PORT di $ENV_FILE)"
 fi
 PORT="$(sed -n 's/^LLM_WIKI_PORT=//p' "$ENV_FILE" 2>/dev/null | head -1)"
+# Deklarasikan port publik di .replit (idempotent): edge hanya memetakan port yang
+# tertulis di situ. Port 80 otomatis tanpa sufiks lewat dev domain.
+REPL_FILE="${REPL_HOME:-$HOME}/.replit"
+if [ -n "$PORT" ] && [ -f "$REPL_FILE" ] && ! grep -qx "localPort = $PORT" "$REPL_FILE"; then
+  printf '\n[[ports]]\nlocalPort = %s\nexternalPort = %s\n' "$PORT" "$PORT" >>"$REPL_FILE" \
+    && say "port $PORT dideklarasikan di $REPL_FILE (berlaku setelah Repl di-restart)"
+fi
 
 say ""
 say "done. start the stack with:"
@@ -193,5 +200,6 @@ say "  bash $APP/run-ui.sh            # optional: the desktop UI in a browser (n
 say ""
 say "add this URL to your MCP client:"
 say "  http://127.0.0.1:8199/mcp                 (loopback, no token)"
-say "  https://<host>:${PORT:-8319}/mcp                  (other machines; header: x-llm-wiki-token: <token>)"
+SUF=""; [ "${PORT:-80}" = 80 ] || SUF=":${PORT}"
+say "  https://<host>${SUF}/mcp   (other machines; header: x-llm-wiki-token: <token>)"
 say "token: $ENV_FILE"
