@@ -58,21 +58,42 @@ Node ≥ 18 sudah ada di box ini (dipasang `setup.sh --node`); di host non-nix p
 flag itu dipakai. Dua jebakan yang sudah ditangani dan **jangan** dihilangkan:
 
 - `/nix/store` bisa tampak writable (mode 777) sementara `nix build --store /nix/store`
-  hanya *mencetak* path tanpa menyalin apa pun. Karena itu build **selalu** ke store
-  per-user `~/.store`; path hasil build di-resolve ke `~/.store/nix/store/<hash>` sebelum
-  diuji (nix tetap mencetak `/nix/store/<hash>` yang belum tentu ada di box).
+  hanya *mencetak* path tanpa menyalin apa pun (chroot store: hasilnya di
+  `/nix/store/nix/store/<hash>`). Karena itu build **selalu** ke store per-user
+  `~/.store` dan path hasil di-resolve ke `~/.store/nix/store/<hash>` sebelum diuji
+  (nix tetap mencetak `/nix/store/<hash>` yang belum tentu ada di box). Launcher-nya
+  butuh nama binari sebagai argumen pertama: `nixenv nix build …`.
 - Biner store punya `PT_INTERP` + `RUNPATH` ke `/nix/store`, jadi store per-user tak
   terlihat loader. Wrapper `~/.local/bin/Xvfb` menjalankannya lewat `nixenv` (mount
   namespace: symlink store sistem + `~/.store`; `unshare -r`, tanpa root) dan menyisipkan
   `-xkbdir` — tanpa itu Xvfb mati `Failed to activate virtual core keyboard`.
+- **Wrapper yang ada di PATH bukan bukti display hidup.** `command -v Xvfb && command -v
+  fluxbox` lolos walau `~/.store` sudah di-GC atau `nixenv` hilang — wrapper basi menunjuk
+  target yang tak ada dan provisioning dilewati, jadi app mati `Failed to initialize GTK`
+  tanpa ada yang memperbaikinya. Gerbangnya `_llm_wiki_display_ok()`: `$XDG_BIN_HOME/nixenv`
+  harus ada DAN setiap wrapper harus benar-benar meng-`exec` target yang `-x`; kalau tidak,
+  run penuh `_llm_wiki_provision_display`.
 
 ## Jalankan
 
 ```bash
 bash setup.sh --llm-wiki   # sekali per mesin: bundle + AppImage + token
 bash run-public.sh         # supervisor, foreground (systemd / workflow / tmux)
-bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :6800)
+bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :6080)
 ```
+
+- **`run-public.sh` menyiapkan `LD_LIBRARY_PATH` sendiri.** Shell telanjang (ssh, cron,
+  workflow, systemd) tidak mewarisi profil, jadi `node` mati `libatomic.so.1: cannot open
+  shared object file` sebelum apa pun jalan. Loop prepend kandidat
+  (`${REPL_HOME:-}/.local/lib`, `$HOME/workspace/.local/lib`, `$HOME/.local/lib`) lalu
+  `export`; di bawah `set -u` bentuk sisipannya `${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH:-}}`
+  (`case "$LD_LIBRARY_PATH:-"` justru `unbound variable`).
+- **Token harus di-`export` ke proses anak, bukan cuma ditulis di `.env`.** Baris token di
+  file tidak masuk environment server (`/proc/<pid>/environ` tetap kosong), sehingga gate
+  read-only tampak "lulus" padahal auth RO tak pernah diuji. Backfill juga `.env` lama yang
+  belum punya baris `LLM_WIKI_READONLY_TOKEN`, chmod tetap 600.
+- **noVNC di `:6080`, bukan `6800`** — 6800 milik sshd remote-shell; dua service di satu
+  port = yang kalah bind diam-diam, dan gejalanya muncul sebagai service yang lain mati.
 
 ## Endpoint
 
@@ -203,7 +224,7 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
 ## Yang tidak bisa diharapkan
 
 - UI desktop dibuka lewat browser: **tidak bisa langsung** — frontend Tauri (`invoke`),
-  jadi pakai noVNC (`run-ui.sh`: x11vnc loopback + noVNC publik `:6800`, VNC password).
+  jadi pakai noVNC (`run-ui.sh`: x11vnc loopback + noVNC publik `:6080`, VNC password).
 - Pilih project lewat file chooser GTK: enumerasi GIO kosong di box ini.
 - Multi-user/login: tidak ada; satu token, satu current project.
 - Vector search butuh `embeddingConfig` (provider + model + baseUrl, bisa
