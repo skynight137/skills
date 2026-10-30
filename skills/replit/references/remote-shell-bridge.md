@@ -235,7 +235,7 @@ workflow entry (a reboot would just bring it back).
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
   Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
   `--start` asserts it, so pin it in the workflow `args`
-  (`TAILSCALE_NODE_NAME=hermesagent bash <skill>/scripts/setup.sh --remote-shell --start --wf`) rather than trusting
+  (`TAILSCALE_NODE_NAME=hermes-agent bash <skill>/scripts/setup.sh --remote-shell --start --wf`) rather than trusting
   the OS hostname — and not in an rc, which re-fires per terminal. A retired name can linger
   in `tailscale status` until removed in the console; the live node is the one under `self`.
   `tailscale set --hostname=` returns before the control plane has applied it, so POLL the
