@@ -128,7 +128,7 @@ clean_paths_for() {
     tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled launch-tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
     remote-shell|e2e)         echo "$RS_DIR (host key/config/authorized_keys sshd; ~/.ssh symlink DIPERTAHANKAN)" ;;
-    llm-wiki)      echo "${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
+    llm-wiki)      echo "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
     *)             echo "$1" ;;
   esac
 }
@@ -354,7 +354,7 @@ clean_sshx() {
 # token file. THE WIKI DATA IS NEVER TOUCHED: the markdown project lives in the
 # workspace (the supervisor's project dir), not inside the install dir.
 clean_llm_wiki() {
-  local dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
+  local dir="${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}"
   if ! _present "$dir/run-public.sh"; then
     nothing_removed "llm-wiki"; return 0
   fi

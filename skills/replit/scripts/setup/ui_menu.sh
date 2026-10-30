@@ -102,7 +102,7 @@ _status_init() {
     if [[ "$bin" == "run-public.sh" ]]; then
       # llm-wiki ships a server, not a PATH binary: report the bundle and NEVER
       # exec the supervisor to probe it (that would start the app and the ports).
-      local wiki_dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
+      local wiki_dir="${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}"
       if [[ -x "$wiki_dir/run-public.sh" ]]; then
         path="$wiki_dir"
         ver="llm-wiki server"

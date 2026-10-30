@@ -232,6 +232,17 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
   Tanpa itu search tetap jalan mode keyword; `llm_wiki_chat` mengembalikan error.
 - GPU: tidak ada → software render (`llvmpipe`); UI berat tapi jalan.
 
+## Lokasi data: `$REPL_HOME`, bukan `$HOME`
+
+Di Replit `$HOME=/home/runner` sedangkan workspace Repl adalah `$REPL_HOME`
+(`/home/runner/workspace`); ssh tanpa login shell tidak mengekspor `$REPL_HOME`.
+Instalasi hidup di `${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app`
+supaya workflow `.replit` dan tombol Run menemukannya, jadi kalau menjalankan setup
+lewat ssh setel sendiri: `export REPL_HOME=/home/runner/workspace`. Token disimpan di
+`<dir>/.env` (instalasi lama `llmwiki.env` dimigrasikan otomatis, nama lama tak dipakai).
+Jangan biarkan dua salinan hidup — salinan di `$HOME/.local/share` tidak akan dipakai
+workflow mana pun.
+
 ## Instal dari nol (mesin bersih)
 
 Tidak ada yang disiapkan manual: skill mengunduh, mengekstrak, dan mem-build semua

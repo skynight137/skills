@@ -72,7 +72,7 @@ doctor() {
   # llm-wiki is a server, not a CLI: there is no --version to probe, so check the
   # installed bundle instead. Warn-only — the server is opt-in and a box that
   # does not want a knowledge base must not fail its doctor run over it.
-  local _wiki_dir="${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}"
+  local _wiki_dir="${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}"
   if [[ -x "$_wiki_dir/run-public.sh" ]]; then
     if [[ -s "$_wiki_dir/.env" || -s "$_wiki_dir/llmwiki.env" ]]; then
       ok "llm-wiki: server installed ($_wiki_dir)"
