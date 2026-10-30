@@ -151,6 +151,24 @@ install_llm_wiki() {
     # silently drop every entry.
     [ -n "$dirs" ] && printf '%s\n' "$dirs" >"$dest/.ldpath"
     miss=$(LD_LIBRARY_PATH="$dirs" ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u | tr '\n' ' ')
+
+    # The two passes above can only find libs that are ALREADY built. On a bare box the
+    # bundle also wants packages nothing here pulled in yet (libXau, libXdmcp,
+    # libgraphite2 …), so build the GTK/Electron runtime set once and resolve again.
+    if [ -n "$miss" ]; then
+      step "llm-wiki: building the packages for the still-missing libs"
+      # shellcheck disable=SC2046
+      "$(nix_bin)" --store "$st" build --no-link --print-out-paths \
+        nixpkgs#xorg.libXau nixpkgs#xorg.libXdmcp nixpkgs#graphite2 nixpkgs#at-spi2-core \
+        nixpkgs#nss nixpkgs#cups nixpkgs#alsa-lib nixpkgs#gtk3 nixpkgs#pango nixpkgs#cairo \
+        nixpkgs#libsecret nixpkgs#libnotify nixpkgs#libxkbcommon >/dev/null 2>&1 || true
+      for lib in $miss; do
+        d=$(ls -d "$st"/nix/store/*/lib/"$lib" /nix/store/*/lib/"$lib" 2>/dev/null | head -1)
+        [ -n "$d" ] && dirs="${dirs:+$dirs:}$(dirname "$d")"
+      done
+      [ -n "$dirs" ] && printf '%s\n' "$dirs" >"$dest/.ldpath"
+      miss=$(LD_LIBRARY_PATH="$dirs" ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u | tr '\n' ' ')
+    fi
     [ -n "$miss" ] && warn "llm-wiki: still unresolved: $miss (add the dir to $dest/.ldpath)"
   fi
 
