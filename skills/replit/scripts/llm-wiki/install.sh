@@ -6,7 +6,7 @@
 #   LLM_WIKI_APPIMAGE_URL=https://.../app.AppImage bash install.sh
 #
 # After it finishes:  bash run-public.sh   (supervisor: Xvfb + WM + app + node server)
-# Server endpoint:    https://<host>:8080/mcp        header: x-llm-wiki-token: <token>
+# Server endpoint:    https://<host>:${PORT:-8319}/mcp        header: x-llm-wiki-token: <token>
 # Local agents:       http://127.0.0.1:8199/mcp      (loopback, no token)
 #
 # Requirements: curl for the download, node >= 18 for the REST/MCP server, and an X
@@ -123,22 +123,42 @@ if [ ! -f "$ENV_FILE" ] && [ -f "$APP/llmwiki.env" ]; then
   chmod 600 "$ENV_FILE"
   say "migrated llmwiki.env -> $ENV_FILE"
 fi
-if [ ! -f "$ENV_FILE" ]; then
+_rand_token() {
   if command -v node >/dev/null 2>&1; then
-    TOKEN=$(node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))')
+    node -e 'console.log(require("crypto").randomBytes(32).toString("hex"))'
   elif command -v openssl >/dev/null 2>&1; then
-    TOKEN=$(openssl rand -hex 32)
+    openssl rand -hex 32
   else
-    TOKEN=$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'
   fi
-  [ -n "$TOKEN" ] || die "could not generate a token"
-  printf 'LLM_WIKI_API_TOKEN=%s\n' "$TOKEN" >"$ENV_FILE"
+}
+if [ ! -f "$ENV_FILE" ]; then
+  # Dua token: akses penuh, plus satu read-only untuk agen yang hanya membaca (server
+  # menolak tulis dengan -32003). Dibuat di sini supaya gate read-only bisa diuji di
+  # mesin bersih tanpa menyunting .env manual.
+  TOKEN=$(_rand_token); [ -n "$TOKEN" ] || die "could not generate a token"
+  RO_TOKEN=$(_rand_token); [ -n "$RO_TOKEN" ] || die "could not generate a read-only token"
+  printf 'LLM_WIKI_API_TOKEN=%s\nLLM_WIKI_READONLY_TOKEN=%s\n' "$TOKEN" "$RO_TOKEN" >"$ENV_FILE"
   chmod 600 "$ENV_FILE"
-  say "wrote $ENV_FILE (chmod 600)"
+  say "wrote $ENV_FILE (chmod 600; full + read-only token)"
   say "token sha256[:12] = $(printf %s "$TOKEN" | sha256sum | cut -c1-12)"
+elif ! grep -q LLM_WIKI_READONLY_TOKEN "$ENV_FILE"; then
+  printf 'LLM_WIKI_READONLY_TOKEN=%s\n' "$(_rand_token)" >>"$ENV_FILE"
+  say "added missing read-only token to $ENV_FILE"
 else
   say "token file already present: $ENV_FILE"
 fi
+# Port publik: Replit hanya me-routing port yang terdaftar, jadi pilih yang benar-benar
+# bebas (8080 bisa dipegang dashboard) dan simpan pilihannya di .env supaya restart
+# konsisten. Override tetap lewat LLM_WIKI_PORT.
+_pick_port() {
+  local c
+  for c in "${LLM_WIKI_PORT:-}" 8319 8320 8081 8090; do
+    [ -n "$c" ] || continue
+    timeout 1 bash -c "echo >/dev/tcp/127.0.0.1/$c" 2>/dev/null || { printf '%s\n' "$c"; return 0; }
+  done
+  return 1
+}
 
 # --- 3. node (the server runtime) -------------------------------------------
 # A missing node must NOT abort the app install: the binary is useful on its own and
@@ -160,12 +180,18 @@ command -v Xvfb >/dev/null 2>&1 || say "note: no Xvfb — the app needs a displa
 { command -v fluxbox >/dev/null 2>&1 || command -v openbox >/dev/null 2>&1; } \
   || say "note: no window manager — GTK windows stay unmapped without one (nix build nixpkgs#fluxbox)"
 
+if ! grep -q '^LLM_WIKI_PORT=' "$ENV_FILE" 2>/dev/null; then
+  PORT="$(_pick_port)" && printf 'LLM_WIKI_PORT=%s\n' "$PORT" >>"$ENV_FILE" \
+    && say "public port: $PORT (tersimpan sebagai LLM_WIKI_PORT di $ENV_FILE — 8080 dipakai dashboard Hermes)"
+fi
+PORT="$(sed -n 's/^LLM_WIKI_PORT=//p' "$ENV_FILE" 2>/dev/null | head -1)"
+
 say ""
 say "done. start the stack with:"
 say "  bash $APP/run-public.sh        # app + REST/MCP server"
-say "  bash $APP/run-ui.sh            # optional: the desktop UI in a browser (noVNC :6800)"
+say "  bash $APP/run-ui.sh            # optional: the desktop UI in a browser (noVNC :6080)"
 say ""
 say "add this URL to your MCP client:"
 say "  http://127.0.0.1:8199/mcp                 (loopback, no token)"
-say "  https://<host>:8080/mcp                  (other machines; header: x-llm-wiki-token: <token>)"
+say "  https://<host>:${PORT:-8319}/mcp                  (other machines; header: x-llm-wiki-token: <token>)"
 say "token: $ENV_FILE"

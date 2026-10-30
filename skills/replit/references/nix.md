@@ -124,6 +124,24 @@ Gotchas found the hard way (all still true):
 - `nix path-info --recursive` is the fast closure tool; a `find` over
   `/nix/store` takes >5 min and is pointless.
 
+## 3b. Bentuk perintah build di box ini (jebakan chroot store)
+
+Bentuk perintahnya bukan pilihan gaya — salah bentuk menghasilkan build yang sukses tapi
+"hilang":
+
+- **`--store /nix/store` membuat chroot store.** Output mendarat di
+  `/nix/store/nix/store/<hash>`, jadi `ls /nix/store/*pkg*` dan `[ -e "/nix/store/<cetakan>" ]`
+  sama-sama meleset dan build tampak gagal. Build ke store per-user:
+  `nix --store "$HOME/.store" build --no-link --print-out-paths nixpkgs#x11vnc` → path nyata
+  `$HOME/.store/nix/store/...`..
+- **Launcher `nixenv` butuh nama binari sebagai argumen pertama**: `nixenv nix build …`
+  (`nixenv build …` → `bash: exec: build: not found`).
+- **Biner store per-user tidak bisa dieksekusi langsung**: `PT_INTERP`/`RUNPATH` menunjuk
+  `/nix/store` yang hanya ter-mount di dalam namespace `nixenv`, jadi hasil `--store
+  $HOME/.store` selalu dijalankan dengan prefix `nixenv`. Resolve path `$HOME/.store`
+  dulu, baru fallback `/nix/store`. Ini juga sebabnya `command -v <tool>` bisa menunjuk
+  wrapper yang target-nya sudah di-GC: validasi target wrapper, bukan keberadaannya.
+
 ## Quick diagnostic table
 
 | Symptom | Diagnosis | Fix |

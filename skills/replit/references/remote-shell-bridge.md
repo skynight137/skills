@@ -71,6 +71,13 @@ tar cz skills/replit | ssh "$host" 'tar xzf - -C ~/workspace/.agents/skills --st
 Then prove the copy landed by grepping a string only the new version has, and only then run
 `--start` there. Delete the stale sibling dir if a bad extract already nested one.
 
+- **`scp` is usually absent on the far box too** (`exit 127`). Ship a single file with the
+  ssh side doing the write: `ssh "$host" 'cat > /tmp/gate.sh' < local.sh`. It also skips the
+  quoting that a remote `bash -c` would need.
+- **`ssh` exiting 255 with only `Warning: Permanently added '[host]:PORT'` is not a failure** —
+  that is the known_hosts notice on a first connect. Judge by the real output (a body, a diff,
+  an exit from the remote command), never by the code alone, or healthy steps read as dead.
+
 
 - **Wrong tailnet outranks every other cause when a fresh join shows nothing in the console you are watching.** An auth key minted in another account joins an EMPTY tailnet: the node reports `Running`, gets a fresh 100.x address, and has `peers: 0`, while every machine you expected is absent. Compare `MagicDNSSuffix` from `tailscale --socket=<sock> status --json` on the joining box with the one on the box you watch from — a different `tailXXXXXX.ts.net` proves an account mismatch, not a broken key. A correct join sees neighbours within seconds, so `peers: 0` is the tell. Only a key from the account that owns the machines fixes it; rejoining never does.
 

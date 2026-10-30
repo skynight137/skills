@@ -7,7 +7,7 @@
 #
 #   install.sh        fetch the AppImage, extract it, mint the shared token
 #   run-public.sh     supervisor: Xvfb + WM + app + the REST/MCP server
-#                     (19828 app API · public port $LLM_WIKI_PORT or 8080, token required
+#                     (19828 app API · public port LLM_WIKI_PORT or 8319, token required
 #                      · 8199 loopback, no token)
 #   run-ui.sh         supervisor: x11vnc (loopback 5900) + noVNC (public 6800) so the real
 #                     desktop UI opens in a browser — the frontend is Tauri, there is no
@@ -33,8 +33,22 @@
 # "Failed to activate virtual core keyboard". Report-only stays for what is still missing.
 _nix_store_user() { printf '%s' "$HOME/.store"; }
 
+# A wrapper on PATH is not proof of a working display: it exec's nixenv + a path in
+# ~/.store, and a wiped store (or a lost nixenv, which an older bug in this module
+# caused) leaves both pointing nowhere while `command -v` still succeeds. Validate the
+# whole chain, or a stale wrapper silently suppresses the provisioning that would fix it.
+_llm_wiki_display_ok() {
+  local b w sp
+  [ -x "$XDG_BIN_HOME/nixenv" ] || return 1
+  for b in Xvfb fluxbox; do
+    w="$(command -v "$b" 2>/dev/null)" || return 1
+    sp="$(sed -n 's#^exec [^ ]* \(/.*/bin/[^ "]*\).*#\1#p' "$w" 2>/dev/null | head -1)"
+    [ -n "$sp" ] && [ -x "$sp" ] || return 1
+  done
+}
+
 _llm_wiki_provision_display() {
-  { command -v Xvfb >/dev/null 2>&1 && command -v fluxbox >/dev/null 2>&1; } && return 0
+  _llm_wiki_display_ok && return 0
   [ -n "$(nix_bin)" ] || return 0
   local st p up xkb="" b wrapper
   st="$(_nix_store_user)"; mkdir -p "$st/nix/store"
@@ -48,7 +62,10 @@ _llm_wiki_provision_display() {
   for p in $outs; do
     case "$p" in *xkeyboard-config*) xkb="$st/nix/store/${p##*/}/share/X11/xkb" ;; esac
   done
-  cp -f "$SCRIPT_DIR/nixenv" "$XDG_BIN_HOME/nixenv"; chmod +x "$XDG_BIN_HOME/nixenv"
+  # nixenv sits next to this module (scripts/setup/), not in scripts/ where setup.sh lives.
+  cp -f "$SCRIPT_DIR/setup/nixenv" "$XDG_BIN_HOME/nixenv" \
+    || { warn "llm-wiki: nixenv tidak ada di $SCRIPT_DIR/setup — Xvfb hasil build tak bisa jalan"; return 1; }
+  chmod +x "$XDG_BIN_HOME/nixenv"
   for p in $outs; do
     up="$st/nix/store/${p##*/}"
     for b in "$up/bin/Xvfb" "$up/bin/fluxbox"; do
@@ -111,16 +128,22 @@ install_llm_wiki() {
   miss=$(ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u)
   if [ -n "$miss" ] && [ -n "$(nix_bin)" ]; then
     step "llm-wiki: resolving $(wc -l <<<"$miss") shared libs from nix"
-    for p in $(nix_run build --no-link --print-out-paths \
+    # Build into the PER-USER store, not /nix/store: /etc/nix/nix.conf enables a
+    # local-overlay there, so nix happily prints /nix/store/<hash> while copying
+    # nothing, and every [ -d ] below then misses (the documented trap). Outputs are
+    # resolved back into our own store before they are tested.
+    local st; st="$(_nix_store_user)"; mkdir -p "$st/nix/store"
+    for p in $("$(nix_bin)" --store "$st" build --no-link --print-out-paths \
       nixpkgs#xorg.libX11 nixpkgs#xorg.libxcb nixpkgs#libdrm nixpkgs#mesa nixpkgs#expat \
       nixpkgs#fribidi nixpkgs#harfbuzz nixpkgs#zlib nixpkgs#libgpg-error \
       nixpkgs#stdenv.cc.cc.lib 2>/dev/null); do
-      [ -d "$p/lib" ] && dirs="${dirs:+$dirs:}$p/lib"
+      d="$st/nix/store/${p##*/}/lib"
+      [ -d "$d" ] && dirs="${dirs:+$dirs:}$d"
     done
     # Some libs sit in a non-default output (libcom_err in e2fsprogs), so nothing above
-    # covers them: locate the file by name in the store and take its directory.
+    # covers them: locate the file by name and take its directory. Our own store first.
     for lib in $(LD_LIBRARY_PATH="$dirs" ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u); do
-      d=$(ls -d /nix/store/*/lib/"$lib" 2>/dev/null | head -1)
+      d=$(ls -d "$st"/nix/store/*/lib/"$lib" /nix/store/*/lib/"$lib" 2>/dev/null | head -1)
       [ -n "$d" ] && dirs="${dirs:+$dirs:}$(dirname "$d")"
     done
     # start-app reads this with `read -a`, which returns non-zero at EOF without a
@@ -131,7 +154,8 @@ install_llm_wiki() {
     [ -n "$miss" ] && warn "llm-wiki: still unresolved: $miss (add the dir to $dest/.ldpath)"
   fi
 
-  local port="${LLM_WIKI_PORT:-8080}"
+  local port; port="$(sed -n 's/^LLM_WIKI_PORT=//p' "$dest/.env" 2>/dev/null | head -1)"
+  port="${port:-${LLM_WIKI_PORT:-8319}}"
   cat <<NEXT
 
   llm-wiki is installed. Start it:

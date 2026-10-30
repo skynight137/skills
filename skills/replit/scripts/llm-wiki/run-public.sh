@@ -9,7 +9,7 @@
 #
 # Node.js is the only runtime dependency for the server part; the app part needs an
 # X display (real desktop, or Xvfb + a window manager).
-# Overridable: LLM_WIKI_PORT(8080; set 8081 when the Hermes dashboard owns 8080) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
+# Overridable: LLM_WIKI_PORT(8319; Hermes dashboard owns 8080, so stay off it) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
 #              LLM_WIKI_PROJECT LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
 set -uo pipefail
 APP="${LLM_WIKI_APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
@@ -18,7 +18,24 @@ ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/.env}"
 if [ -z "${LLM_WIKI_ENV_FILE:-}" ] && [ ! -f "$ENV_FILE" ] && [ -f "$APP/llmwiki.env" ]; then
   ENV_FILE="$APP/llmwiki.env"
 fi
-PORT="${LLM_WIKI_PORT:-8080}"
+PORT="${LLM_WIKI_PORT:-8319}"
+
+# Replit merouting port hanya kalau sudah terdaftar, dan registry itu ditulis platform —
+# bukan .replit. Satu GET lewat dev-domain sudah cukup untuk memicu pendaftaran; ulangi
+# sebentar karena entri bisa belum hidup di percobaan pertama. Best-effort: box non-Replit
+# tak punya REPLIT_DEV_DOMAIN dan tak ada yang perlu didaftarkan.
+register_public_port() {
+  [ -n "${REPLIT_DEV_DOMAIN:-}" ] || return 0
+  local i
+  for i in 1 2 3 4 5; do
+    if curl -fsS -m 4 -o /dev/null "https://$REPLIT_DEV_DOMAIN:$PORT/health" 2>/dev/null; then
+      log "port $PORT registered on https://$REPLIT_DEV_DOMAIN:$PORT/"
+      return 0
+    fi
+    sleep 3
+  done
+  log "warn: port $PORT belum ter-routing lewat dev-domain (buka https://$REPLIT_DEV_DOMAIN:$PORT/ sekali di browser)"
+}
 LOCAL_PORT="${LLM_WIKI_LOCAL_PORT:-8199}"
 DISP="${LLM_WIKI_DISPLAY:-:99}"
 PROJECT="${LLM_WIKI_PROJECT:-/home/runner/workspace}"
@@ -83,7 +100,12 @@ start_public_server() {
   LLM_WIKI_BIND_HOST="${LLM_WIKI_BIND_HOST:-$ANY_HOST}" \
     node "$APP/llmwiki-server.js" >"$APP/server-live.log" 2>&1 &
   for _ in $(seq 1 15); do port_open "$PORT" && break; sleep 1; done
-  port_open "$PORT" && log "public server up ($PORT, token required)" || log "public server FAILED (see server-live.log)"
+  if port_open "$PORT"; then
+    log "public server up ($PORT, token required)"
+    register_public_port
+  else
+    log "public server FAILED (see server-live.log)"
+  fi
 }
 
 start_local_server() {
@@ -97,6 +119,13 @@ start_local_server() {
 }
 
 have node || { echo "node is required (the server part needs nothing else)" >&2; exit 1; }
+# The managed node build wants libatomic/libstdc++ from the toolchain dir; a bare shell
+# (ssh, systemd, cron) has no LD_LIBRARY_PATH and node dies "libatomic.so.1: cannot open".
+for _d in "${REPL_HOME:-}/.local/lib" "$HOME/workspace/.local/lib" "$HOME/.local/lib"; do
+  case "${LD_LIBRARY_PATH:-}" in *"$_d"*) continue ;; esac
+  [ -d "$_d" ] && LD_LIBRARY_PATH="$_d${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH:-}}"
+done
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 ANY=0; ANY_HOST="${ANY}.${ANY}.${ANY}.${ANY}"
 log "supervisor start: app=$APP_PORT public=$PORT local=$LOCAL_PORT project=$PROJECT"
 while true; do
