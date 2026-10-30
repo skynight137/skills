@@ -192,8 +192,17 @@ Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
 proxy answered and the port is not published.
 
-`--clean remote-shell` removes the sshd dir and stops it, keeps the `~/.ssh` symlink and the
-workflow entry (a reboot would just bring it back).
+`--clean join` stops both daemons (sshd via its pid file, tailscaled matched by OUR
+socket only), deletes `$RS_DIR` and the tailnet state dir, drops the `hermes-e2e-hop` line
+from `~/.ssh/authorized_keys`, and sweeps exactly the ssh surface join created: `~/.ssh/config`
+blocks whose body names `$RS_PORT` plus a tailnet hop, and `[host]:$RS_PORT` lines in
+`known_hosts`. Foreign config blocks, the `~/.ssh` symlink and the `.replit` workflow entry are
+left alone — a reboot brings the daemon back, and the entry is one line to delete.
+
+Run it **detached** (`setsid bash setup.sh --clean join >& clean.log &`) when the shell
+itself arrives over that sshd: killing tailscaled takes the tailnet leg down and the
+session with it, so the client times out before the sweep finishes. A fresh `--join` after
+that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identity).
 
 ## Surviving a restart (Replit)
 

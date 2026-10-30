@@ -127,7 +127,7 @@ clean_paths_for() {
     cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
     tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled launch-tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
-    join)         echo "$RS_DIR (host key/config/authorized_keys sshd; ~/.ssh symlink DIPERTAHANKAN)" ;;
+    join)          echo "$RS_DIR + state tailnet + blok ssh config & [host]:$RS_PORT di known_hosts + baris hermes-e2e-hop ($HOME/.ssh tetap ada)" ;;
     llm-wiki)      echo "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
     *)             echo "$1" ;;
   esac
@@ -330,15 +330,65 @@ clean_tailscale() {
 }
 
 clean_join() {
-  if ! _present "$RS_DIR"; then
-    nothing_removed "join"; return 0
+  local home ours=() sock="${TAILSCALE_SOCKET:-}"
+  home="$(cd "$HOME" && pwd)"
+  [ -d "$RS_DIR" ] && ours+=("$RS_DIR")
+  [ -n "$sock" ] && ours+=("$sock")
+  _present "${ours[@]}" || { nothing_removed "join"; return 0; }
+
+  # sshd first: pid file when sshd wrote one, else the listener is matched by the
+  # config path only (a second daemon on another socket is a different story).
+  if [ -f "$RS_DIR/sshd.pid" ]; then
+    kill "$(cat "$RS_DIR/sshd.pid")" 2>/dev/null || true
   fi
-  step "Removing join sshd ($RS_DIR)"
-  [ -f "$RS_DIR/sshd.pid" ] && { kill "$(cat "$RS_DIR/sshd.pid")" 2>/dev/null || true; sleep 1; }
+  pkill -f -- "$RS_DIR/sshd_config" 2>/dev/null || true
+  sleep 1
+
+  # tailscaled: matched through OUR socket, not by name, so a client on another
+  # socket (test node, second tailnet) keeps running.
+  if [ -n "$sock" ]; then
+    pkill -f -- "--socket=$sock" 2>/dev/null || true
+    sleep 1
+  fi
+
+  # Hop key we appended to ~/.ssh/authorized_keys (tag: hermes-e2e-hop).
+  [ -f "$home/.ssh/authorized_keys" ] &&     sed -i '/hermes-e2e-hop/d' "$home/.ssh/authorized_keys"
+
+  # ~/.ssh/config: remove only blocks that are ours — a Host/Match block whose body
+  # names our port and a tailnet hop. Any other block stays byte-identical.
+  if [ -f "$home/.ssh/config" ]; then
+    local removed
+    removed="$(awk -v port="$RS_PORT" '
+      function flush(   ours) {
+        if (hdr == "") { printf "%s", blk; blk = ""; return }
+        ours = (body ~ ("(^|[^0-9])" port "([^0-9]|$)") && body ~ /(ProxyCommand|ts\.net|tailscale)/)
+        if (!ours) printf "%s", blk
+        else print "REMOVED " hdr > "/dev/stderr"
+        blk = ""; hdr = ""; body = ""
+      }
+      /^(Host|Match)[[:space:]]/ { flush(); hdr = $0; blk = $0 "\n"; body = ""; next }
+      { blk = blk $0 "\n"; body = body $0 "\n" }
+      END { flush() }
+    ' "$home/.ssh/config" 2>/tmp/rs_cfg_removed)"
+    if [ -s /tmp/rs_cfg_removed ]; then
+      printf '%s\n' "$removed" >"$home/.ssh/config"
+      while read -r _ h; do ok "config ssh dihapus: $h"; done </tmp/rs_cfg_removed
+    fi
+    rm -f /tmp/rs_cfg_removed
+  fi
+
+  # known_hosts: only the [host]:port forms — the plain 22 entries are not ours.
+  for f in "$home/.ssh/known_hosts" "$home/.ssh/known_hosts2"; do
+    [ -f "$f" ] && sed -i "\#^\[[^]]*\]:$RS_PORT #d" "$f"
+  done
+
   rm -rf "$RS_DIR"
-  ok "join sshd removed"
-  warn "$HOME/.ssh tetap symlink ke \$REPL_HOME/.ssh (ssh config tidak ikut hilang)"
-  warn "entri workflow yang memanggil --join di .replit dibiarkan; hapus manual bila tak dipakai lagi"
+  ok "join sshd dihapus ($RS_DIR)"
+  [ -n "$sock" ] && rm -rf "${TAILSCALE_STATE_DIR:-$(dirname "$sock")}"
+  ok "state tailnet dihapus (host key + node identity)"
+  warn "biner tailscale tetap ada; hapus dengan: setup.sh --clean tailscale"
+  warn "node masih terdaftar di console sampai kedaluwarsa — hapus manual di admin panel"
+  warn "~/.ssh tetap ada dan tidak ikut terhapus; .replit --join dibiarkan (hapus manual)"
 }
 
 clean_sshx() {

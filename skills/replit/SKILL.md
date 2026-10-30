@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.19.0
+version: 4.20.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -258,6 +258,28 @@ on disk before moving on:
   `--join` is the only path that writes sshd config/keys, binds `$RS_PORT` and runs
   `tailscale up`; `--wf` is `--join` in workflow mode. There is no prepare-only mode and no
   second flag to chain: if a box must be inspectable without listeners, stop at `--tailscale`.
+
+### Renaming a setup flag (strict — this skill is self-used)
+
+The skill has one operator, so a rename is done hard: no alias kept, no migration block that
+rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
+
+1. Enumerate every surface in the SAME pass — a rename is not one `case` arm: arg parse,
+   usage text, `ui_menu.sh` key, `cli.sh` step name, `cleanup.sh` target + `clean_<fn>`,
+   the `install_<fn>` definition, the workflow-shim match string, docs, probe scripts.
+2. Make the unknown-option arm `die` with the new spelling in the hint (`die "Unknown option
+   '$1'. … sudah digabung jadi --join"`). Without it an unknown flag leaves every
+   `INSTALL_*` false and the guard at the bottom falls through to `INSTALL_ALL` — one stale
+   workflow entry then re-installs the whole toolchain on every boot.
+3. `git mv` any renamed script/reference so history follows; update the pointers (header
+   comment, SKILL.md row, sibling docs).
+4. `bash -n` every touched script and run `setup.sh --help` — the usage heredoc is an
+   UNQUOTED `<<USAGE`, so a bare backtick in new help text executes as a command at
+   `--help` time (`line 4: --tailscale: command not found`). Escape it `\``.
+5. Prove it on a second box, not here: fresh `--tailscale --join`, then a rerun WITHOUT the
+   auth key must print `sshd sudah hidup`/`tailnet: <ip>` and stay joined (idempotent), and
+   the old spelling must die with the hint. `scp` may be absent — push the tree with
+   `tar czf - dir | ssh host 'cat > ~/x.tgz'` and unpack there.
 - Export only what the script owns. Replit already provides `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME`; re-exporting them adds nothing. `XDG_BIN_HOME` is the one PATH entry the toolchain owns, always `$REPL_HOME/.local/bin`.
 - `HERMES_HOME`, `HERMES_MANAGED_DIR` and the launcher dir are ORDINARY wire-registered tool wiring in the single managed toolchain block (`wire_tool hermes` + `record_tool_env_vars` / `record_tool_path_dirs`, mirrored in `install_hermes` and `fix_derive_wiring`). Never give a tool its own rc block outside the managed markers: a second block has to be re-appended after EVERY rewrite to keep PATH precedence stable, `strip_tool_wiring` cannot see it, and a run that does not install that tool silently drops its lines (the pre-merge `hermes-tools` block had all three problems; `lift_legacy_hermes_wiring` / `strip_legacy_hermes_block` migrate such an rc in one pass). The managed-scope dir defaults to `/etc/hermes`, which does not exist and cannot be created on Replit (`/etc` is a read-only mount, no root), so it is pinned under `$HERMES_HOME/managed`. Keep `HERMES_HOME` OUT of `_FIXED_RC_ENV_VARS`: that list suppresses the tool-var export, which is now the only thing that emits it.
 - The only Hermes PATH entry is `$HERMES_HOME/hermes-agent/.hermes/bin` (the stable launcher; it resolves the correct environment itself). Never add `installs/*/environments/*/venv/bin` or `hermes-agent/venv/bin`: those venvs belong to an isolated session run, are not stable across sessions or updates, and a public shell that picks one up calls a binary from a session that may not exist.
