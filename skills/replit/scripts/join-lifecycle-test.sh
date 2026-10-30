@@ -53,7 +53,7 @@ for _ in $(seq 1 40); do grep -q 'dibiarkan (hapus manual)' "$HOME/clean.log" 2>
   say "sshd-up-after: $( (exec 3<>/dev/tcp/127.0.0.1/6800) 2>/dev/null && echo yes || echo no)   # expect no"
   say "socket-after: $([ -S "$SOCK" ] && echo present || echo gone)   # expect gone"
   say "processes-left: $(pgrep -af '[s]shd_config|[t]ailscaled --tun' | wc -l)   # expect 0"
-  say "state-dir: $([ -d "${RS_DIR:-$REPL_HOME/.ssh/join-sshd}" ] && echo present || echo gone)   # expect gone"
+  say "state-dir: $([ -d "${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/join-sshd}" ] && echo present || echo gone)   # expect gone"
   say "-- clean.log --";  sed -n '1,40p' "$HOME/clean.log"
   say "-- config --";     cat "$HOME/.ssh/config"        # peer block gone, github.com + other-box intact
   say "-- known_hosts --"; cat "$HOME/.ssh/known_hosts"  # :6800 line gone, others intact
