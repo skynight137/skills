@@ -97,7 +97,7 @@ install_llm_wiki() {
     dest="$WORKSPACE/tools/llmwiki-app"
     note=" (reusing the existing install)"
   else
-    dest="${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app"
+    dest="${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}"
   fi
 
   [ -d "$src" ] || { warn "bundle missing: $src"; return 1; }

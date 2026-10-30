@@ -205,7 +205,7 @@ SUMMARY
   # llm-wiki is a server, not a PATH binary: point at the supervisor it installed
   # instead of pretending it belongs in the "run directly" tool list above.
   if $INSTALL_LLM_WIKI; then
-    echo "   llm-wiki server: bash ${LLM_WIKI_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/llmwiki-app}/run-public.sh"
+    echo "   llm-wiki server: bash ${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}/run-public.sh"
   fi
 
   # Report (and fail on) tools that did not install. Run as the LAST step so
