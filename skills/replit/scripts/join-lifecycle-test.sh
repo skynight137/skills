@@ -10,7 +10,7 @@ set -u
 cd "${REPL_HOME:-$HOME/workspace}" || exit 1
 S=skills/replit/scripts/setup.sh
 TS="${REPL_HOME:-$HOME/workspace}/.local/bin/tailscale"
-SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_DATA_DIR:-$REPL_HOME/.local/share/tailscale}/state/tailscaled.sock}"
+SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/share/tailscale}/state/tailscaled.sock}"
 OUT="$HOME/lifecycle.out"
 : >"$OUT"
 say() { printf '%s\n' "$*" | tee -a "$OUT"; }
