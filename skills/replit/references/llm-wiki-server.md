@@ -243,6 +243,12 @@ lewat ssh setel sendiri: `export REPL_HOME=/home/runner/workspace`. Token disimp
 Jangan biarkan dua salinan hidup — salinan di `$HOME/.local/share` tidak akan dipakai
 workflow mana pun.
 
+Display (Xvfb/fluxbox) dan store nix-nya ikut `$REPL_HOME` (`$REPL_HOME/.local/bin`,
+`$REPL_HOME/.store`) — `$HOME` kena wipe tiap Repl restart, jadi wrapper yang menunjuk
+`$HOME/.store` akan mati dengan `cannot execute`. `nixenv` juga resolve store dari
+`REPL_HOME`, dan `run-public.sh` menambahkan `$REPL_HOME/.local/bin` + `.../node/bin`
+ke PATH sendiri supaya supervisor yang dijalankan lewat ssh tetap menemukan Xvfb/node.
+
 ## Instal dari nol (mesin bersih)
 
 Tidak ada yang disiapkan manual: skill mengunduh, mengekstrak, dan mem-build semua
