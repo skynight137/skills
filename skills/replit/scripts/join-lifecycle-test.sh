@@ -8,12 +8,13 @@
 # key) is what proves the sweep is narrow: those must survive untouched.
 set -u
 cd "${REPL_HOME:-$HOME/workspace}" || exit 1
-S=skills/replit/scripts/setup.sh
+S="${SKILL_DIR:-skills/replit}/scripts/setup.sh"
 TS="${REPL_HOME:-$HOME/workspace}/.local/bin/tailscale"
 SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/share/tailscale}/state/tailscaled.sock}"
 OUT="$HOME/lifecycle.out"
 : >"$OUT"
-say() { printf '%s\n' "$*" | tee -a "$OUT"; }
+exec >>"$OUT" 2>&1
+say() { printf '%s\n' "$*"; }
 
 mkdir -p "$HOME/.ssh"
 cat >"$HOME/.ssh/config" <<'CFG'
@@ -38,12 +39,12 @@ printf 'ssh-ed25519 AAAAother other-key\n' >"$HOME/.ssh/authorized_keys"
 
 say "== INSTALL =="
 TAILSCALE_NODE_NAME="${TAILSCALE_NODE_NAME:-$(hostname)}" bash $S --tailscale -j 2>&1 \
-  | grep -E "\u2714 |\u2717|\u26a0 " | tail -8 | tee -a "$OUT"
+  | tail -8
 say "sshd-up: $( (exec 3<>/dev/tcp/127.0.0.1/6800) 2>/dev/null && echo yes || echo no)"
 say "node-ip: $($TS --socket="$SOCK" ip -4 2>/dev/null)"
 
 say "== UNINSTALL (detached) =="
-setsid nohup bash -c 'cd "$REPL_HOME"; bash skills/replit/scripts/setup.sh --clean tailscale' \
+setsid nohup bash -c "cd \"\${REPL_HOME:-\$HOME/workspace}\"; bash \"$S\" --clean tailscale" \
   </dev/null >"$HOME/clean.log" 2>&1 &
 for _ in $(seq 1 40); do grep -q 'dibiarkan (hapus manual)' "$HOME/clean.log" 2>/dev/null && break; sleep 1; done
 
@@ -57,4 +58,4 @@ for _ in $(seq 1 40); do grep -q 'dibiarkan (hapus manual)' "$HOME/clean.log" 2>
   say "-- config --";     cat "$HOME/.ssh/config"        # peer block gone, github.com + other-box intact
   say "-- known_hosts --"; cat "$HOME/.ssh/known_hosts"  # :6800 line gone, others intact
   say "-- authorized_keys --"; cat "$HOME/.ssh/authorized_keys"
-} >>"$OUT" 2>&1
+}
