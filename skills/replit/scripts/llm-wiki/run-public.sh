@@ -9,7 +9,7 @@
 #
 # Node.js is the only runtime dependency for the server part; the app part needs an
 # X display (real desktop, or Xvfb + a window manager).
-# Overridable: LLM_WIKI_PORT(8319; Hermes dashboard owns 8080, so stay off it) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
+# Overridable: LLM_WIKI_PORT(80 -> https://$REPLIT_DEV_DOMAIN/mcp tanpa sufiks) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
 #              LLM_WIKI_PROJECT LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
 set -uo pipefail
 APP="${LLM_WIKI_APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
@@ -20,7 +20,7 @@ if [ -z "${LLM_WIKI_ENV_FILE:-}" ] && [ ! -f "$ENV_FILE" ] && [ -f "$APP/llmwiki
 fi
 # port (dan kredensial) ikut .env supaya restart jarak jauh tak perlu env manual
 if [ -f "$ENV_FILE" ]; then set -a; . "$ENV_FILE"; set +a; fi
-PORT="${LLM_WIKI_PORT:-8319}"
+PORT="${LLM_WIKI_PORT:-80}"
 
 # Replit merouting port hanya kalau sudah terdaftar, dan registry itu ditulis platform —
 # bukan .replit. Satu GET lewat dev-domain sudah cukup untuk memicu pendaftaran; ulangi

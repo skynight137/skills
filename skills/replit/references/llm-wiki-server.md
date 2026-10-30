@@ -107,9 +107,8 @@ bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :6080)
 | `https://<host>:${PORT}/api/v1/...` | header sama | script/curl |
 | `https://<host>:${PORT}/health` | tanpa auth | cek server + upstream |
 
-Port publik default **8080** (yang diharapkan klien llm-wiki). Kalau 8080 sudah dipakai
-hal lain — di box ini `hermes -p <profile> dashboard` — set `LLM_WIKI_PORT=8081` di
-`.env`; itu satu-satunya tempat override-nya, bukan di kode. Kalau tabrakan,
+Port publik default **80** (`LLM_WIKI_PORT=80` di `.env`), jadi URL klien tanpa sufiks.
+8080 dipakai kalau 80 sudah dipegang hal lain. Kalau tabrakan,
 server tidak bisa bind dan `/health` justru balas **302 +
 `{"error":"unauthenticated",...,"login_url":"/login"}`**: itu dashboard Hermes, bukan
 llm-wiki. Cek pemilik port dulu sebelum menuduh server rusak.
@@ -147,7 +146,7 @@ hermes -p <profile> config set mcp_servers.llm-wiki.headers.Authorization 'Beare
 
 `config set` menerima `${VAR}`; Hermes membacanya dari `.env` profile itu, jadi nama tokennya
 tetap **`LLM_WIKI_API_TOKEN`** (alias `MCP_<NAMA>_API_KEY` cuma dipakai kalau memakai flag
-`--auth header`). Klien non-Hermes: `{"mcpServers":{"llm-wiki":{"url":"http://127.0.0.1:8081/mcp",
+`--auth header`). Klien non-Hermes: `{"mcpServers":{"llm-wiki":{"url":"https://$REPLIT_DEV_DOMAIN/mcp",
 "headers":{"Authorization":"Bearer <token>"}}}}`. Tool yang muncul: 12
 (`llm_wiki_status/projects/set_project/files/read_file/write_page/search/graph/
 rescan_sources/embed_page/reviews/chat`).
@@ -191,7 +190,7 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
 
 - Taruh semuanya di bawah `$REPL_HOME` (persisten); `$HOME` dan `/tmp` kena wipe, dan
   **proses yang dijalankan dari sesi agen mati bersama sesinya** — stack yang tadi hidup
-  bisa sepenuhnya mati di sesi berikutnya. Probe dulu (`19828`, `8081`, `8199`, `6800`)
+  bisa sepenuhnya mati di sesi berikutnya. Probe dulu (`19828`, `80`, `8199`, `6800`)
   sebelum mendiagnosis apa pun. Daftarkan TIAP supervisor sebagai workflow sendiri di
   `.replit` (`llm-wiki-public` → `run-public.sh`, `llm-wiki-ui` → `run-ui.sh`); satu
   workflow per proses panjang, dan JANGAN berbagi `waitForPort` dengan workflow lain.
@@ -203,7 +202,7 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
   basi sebelum start — aturan lengkap + guard WM di skill `headless-gui-linux`.
 - Port harus ada di `.replit [[ports]]` (dan perubahan baru efektif setelah Repl
   restart). Untuk port app `:19828` cukup jangan diumbar — server Node di port yang
-  sudah terdaftar (mis. 8081) yang jadi pintunya.
+  sudah terdaftar (80) yang jadi pintunya.
 - Tidak ada root/systemd: `machine-id` tak bisa ditulis → dbus session distart manual;
   websocket/DBus warning `LIBDBUSMENU-GLIB` tidak fatal.
 - `apt` tidak tersedia untuk user → `shared-mime-info`/mesa/wayland diambil dari
@@ -286,11 +285,12 @@ butuh permanen.
 
 ## Publik lewat dev domain
 
-Port 8319 tidak ada di daftar port yang bisa dibuka Replit, jadi untuk akses publik
-pakai 8081 (`LLM_WIKI_PORT=8081` di `.env`) dan deklarasikan di `.replit`
-(`[[ports]] localPort = 8081` + `externalPort = 8081`). Edge baru membuka port itu
-setelah Repl di-restart; detail dan daftar port ada di `references/public-ports.md`.
-URL klien: `https://$REPLIT_DEV_DOMAIN:8081/mcp` + header `Authorization: Bearer`.
+Pakai port **80**: `LLM_WIKI_PORT=80` di `.env`, deklarasikan `.replit`
+(`[[ports]] localPort = 80` + `externalPort = 80`), lalu akses
+`https://$REPLIT_DEV_DOMAIN/mcp` — tanpa sufiks port. Header tetap
+`Authorization: Bearer <token>`. 8081 termasuk yang di atas kertas boleh, tapi di
+repl-test deklarasi + listener tidak membuat edge memetakannya (`000` terus) sementara
+8080/6800 yang sudah hidup saat boot dipetakan; detail di `references/public-ports.md`.
 
-Tunnel ssh tetap dipakai kalau port publik belum terbuka atau butuh akses stabil:
-`ssh -N -L 127.0.0.1:8081:localhost:8081 repl-test` lalu url loopback.
+Tunnel ssh hanya fallback saat edge belum memetakan port 80:
+`ssh -N -L 127.0.0.1:8080:localhost:80 repl-test` lalu url loopback.
