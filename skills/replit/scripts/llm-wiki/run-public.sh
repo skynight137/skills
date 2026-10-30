@@ -120,6 +120,9 @@ start_local_server() {
   port_open "$LOCAL_PORT" && log  "local server up ($LOCAL_PORT, loopback, no token)" || log "local server FAILED"
 }
 
+# wrapper display (Xvfb/fluxbox) dan node tinggal di REPL_HOME/.local/bin + .local/share/node
+[[ -n "${REPL_HOME:-}" ]] && PATH="$PATH:$REPL_HOME/.local/bin:$REPL_HOME/.local/share/node/bin"
+[[ -n "${REPL_HOME:-}" ]] && export PATH
 have node || { echo "node is required (the server part needs nothing else)" >&2; exit 1; }
 # The managed node build wants libatomic/libstdc++ from the toolchain dir; a bare shell
 # (ssh, systemd, cron) has no LD_LIBRARY_PATH and node dies "libatomic.so.1: cannot open".

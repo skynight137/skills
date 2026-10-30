@@ -31,7 +31,7 @@
 # copying nothing when the dir only looks writable, so every `[ -x ]` then fails and
 # nothing lands on PATH. A wrapper also pins -xkbdir, without which Xvfb dies with
 # "Failed to activate virtual core keyboard". Report-only stays for what is still missing.
-_nix_store_user() { printf '%s' "$HOME/.store"; }
+_nix_store_user() { printf '%s' "${REPL_HOME:-$HOME}/.store"; }
 
 # A wrapper on PATH is not proof of a working display: it exec's nixenv + a path in
 # ~/.store, and a wiped store (or a lost nixenv, which an older bug in this module

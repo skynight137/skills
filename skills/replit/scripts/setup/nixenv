@@ -15,8 +15,10 @@ exec unshare -rm --propagation private bash -c '
   mount --bind /nix/store /tmp/nixlower || exit 1
   mount -t tmpfs tmpfs /nix/store || exit 1
   ln -s /tmp/nixlower/* /nix/store/ 2>/dev/null
-  ln -s "$HOME"/.store/nix/store/* /nix/store/ 2>/dev/null
-  PATH="$(ls -d "$HOME"/.store/nix/store/*/bin 2>/dev/null | paste -sd: -):$PATH"
+  # per-user store: REPL_HOME (persistent) wins over $HOME (wiped on restart)
+  _S="${REPL_HOME:-$HOME}/.store"
+  ln -s "$_S"/nix/store/* /nix/store/ 2>/dev/null
+  PATH="$(ls -d "$_S"/nix/store/*/bin 2>/dev/null | paste -sd: -):$PATH"
   export PATH
   exec "$@"
 ' bash "$@"
