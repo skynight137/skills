@@ -1,4 +1,4 @@
-# SSH e2e hop into a second box (key-only sshd on a high port)
+# SSH hop into a second box (manual bootstrap) (key-only sshd on a high port)
 
 > **Which file?** `references/join-bridge.md` is the current lane: `setup.sh --tailscale --join`
 > does all of this itself (persistent `~/.ssh` symlink, tailnet hop, workflow notice). Read this
@@ -18,7 +18,7 @@ the user a place to paste a bootstrap script, then leave it.
 ## Shape
 
 1. Agent box (server 1): make a dedicated keypair, never reuse a GitHub key.
-   `ssh-keygen -q -t ed25519 -N '' -f <keys>/e2e-hop -C hermes-e2e-hop`
+   `ssh-keygen -q -t ed25519 -N '' -f <keys>/join-hop -C hermes-join-hop`
    The public key is safe to embed and to print; the private key stays put.
 2. Write one bootstrap script for the second box and deliver it as a **file
    path** the user opens and pastes (a gzip+base64 single line only if the
@@ -51,7 +51,7 @@ StrictModes no
 LogLevel VERBOSE
 ```
 
-Keep it under `~/.ssh/e2e-sshd/` so the user's own `authorized_keys` and
+Keep it under `~/.ssh/join-sshd/` so the user's own `authorized_keys` and
 `sshd_config` are untouched.
 
 - **Allocate a free high port (6800-family) and check the owner first.** On a
@@ -120,7 +120,7 @@ pass.
 
 ## After the hop works
 
-- Connect with the dedicated key and a `Host e2e` block in `~/.ssh/config`
+- Connect with the dedicated key and a `Host join` block in `~/.ssh/config`
   (HostName 127.0.0.1, the forwarded/Publish port, the user, IdentityFile).
 - Point Hermes at it with `TERMINAL_SSH_*` in the profile `.env` and
   `hermes config set terminal.backend ssh`, then prove it: the `terminal` tool's

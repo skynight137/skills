@@ -13,14 +13,15 @@
 #     once per boot and is start/stop-able from the UI.
 # One mode only: join. This script always ends with sshd + tailscaled running and the
 # node joined; there is no prepare-then-exit branch. `setup.sh --tailscale` (binaries
-# only, no join) does not reach this file at all. `--wf` is the workflow variant: same
+# only, no join) does not reach this file at all. `--wf`/`--workflow` is the workflow
+# variant: same
 # thing, but the log streams and the process stays in the foreground.
 # The tailnet auth key is NEVER baked in: export TAILSCALE_AUTH_KEY for the first
 # start, afterwards the stored node identity carries the login on its own.
 # ─────────────────────────────────────────────────────────────────────────────
 
 : "${RS_PORT:=6800}"
-RS_DIR="${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/e2e-sshd}"
+RS_DIR="${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/join-sshd}"
 RS_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")/../.." 2>/dev/null && pwd)"
 
 __rs_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }
@@ -175,7 +176,7 @@ install_join() {
 
   # the operator pastes hop keys here; a key already present is not duplicated
   local k
-  for k in ${RS_AUTHORIZED_KEYS:-"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJiPaPIegqJyzbg21stqeclMtRUmUpFqJbMCj8W1vKN hermes-e2e-hop"}; do
+  for k in ${RS_AUTHORIZED_KEYS:-"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJiPaPIegqJyzbg21stqeclMtRUmUpFqJbMCj8W1vKN hermes-join-hop"}; do
     [ -n "$k" ] || continue
     grep -qF "$k" "$RS_DIR/authorized_keys" 2>/dev/null || printf '%s\n' "$k" >>"$RS_DIR/authorized_keys"
   done
@@ -185,7 +186,7 @@ install_join() {
   local home; home="$(__rs_homedir)"
   mkdir -p "$home/.ssh"
   touch "$home/.ssh/authorized_keys" && chmod 600 "$home/.ssh/authorized_keys"
-  grep -qF "hermes-e2e-hop" "$home/.ssh/authorized_keys" || tail -n 1 "$RS_DIR/authorized_keys" >>"$home/.ssh/authorized_keys"
+  grep -qF "hermes-join-hop" "$home/.ssh/authorized_keys" || tail -n 1 "$RS_DIR/authorized_keys" >>"$home/.ssh/authorized_keys"
 
   cat >"$RS_DIR/sshd_config" <<EOF
 Port $RS_PORT

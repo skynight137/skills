@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.20.0
+version: 4.21.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -138,6 +138,16 @@ without ripgrep.
     fallback when the CLI is unavailable); ollama models + camofox server state
     are preserved; cliproxy keeps config/OAuth logins. A bare non-interactive
     `--clean` is REFUSED (use `--clean all -y`).
+  - **A `clean_*` must undo everything its `install_*` created, not just the directory.**
+    The leftovers are the ones that rot: entries the installer appended to shared files
+    (`~/.ssh/authorized_keys`, `~/.ssh/config`, `known_hosts`), state dirs that make the
+    next install reuse a stale identity, and socket files. Remove those too, but only the
+    shape you wrote — match your own port/socket/tag comment, so a foreign block survives.
+  - **When the clean kills the transport it runs over, the clean must be detached and
+    verified from a file.** Killing `sshd` survives (children are orphaned); killing the
+    tailnet/tunnel client takes the whole leg down and the client times out mid-sweep.
+    Run it under `setsid ... >& clean.log &`, wait for the last line of output, and write
+    the post-clean assertions to a file on the box — the session that started it is gone.
   - **Conflict-free installs.** A box normally ALREADY has the tool: hand-installed
     into some arbitrary directory, symlinked onto PATH, often with a `.replit`
     workflow running that copy. The managed install must win without breaking any
@@ -256,7 +266,8 @@ on disk before moving on:
   (`tskey-auth-...`) is correct; printing the value is not.
 - **Install and join are two flags, not one.** `--tailscale` installs binaries and exits;
   `--join` is the only path that writes sshd config/keys, binds `$RS_PORT` and runs
-  `tailscale up`; `--wf` is `--join` in workflow mode. There is no prepare-only mode and no
+  `tailscale up`. `-j` is `--join`; `--wf`/`-wf`/`--workflow` is the same run in workflow
+  mode. There is no prepare-only mode and no
   second flag to chain: if a box must be inspectable without listeners, stop at `--tailscale`.
 
 ### Renaming a setup flag (strict — this skill is self-used)
@@ -267,18 +278,31 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
 1. Enumerate every surface in the SAME pass — a rename is not one `case` arm: arg parse,
    usage text, `ui_menu.sh` key, `cli.sh` step name, `cleanup.sh` target + `clean_<fn>`,
    the `install_<fn>` definition, the workflow-shim match string, docs, probe scripts.
-2. Make the unknown-option arm `die` with the new spelling in the hint (`die "Unknown option
+2. **Short and word aliases ride the flag they alias, not a new branch**: `--join|-j`,
+   `--wf|-wf|--workflow` sit in the SAME `case` arm, so the alias cannot drift. The help
+   line lists all spellings — a hidden alias is a support call.
+3. **A clean target is named after the TOOL, never the verb.** `--clean tailscale` tears the
+   whole join down (binaries + sshd + node state + the ssh wiring) because tailscale is what
+   backs it; `--clean join` only reads like the install flag and misleads. One target, one
+   owner, nothing left behind for a second call to find.
+4. **Feature names, not legacy prefixes.** State dir `$RS_DIR` is `$REPL_HOME/.ssh/join-sshd`
+   and the hop key tag is `hermes-join-hop`; the merge-era `e2e-sshd`/`e2e-hop` names are gone.
+   Renaming the state dir mints a new sshd host key — old `known_hosts` lines rot, so the
+   clean sweeps `[host]:$RS_PORT` too.
+5. Make the unknown-option arm `die` with the new spelling in the hint (`die "Unknown option
    '$1'. … sudah digabung jadi --join"`). Without it an unknown flag leaves every
    `INSTALL_*` false and the guard at the bottom falls through to `INSTALL_ALL` — one stale
    workflow entry then re-installs the whole toolchain on every boot.
-3. `git mv` any renamed script/reference so history follows; update the pointers (header
+6. `git mv` any renamed script/reference so history follows; update the pointers (header
    comment, SKILL.md row, sibling docs).
-4. `bash -n` every touched script and run `setup.sh --help` — the usage heredoc is an
+7. `bash -n` every touched script and run `setup.sh --help` — the usage heredoc is an
    UNQUOTED `<<USAGE`, so a bare backtick in new help text executes as a command at
    `--help` time (`line 4: --tailscale: command not found`). Escape it `\``.
-5. Prove it on a second box, not here: fresh `--tailscale --join`, then a rerun WITHOUT the
+8. Prove it on a second box, not here: fresh `--tailscale --join`, then a rerun WITHOUT the
    auth key must print `sshd sudah hidup`/`tailnet: <ip>` and stay joined (idempotent), and
-   the old spelling must die with the hint. `scp` may be absent — push the tree with
+   the old spelling must die with the hint. The uninstall leg runs **detached**
+   (`setsid … >& clean.log &` + poll the log for the last line) — it kills tailscaled, which
+   drops the tailnet leg and the session with it. `scp` may be absent — push the tree with
    `tar czf - dir | ssh host 'cat > ~/x.tgz'` and unpack there.
 - Export only what the script owns. Replit already provides `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME`; re-exporting them adds nothing. `XDG_BIN_HOME` is the one PATH entry the toolchain owns, always `$REPL_HOME/.local/bin`.
 - `HERMES_HOME`, `HERMES_MANAGED_DIR` and the launcher dir are ORDINARY wire-registered tool wiring in the single managed toolchain block (`wire_tool hermes` + `record_tool_env_vars` / `record_tool_path_dirs`, mirrored in `install_hermes` and `fix_derive_wiring`). Never give a tool its own rc block outside the managed markers: a second block has to be re-appended after EVERY rewrite to keep PATH precedence stable, `strip_tool_wiring` cannot see it, and a run that does not install that tool silently drops its lines (the pre-merge `hermes-tools` block had all three problems; `lift_legacy_hermes_wiring` / `strip_legacy_hermes_block` migrate such an rc in one pass). The managed-scope dir defaults to `/etc/hermes`, which does not exist and cannot be created on Replit (`/etc` is a read-only mount, no root), so it is pinned under `$HERMES_HOME/managed`. Keep `HERMES_HOME` OUT of `_FIXED_RC_ENV_VARS`: that list suppresses the tool-var export, which is now the only thing that emits it.

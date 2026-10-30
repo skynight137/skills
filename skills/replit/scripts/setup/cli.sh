@@ -176,7 +176,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cloudflared  tailscale  sshx  join
+   cloudflared  tailscale  sshx
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
@@ -196,7 +196,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cloudflared  tailscale  sshx  join
+   cloudflared  tailscale  sshx
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY

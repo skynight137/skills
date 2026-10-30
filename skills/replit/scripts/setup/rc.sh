@@ -51,12 +51,12 @@ Options:
                         dari pkgs.tailscale.com). Biner ke XDG_BIN_HOME, state node ke
                         \$TAILSCALE_DATA_DIR (PRESERVED oleh --clean tailscale). Tak ada
                         proses dinyalakan.
-  --join                Join tailnet: install tailscale bila belum ada, siapkan sshd key-only
+  --join, -j            Join tailnet: install tailscale bila belum ada, siapkan sshd key-only
                         ($RS_PORT) + ~/.ssh persisten, nyalakan sshd + tailscaled, lalu
                         \`tailscale up\` dengan TAILSCALE_AUTH_KEY. Run pertama butuh
                         TAILSCALE_AUTH_KEY=tskey-... di depan; boot berikutnya pakai
-                        identitas node tersimpan. Tanpa alias.
-  --wf                  Modifier entri workflow .replit: log dialirkan ke terminal dan
+                        identitas node tersimpan.
+  --wf, -wf, --workflow Modifier entri workflow .replit: log dialirkan ke terminal dan
                         proses TIDAK keluar (job tidak dianggap selesai). Implisit --join,
                         jadi pasangannya \`--tailscale --join --wf\`.
   --sshx                Install sshx (collaborative web terminal; direct binary)
@@ -93,8 +93,9 @@ Options:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|oc|opencode|ollama|
                         claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|
-                        cloudflared|tailscale|sshx|join removes one
-                        tool. Flag-driven cleanup prompts for confirmation
+                        cloudflared|tailscale|sshx removes one tool
+                        (tailscale = biner + sshd join + state + wiring ssh).
+                        Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
                         USER DATA: tools that own it are handled safely —
                         hermes is backed up with its OWN CLI (`hermes backup`,
@@ -150,8 +151,8 @@ parse_args() {
       --tailscale)              INSTALL_TAILSCALE=true ;;
       --sshx)                   INSTALL_SSHX=true ;;
       --tailscale)              INSTALL_TAILSCALE=true ;;
-      --join)                   INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
-      --wf)                     INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
+      --join|-j)                INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
+      --wf|-wf|--workflow)      INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --llm-wiki)               INSTALL_LLM_WIKI=true ;;

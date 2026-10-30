@@ -125,9 +125,8 @@ clean_paths_for() {
     aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
     ffmpeg)        echo "$XDG_BIN_HOME/ffmpeg ffprobe ffplay" ;;
     cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
-    tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled launch-tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
+    tailscale)     echo "$XDG_BIN_HOME/{tailscale,tailscaled,launch-tailscaled} + $RS_DIR + state tailnet + blok ssh config & [host]:$RS_PORT di known_hosts + baris hermes-join-hop ($HOME/.ssh tetap ada)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
-    join)          echo "$RS_DIR + state tailnet + blok ssh config & [host]:$RS_PORT di known_hosts + baris hermes-e2e-hop ($HOME/.ssh tetap ada)" ;;
     llm-wiki)      echo "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
     *)             echo "$1" ;;
   esac
@@ -316,25 +315,15 @@ clean_cloudflared() {
 # (and its Funnel/serve config) without a re-auth. Copies an older manual install
 # left in $TAILSCALE_DATA_DIR are deliberately KEPT: that dir also holds the
 # user's own start scripts, and those binaries belong to whoever wrote them.
-clean_tailscale() {
-  if ! _present "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled"; then
-    nothing_removed "tailscale"; return 0
-  fi
-  step "Removing tailscale (node state kept in $TAILSCALE_DATA_DIR)"
-  rm -f "$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled"
-  ok "tailscale removed (preserved: $TAILSCALE_DATA_DIR)"
-  if [[ -e "$TAILSCALE_DATA_DIR/tailscale" || -e "$TAILSCALE_DATA_DIR/tailscaled" ]]; then
-    warn "older copies remain in $TAILSCALE_DATA_DIR — kept on purpose (your scripts + the node state live there)"
-  fi
-  return 0
-}
 
-clean_join() {
+clean_tailscale() {
   local home ours=() sock="${TAILSCALE_SOCKET:-}"
   home="$(cd "$HOME" && pwd)"
   [ -d "$RS_DIR" ] && ours+=("$RS_DIR")
   [ -n "$sock" ] && ours+=("$sock")
-  _present "${ours[@]}" || { nothing_removed "join"; return 0; }
+  local bins=("$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled")
+  _present "${ours[@]}" "${bins[@]}" || { nothing_removed "tailscale"; return 0; }
+  step "Removing tailscale join (biner + sshd + node state + wiring ssh)"
 
   # sshd first: pid file when sshd wrote one, else the listener is matched by the
   # config path only (a second daemon on another socket is a different story).
@@ -351,8 +340,8 @@ clean_join() {
     sleep 1
   fi
 
-  # Hop key we appended to ~/.ssh/authorized_keys (tag: hermes-e2e-hop).
-  [ -f "$home/.ssh/authorized_keys" ] &&     sed -i '/hermes-e2e-hop/d' "$home/.ssh/authorized_keys"
+  # Hop key we appended to ~/.ssh/authorized_keys (tag: hermes-join-hop).
+  [ -f "$home/.ssh/authorized_keys" ] &&     sed -i '/hermes-join-hop/d' "$home/.ssh/authorized_keys"
 
   # ~/.ssh/config: remove only blocks that are ours — a Host/Match block whose body
   # names our port and a tailnet hop. Any other block stays byte-identical.
@@ -386,7 +375,8 @@ clean_join() {
   ok "join sshd dihapus ($RS_DIR)"
   [ -n "$sock" ] && rm -rf "${TAILSCALE_STATE_DIR:-$(dirname "$sock")}"
   ok "state tailnet dihapus (host key + node identity)"
-  warn "biner tailscale tetap ada; hapus dengan: setup.sh --clean tailscale"
+  rm -f "${bins[@]}"
+  ok "biner tailscale/launch-tailscaled dihapus"
   warn "node masih terdaftar di console sampai kedaluwarsa — hapus manual di admin panel"
   warn "~/.ssh tetap ada dan tidak ikut terhapus; .replit --join dibiarkan (hapus manual)"
 }
@@ -539,7 +529,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|join)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -556,7 +546,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|join)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -601,7 +591,7 @@ clean() {
       clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|join)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -638,7 +628,6 @@ clean() {
         cloudflared)   clean_cloudflared ;;
         tailscale)     clean_tailscale ;;
         sshx)          clean_sshx ;;
-        join) clean_join ;;
       esac
       ;;
     "")

@@ -161,11 +161,11 @@ re-spelling it.
 is the operator's decision per machine, so it is pinned where the machine is described
 — in-line on the workflow `args` (`TAILSCALE_NODE_NAME=<name> bash ... --tailscale --join --wf`) or in a Replit secret — not exported to every shell of the box.
 
-### Why the flags say `tailscale`/`join` and the dir still says `e2e-sshd`
+### Why the flag says `join` and the clean target says `tailscale`
 
 `--tailscale` is the binary install; `--join` is the machine entering the tailnet —
 until it joins, no other machine can reach it, so `join` names the act. The state dir
-keeps `e2e-sshd` on purpose: moving it would mint a new sshd host key and every
+keeps `join-sshd` on purpose: moving it would mint a new sshd host key and every
 client's `known_hosts` would warn.
 
 What `install_join` does, in order (all idempotent, re-run to repair):
@@ -173,7 +173,7 @@ What `install_join` does, in order (all idempotent, re-run to repair):
 1. `~/.ssh` → symlink to `$REPL_HOME/.ssh` (persistent). An existing `~/.ssh` is
    moved in first, not discarded, so the operator's own `config`/keys survive a
    restart too.
-2. host key + `authorized_keys` + `sshd_config` under `$REPL_HOME/.ssh/e2e-sshd/`;
+2. host key + `authorized_keys` + `sshd_config` under `$REPL_HOME/.ssh/join-sshd/`;
    the hop key is added once, duplicates are grepped out.
 3. `sshd -t`, start detached, then **verify the banner and loopback auth**; a live
    `sshd` is skipped rather than killed (killing it cuts the current session).
@@ -192,14 +192,14 @@ Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
 proxy answered and the port is not published.
 
-`--clean join` stops both daemons (sshd via its pid file, tailscaled matched by OUR
-socket only), deletes `$RS_DIR` and the tailnet state dir, drops the `hermes-e2e-hop` line
+`--clean tailscale` stops both daemons (sshd via its pid file, tailscaled matched by OUR
+socket only), deletes `$RS_DIR` and the tailnet state dir, drops the `hermes-join-hop` line
 from `~/.ssh/authorized_keys`, and sweeps exactly the ssh surface join created: `~/.ssh/config`
 blocks whose body names `$RS_PORT` plus a tailnet hop, and `[host]:$RS_PORT` lines in
 `known_hosts`. Foreign config blocks, the `~/.ssh` symlink and the `.replit` workflow entry are
 left alone — a reboot brings the daemon back, and the entry is one line to delete.
 
-Run it **detached** (`setsid bash setup.sh --clean join >& clean.log &`) when the shell
+Run it **detached** (`setsid bash setup.sh --clean tailscale >& clean.log &`) when the shell
 itself arrives over that sshd: killing tailscaled takes the tailnet leg down and the
 session with it, so the client times out before the sweep finishes. A fresh `--join` after
 that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identity).
@@ -212,7 +212,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
 
 - `~/.ssh` itself is a symlink into `$REPL_HOME/.ssh` (persistent, so ssh `config`
   and `known_hosts` also survive); host key, sshd config, authorized key, log →
-  `$REPL_HOME/.ssh/e2e-sshd/`; tailnet node state →
+  `$REPL_HOME/.ssh/join-sshd/`; tailnet node state →
   `$REPL_HOME/.local/share/tailscale/state/`; managed `tailscale`/`tailscaled` binaries →
   `$REPL_HOME/.local/bin/`. Nothing a reboot needs may live in `$HOME`.
 - a node whose key sits in `$HOME` re-registers from scratch on every boot: new `100.x`
@@ -335,7 +335,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   the bind race and you debug the bind failure instead of the real error.
 - `pkill -f "sshd -f …"` also matches the wrapper of the very command you are
   running and kills it; use `pkill -x sshd`.
-- `pkill -f 'e2e-sshd/sshd_config'` kills **every** e2e listener on the box, not just
+- `pkill -f 'join-sshd/sshd_config'` kills **every** join listener on the box, not just
   the port you meant: the pattern is the shared config path. Restart the one you still
   need with `--join` (and `RS_PORT=` if it is not the default) right after.
 - GNU sed here rejects `|` as the `s` delimiter on these `args`/quote patterns
@@ -378,7 +378,7 @@ repo is already public.
 - **A listed peer is not a reachable machine.** Three things are required, in order:
   the peer is online in `tailscale status`, sshd was prepared *on that box*
   (`setup.sh --join`), and a hop key sits in its `authorized_keys` — which the
-  prep does for you (the `hermes-e2e-hop` key is authorized by default; extend with
+  prep does for you (the `hermes-join-hop` key is authorized by default; extend with
   `RS_AUTHORIZED_KEYS`). Onboarding a machine is therefore: join it with the auth key,
   run the prep there, then add a `Host` block here. Answer "can we reach every
   machine?" as "every machine that has done this", never as "any host on the tailnet".
