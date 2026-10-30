@@ -125,6 +125,10 @@ be carried explicitly: with `TAILSCALE_NODE_NAME` set the task line is pinned to
 the pin instead of appending a second one. Unpinned, the console keeps the last say —
 which is what a box whose name you rename on the dashboard wants.
 
+To rename a joined box use `tailscale set --hostname=<name>`; it takes effect at once and
+the MagicDNS name follows. Deleting a machine is console-only (`tailscale` has no local
+delete), so a wiped identity leaves an offline ghost for you to remove there.
+
 ### Moving a box to another tailnet
 
 The auth key decides which tailnet a join lands in, and a box already joined keeps its
