@@ -211,8 +211,8 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
 
 ## Gate verifikasi (jangan percaya klaim, cek ini)
 
-1. `curl -s localhost:8081/health` → `ok:true`, `upstream` healthy (curl ke `:8080` yang
-   menjawab dengan JSON lain = port itu milik service lain).
+1. `curl -s localhost:$(sed -n 's/^LLM_WIKI_PORT=//p' ~/.local/share/llmwiki-app/.env)/health` → `ok:true`, `upstream` healthy (port diambil dari
+   `.env`; curl ke `:8080` yang menjawab dengan JSON lain = port itu milik dashboard).
 2. `initialize` ke `/mcp` → `serverInfo.name == llm-wiki`.
 3. `tools/list` → 12 tool.
 4. `llm_wiki_write_page` lalu `llm_wiki_read_file` dengan path sama → isi cocok
@@ -231,3 +231,38 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
   OpenAI-compatible atau Ollama) di app state; chat butuh `llmConfig` (API key LLM).
   Tanpa itu search tetap jalan mode keyword; `llm_wiki_chat` mengembalikan error.
 - GPU: tidak ada → software render (`llvmpipe`); UI berat tapi jalan.
+
+## Instal dari nol (mesin bersih)
+
+Tidak ada yang disiapkan manual: skill mengunduh, mengekstrak, dan mem-build semua
+sendiri. Urutannya:
+
+1. `npx -y skills add skynight137/skills -s replit --agent "*" -y` — prompt interaktif
+   mati kalau stdin bukan TTY, dan tanpa `LD_LIBRARY_PATH` node mati `libatomic.so.1`.
+   Di ssh non-interaktif: `export LD_LIBRARY_PATH=$(ls -d /nix/store/*gcc-1*-lib/lib | tail -1)`.
+2. `bash ~/.agents/skills/replit/scripts/setup.sh --llm-wiki` (juga butuh
+   `LD_LIBRARY_PATH` di atas; tanpa itu `node -e` pembuat token gagal).
+3. Cek `lldd` bersih: `LD_LIBRARY_PATH=$(cat ~/.local/share/llmwiki-app/.ldpath) ldd
+   ~/.local/share/llmwiki-app/squashfs-root/usr/bin/llm-wiki | grep -c "not found"` → 0.
+   Kalau ada sisa, modul mem-build paketnya lalu mengulang resolusi; `.ldpath` yang
+   berhenti tumbuh = paket memang tidak punya lib itu, bukan sukses.
+
+Port publik default 8319 (8080 milik dashboard Hermes) dan disimpan sebagai
+`LLM_WIKI_PORT` di `.env`; sesudah server hidup supervisor memanggil dev-domain sekali
+supaya platform mendaftarkan portnya.
+
+## Client di mesin lain
+
+Tailscale di box ini berjalan **userspace** (`--tun=userspace-networking`, SOCKS5 di
+`:1055`) dan **tidak** punya TUN, jadi `http://<ip-tailnet>:8319` dari mesin lain
+memberi `000` walau server hidup — `ssh` tetap jalan karena lewat ProxyCommand SOCKS.
+Yang dipakai: tunnel ssh ke loopback klien.
+
+    ssh -N -L 127.0.0.1:8319:localhost:8319 repl-test      # di mesin klien
+    hermes mcp add / edit entry:  url http://127.0.0.1:8319/mcp
+                                  header Authorization: Bearer <LLM_WIKI_API_TOKEN>
+
+Token penuh dari `~/.local/share/llmwiki-app/.env` di mesin server. Bukti koneksi:
+`hermes mcp test llm-wiki` harus menampilkan daftar tool, bukan "Connection failed".
+Tunnel mati bersama sesinya — jalankan di supervisor (`persist`) atau workflow kalau
+butuh permanen.
