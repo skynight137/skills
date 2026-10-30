@@ -56,9 +56,9 @@ Options:
                         \`tailscale up\` dengan TAILSCALE_AUTH_KEY. Run pertama butuh
                         TAILSCALE_AUTH_KEY=tskey-... di depan; boot berikutnya pakai
                         identitas node tersimpan.
-  --wf, -wf, --workflow Modifier entri workflow .replit: log dialirkan ke terminal dan
+  -w, --workflow  Modifier entri workflow .replit: log dialirkan ke terminal dan
                         proses TIDAK keluar (job tidak dianggap selesai). Implisit --join,
-                        jadi pasangannya \`--tailscale --join --wf\`.
+                        jadi pasangannya \`--tailscale --join --workflow\`.
   --sshx                Install sshx (collaborative web terminal; direct binary)
   --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
                         Firefox server + MCP adapter). Provisions the package-pinned
@@ -152,7 +152,7 @@ parse_args() {
       --sshx)                   INSTALL_SSHX=true ;;
       --tailscale)              INSTALL_TAILSCALE=true ;;
       --join|-j)                INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
-      --wf|-wf|--workflow)      INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
+      -w|--workflow)      INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
       --camofox)                INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       --llm-wiki)               INSTALL_LLM_WIKI=true ;;

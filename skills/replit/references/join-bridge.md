@@ -128,7 +128,7 @@ Replit Secrets reach app processes only, never a shell started later: to exercis
 
 An existing workflow entry is upgraded, never blindly rewritten, so the node name has to
 be carried explicitly: with `TAILSCALE_NODE_NAME` set the task line is pinned to
-`TAILSCALE_NODE_NAME=<name> bash … --tailscale --join --wf`, and a rename rewrites
+`TAILSCALE_NODE_NAME=<name> bash … --tailscale --join --workflow`, and a rename rewrites
 the pin instead of appending a second one. Unpinned, the console keeps the last say —
 which is what a box whose name you rename on the dashboard wants.
 
@@ -159,7 +159,7 @@ re-spelling it.
 
 `TAILSCALE_NODE_NAME` stays out of the rc on purpose. Which name a machine answers to
 is the operator's decision per machine, so it is pinned where the machine is described
-— in-line on the workflow `args` (`TAILSCALE_NODE_NAME=<name> bash ... --tailscale --join --wf`) or in a Replit secret — not exported to every shell of the box.
+— in-line on the workflow `args` (`TAILSCALE_NODE_NAME=<name> bash ... --tailscale --join --workflow`) or in a Replit secret — not exported to every shell of the box.
 
 ### Why the flag says `join` and the clean target says `tailscale`
 
@@ -224,7 +224,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   type `shell.exec`, command:
 
   ```
-  bash <skill-dir>/scripts/setup.sh --tailscale --join --wf      # path relatif ke workspace
+  bash <skill-dir>/scripts/setup.sh --tailscale --join --workflow      # path relatif ke workspace
   ```
 
   `install_join` prints that one line and leaves `.replit` alone. The path is made
@@ -236,8 +236,8 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   theirs without touching the file (a pasted second `name` collides with a workflow they
   already have, and `[workflows]` sits in a different place on every host). Anything that
   already points at `setup.sh --join` counts as wired; an old entry is upgraded in place by
-  appending `--wf` to its `args`, and one that points at a path which no longer exists is
-  reported (skill dir moved) instead of being silently accepted. The `--wf` check runs only
+  appending `--workflow` to its `args`, and one that points at a path which no longer exists is
+  reported (skill dir moved) instead of being silently accepted. The `--workflow` check runs only
   after the path check, or a dead path hides behind the "already wired" branch. The skill dir is persistent, which is why the command
   points at `setup.sh` instead of a copied script — no duplicate to drift.
 - **Renaming the node is safe, but only if the skill does not re-assert the OS hostname.**
@@ -250,7 +250,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
   Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
   `--join` asserts it, so pin it in the workflow `args`
-  (`TAILSCALE_NODE_NAME=hermes-agent bash <skill>/scripts/setup.sh --join --wf`) rather than trusting
+  (`TAILSCALE_NODE_NAME=hermes-agent bash <skill>/scripts/setup.sh --join --workflow`) rather than trusting
   the OS hostname — and not in an rc, which re-fires per terminal. A retired name can linger
   in `tailscale status` until removed in the console; the live node is the one under `self`.
   `tailscale set --hostname=` returns before the control plane has applied it, so POLL the
@@ -268,28 +268,28 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   file means owning something that is not ours: a second `name = "remote-shell"` collides with a
   workflow the operator already uses, and `[workflows]` sits in a different place on every
   host. But a full `[[workflows.workflow]]` block is also more than needed — the UI creates
-  the task for them — so `--join` prints just `bash <skill-dir>/scripts/setup.sh --tailscale --join --wf`
+  the task for them — so `--join` prints just `bash <skill-dir>/scripts/setup.sh --tailscale --join --workflow`
   and leaves the file alone; name and ordering stay theirs.
 - **Print the `args` path workspace-relative, never absolute.** Workflows run with the
   workspace as cwd, so a relative path survives the operator moving or renaming the skill
   dir; an absolute `$RS_SKILL_ROOT` breaks on the next move. Only a copy outside the
   workspace is printed absolute, with a note to move it in.
-- **When an entry already points at `setup.sh --join`, check its path BEFORE the `--wf`
+- **When an entry already points at `setup.sh --join`, check its path BEFORE the `--workflow`
   check.** Order the other way and a dead path hides behind the "already wired" branch
   forever: report `skill dipindah?` and print the current line instead of skipping. Also
   grep only the line that carries `--join` (`grep -oE 'bash +[^"]*setup\.sh --join' | head -1`)
   — other workflows in the same file (`--camofox`, …) point at that very script, so a bare
   `head -1` of all `setup.sh` lines reads the wrong one and flags a healthy entry.
   Upgrading an old entry in place is additive and idempotent: `--join` is inserted
-  straight after `--join` (so an existing `--wf` survives) and `--wf` is appended when
+  straight after `--join` (so an existing `--workflow` survives) and `--workflow` is appended when
   missing, both then verified by grep. Note GNU sed rejects `|` as the delimiter on these
   patterns — use `s#…#…#`.
 - **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
   command returns, taking the daemons with it, and a run whose output is redirected to a
-  file shows nothing. `--wf` (implies `--join`) prints the steps to the terminal
+  file shows nothing. `--workflow` (implies `--join`) prints the steps to the terminal
   and ends with `tail -F` on the tailscaled log, so one foreground process (and visible
   output) holds the job open. Every other flag is a one-shot install: use `--join` by hand,
-  `--join --wf` in `.replit [workflows]`.
+  `--join --workflow` in `.replit [workflows]`.
 - **The SOCKS relay fails intermittently** (`General SOCKS server failure` while the same
   probe answered a minute earlier). Retry the probe 2–3× before declaring the port dead, and
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success

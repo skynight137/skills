@@ -13,7 +13,7 @@
 #     once per boot and is start/stop-able from the UI.
 # One mode only: join. This script always ends with sshd + tailscaled running and the
 # node joined; there is no prepare-then-exit branch. `setup.sh --tailscale` (binaries
-# only, no join) does not reach this file at all. `--wf`/`--workflow` is the workflow
+# only, no join) does not reach this file at all. `--workflow`/`-w` is the workflow
 # variant: same
 # thing, but the log streams and the process stays in the foreground.
 # The tailnet auth key is NEVER baked in: export TAILSCALE_AUTH_KEY for the first
@@ -92,8 +92,8 @@ __rs_workflow() {
   local base="${REPL_HOME:-$HOME/workspace}"
 
   # Already wired? Then only two things matter: does the command it points at still
-  # exist, and does it carry --wf. Path first — a moved skill dir must not be masked
-  # by the --wf check, or a dead absolute path sits there forever.
+  # exist, and does it carry --workflow. Path first — a moved skill dir must not be masked
+  # by the --workflow check, or a dead absolute path sits there forever.
   if grep -qE 'setup\.sh --join' "$rp"; then
     local wired
     # Only the line that carries --join: other workflows point at the same script.
@@ -121,20 +121,20 @@ __rs_workflow() {
             || warn "gagal mem-pin TAILSCALE_NODE_NAME di $rp"
         fi
       fi
-      # --join implies the start; only --wf can still be missing (an entry wired before
+      # --join implies the start; only --workflow can still be missing (an entry wired before
       # that modifier existed). Verified afterwards — sed on a file we do not own gets
       # no trust from us.
-      if ! grep -qE 'setup\.sh --join --wf' "$rp"; then
-        sed -i -E 's#^(args = ".*setup\.sh --join\b[^"]*)"$#\1 --wf"#' "$rp"
-        changed="--wf"
+      if ! grep -qE 'setup\.sh --join --workflow' "$rp"; then
+        sed -i -E 's#^(args = ".*setup\.sh --join\b[^"]*)"$#\1 --workflow"#' "$rp"
+        changed="--workflow"
       fi
       if [ -n "${changed# }" ]; then
-        grep -qE 'setup\.sh --join --wf' "$rp" \
+        grep -qE 'setup\.sh --join --workflow' "$rp" \
           && { ok "workflow join di-upgrade ke $changed (entri lama)"; return 0; } \
           || warn "entri workflow join ada tapi gagal ditambahi $changed — cek $rp baris 'args'"
         return 0
       fi
-      grep -qE 'setup\.sh --join --wf' "$rp" && { ok "workflow join sudah terdaftar (--wf)"; return 0; }
+      grep -qE 'setup\.sh --join --workflow' "$rp" && { ok "workflow join sudah terdaftar (--workflow)"; return 0; }
       skip "workflow join sudah ada di $rp — tidak diubah"
       return 0
     fi
@@ -147,8 +147,8 @@ __rs_workflow() {
   # skill dir. Only an out-of-workspace copy needs the absolute path.
   echo
   ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
-  echo "    bash $(__rs_cmd) --tailscale --join --wf"
-  ok "  nama workflow & urutannya bebas; --join yang menyalakan daemon, --wf menahan task (tail -F) supaya job tidak di-reap"
+  echo "    bash $(__rs_cmd) --tailscale --join --workflow"
+  ok "  nama workflow & urutannya bebas; --join yang menyalakan daemon, --workflow menahan task (tail -F) supaya job tidak di-reap"
   # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
   if __rs_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi
 }

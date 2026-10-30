@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Lifecycle test for the join bridge: install -> detached uninstall -> assertions -> (rejoin
+# from the operator box). RUN THIS ON THE TARGET BOX. The uninstall leg is detached because it
+# kills tailscaled and takes the tailnet leg (and the session) with it; results are written to
+# $HOME/lifecycle.out, which you read after rejoining.
+#
+# Planted foreign state (another Host block, a 22-era known_hosts line, a foreign authorized
+# key) is what proves the sweep is narrow: those must survive untouched.
+set -u
+cd "${REPL_HOME:-$HOME/workspace}" || exit 1
+S=skills/replit/scripts/setup.sh
+TS="${REPL_HOME:-$HOME/workspace}/.local/bin/tailscale"
+SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_DATA_DIR:-$REPL_HOME/.local/share/tailscale}/state/tailscaled.sock}"
+OUT="$HOME/lifecycle.out"
+: >"$OUT"
+say() { printf '%s\n' "$*" | tee -a "$OUT"; }
+
+mkdir -p "$HOME/.ssh"
+cat >"$HOME/.ssh/config" <<'CFG'
+# user preamble
+Host github.com
+    HostName github.com
+    User git
+
+Host <peer>
+    HostName <peer>
+    Port 6800
+    User runner
+    ProxyCommand /repl/tools/bin/nc -X 5 -x 127.0.0.1:1055 %h %p
+
+Host other-box
+    HostName 10.0.0.9
+    Port 6800
+    User runner
+CFG
+printf 'gh.example.com ssh-ed25519 AAAAforeign\n[127.0.0.1]:6800 ssh-ed25519 AAAAgone\n' >"$HOME/.ssh/known_hosts"
+printf 'ssh-ed25519 AAAAother other-key\n' >"$HOME/.ssh/authorized_keys"
+
+say "== INSTALL =="
+TAILSCALE_NODE_NAME="${TAILSCALE_NODE_NAME:-$(hostname)}" bash $S --tailscale -j 2>&1 \
+  | grep -E "\u2714 |\u2717|\u26a0 " | tail -8 | tee -a "$OUT"
+say "sshd-up: $( (exec 3<>/dev/tcp/127.0.0.1/6800) 2>/dev/null && echo yes || echo no)"
+say "node-ip: $($TS --socket="$SOCK" ip -4 2>/dev/null)"
+
+say "== UNINSTALL (detached) =="
+setsid nohup bash -c 'cd "$REPL_HOME"; bash skills/replit/scripts/setup.sh --clean tailscale' \
+  </dev/null >"$HOME/clean.log" 2>&1 &
+for _ in $(seq 1 40); do grep -q 'dibiarkan (hapus manual)' "$HOME/clean.log" 2>/dev/null && break; sleep 1; done
+
+{
+  say "== POST-CLEAN ASSERTIONS =="
+  say "sshd-up-after: $( (exec 3<>/dev/tcp/127.0.0.1/6800) 2>/dev/null && echo yes || echo no)   # expect no"
+  say "socket-after: $([ -S "$SOCK" ] && echo present || echo gone)   # expect gone"
+  say "processes-left: $(pgrep -af '[s]shd_config|[t]ailscaled --tun' | wc -l)   # expect 0"
+  say "state-dir: $([ -d "${RS_DIR:-$REPL_HOME/.ssh/join-sshd}" ] && echo present || echo gone)   # expect gone"
+  say "-- clean.log --";  sed -n '1,40p' "$HOME/clean.log"
+  say "-- config --";     cat "$HOME/.ssh/config"        # peer block gone, github.com + other-box intact
+  say "-- known_hosts --"; cat "$HOME/.ssh/known_hosts"  # :6800 line gone, others intact
+  say "-- authorized_keys --"; cat "$HOME/.ssh/authorized_keys"
+} >>"$OUT" 2>&1

@@ -44,7 +44,7 @@ other lane assumes its persistence rules.
 | decide which ports may be public on Replit, and how to expose one (declared in `.replit`, edge opens only after a restart; supported list = 80, 3000-3003, 4200, 5000, 5173, 6000, 6800, 8000, 8008, 8080, 8081, 8099, 9000) | `references/public-ports.md` | — |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js`. Port lewat `LLM_WIKI_PORT` (default 8319, 8080 milik dashboard; 8319 loopback-only, pakai 8081 untuk publik); client di mesin lain butuh tunnel ssh karena tailscale di sini userspace tanpa TUN |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/join-bridge.md` | `scripts/setup.sh --tailscale --join` (host key + key-only sshd config + tailnet join, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--tailscale` alone installs the binaries only, `--wf` = the same in workflow mode; set `TAILSCALE_NODE_NAME=<name>` inline on the workflow args (or a Replit secret) to pin the tailnet node name, otherwise the console name is left alone |
+| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/join-bridge.md` | `scripts/setup.sh --tailscale --join` (host key + key-only sshd config + tailnet join, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--tailscale` alone installs the binaries only, `--workflow` = the same in workflow mode; set `TAILSCALE_NODE_NAME=<name>` inline on the workflow args (or a Replit secret) to pin the tailnet node name, otherwise the console name is left alone |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -266,7 +266,7 @@ on disk before moving on:
   (`tskey-auth-...`) is correct; printing the value is not.
 - **Install and join are two flags, not one.** `--tailscale` installs binaries and exits;
   `--join` is the only path that writes sshd config/keys, binds `$RS_PORT` and runs
-  `tailscale up`. `-j` is `--join`; `--wf`/`-wf`/`--workflow` is the same run in workflow
+  `tailscale up`. `-j` is `--join`; `--workflow`/`-w` is the same run in workflow
   mode. There is no prepare-only mode and no
   second flag to chain: if a box must be inspectable without listeners, stop at `--tailscale`.
 
@@ -279,7 +279,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
    usage text, `ui_menu.sh` key, `cli.sh` step name, `cleanup.sh` target + `clean_<fn>`,
    the `install_<fn>` definition, the workflow-shim match string, docs, probe scripts.
 2. **Short and word aliases ride the flag they alias, not a new branch**: `--join|-j`,
-   `--wf|-wf|--workflow` sit in the SAME `case` arm, so the alias cannot drift. The help
+   `-w|--workflow` sit in the SAME `case` arm, so the alias cannot drift. The help
    line lists all spellings — a hidden alias is a support call.
 3. **A clean target is named after the TOOL, never the verb.** `--clean tailscale` tears the
    whole join down (binaries + sshd + node state + the ssh wiring) because tailscale is what
@@ -302,7 +302,22 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
    auth key must print `sshd sudah hidup`/`tailnet: <ip>` and stay joined (idempotent), and
    the old spelling must die with the hint. The uninstall leg runs **detached**
    (`setsid … >& clean.log &` + poll the log for the last line) — it kills tailscaled, which
-   drops the tailnet leg and the session with it. `scp` may be absent — push the tree with
+   drops the tailnet leg and the session with it. `scripts/join-lifecycle-test.sh` runs the
+   whole cycle that way and dumps the post-clean assertions (config/known_hosts/keys/state)
+   to a file.
+9. **Push the updated tree BEFORE the clean leg.** The clean kicks the box off the tailnet, so
+   the channel you would have used to `scp` the new scripts is the one that dies; a test that
+   cleans the old copy leaves the box running old flags. Ship the tree, then clean.
+10. **Expect the lockout and stage the way back first.** After a full uninstall nothing on the
+    box can be reached from here (sshd and tailscaled are both gone), so line up the recovery
+    line before starting — `cd ~/workspace && TAILSCALE_NODE_NAME=<node> bash
+    skills/replit/scripts/setup.sh --tailscale --join`, typed by the operator in the platform
+    shell. It needs no auth key while the state dir survives; a clean that already wiped the
+    state does need `TAILSCALE_AUTH_KEY`.
+11. **A rename of the state dir orphans the old directory.** Nothing migrates, so
+    `$REPL_HOME/.ssh/<old-name>/` survives with a dead host key inside; delete it by hand once
+    the new path is proven. `known_hosts` lines for the old host key die on the same port, which
+    is why the clean sweeps `[host]:$RS_PORT` rather than trusting host-key reuse. `scp` may be absent — push the tree with
    `tar czf - dir | ssh host 'cat > ~/x.tgz'` and unpack there.
 - Export only what the script owns. Replit already provides `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME`; re-exporting them adds nothing. `XDG_BIN_HOME` is the one PATH entry the toolchain owns, always `$REPL_HOME/.local/bin`.
 - `HERMES_HOME`, `HERMES_MANAGED_DIR` and the launcher dir are ORDINARY wire-registered tool wiring in the single managed toolchain block (`wire_tool hermes` + `record_tool_env_vars` / `record_tool_path_dirs`, mirrored in `install_hermes` and `fix_derive_wiring`). Never give a tool its own rc block outside the managed markers: a second block has to be re-appended after EVERY rewrite to keep PATH precedence stable, `strip_tool_wiring` cannot see it, and a run that does not install that tool silently drops its lines (the pre-merge `hermes-tools` block had all three problems; `lift_legacy_hermes_wiring` / `strip_legacy_hermes_block` migrate such an rc in one pass). The managed-scope dir defaults to `/etc/hermes`, which does not exist and cannot be created on Replit (`/etc` is a read-only mount, no root), so it is pinned under `$HERMES_HOME/managed`. Keep `HERMES_HOME` OUT of `_FIXED_RC_ENV_VARS`: that list suppresses the tool-var export, which is now the only thing that emits it.
