@@ -210,6 +210,10 @@ on disk before moving on:
   delimiter; `(--start)?` written where the text has a space, so the pattern silently
   never matched while `rc=0` claimed success) look identical to a logic bug, and the
   script "succeeds" without editing anything.
+- **`sed -ed -i f1 f2` mengosongkan KEDUA file.** `-ed` menempelkan `d` ke script, jadi setiap
+  baris dihapus (`wc -l` = 0) dan `rc=0` tetap terlihat sukses. Tulis `sed -e 's#a#b#' -e 's#c#d#' -i f1 f2`,
+  dan `wc -l` tiap file tepat setelah edit multi-`-e`. Pemulihan: `git checkout -- <file>` — patch
+  yang belum di-commit di file itu ikut hilang, jadi siapkan untuk meng-apply-ulang.
 - Pass **absolute** paths: a `cd` from a previous terminal call persists, so a
   relative path can resolve against the wrong directory.
 - Trust base after any edit: `bash -n` on every module (the setup.sh syntax gate
