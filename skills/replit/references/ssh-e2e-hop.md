@@ -1,6 +1,6 @@
 # SSH e2e hop into a second box (key-only sshd on a high port)
 
-> **Which file?** `references/e2e-sshd-bridge.md` is the current lane: `setup.sh --e2e --start`
+> **Which file?** `references/join-bridge.md` is the current lane: `setup.sh --tailscale --join`
 > does all of this itself (persistent `~/.ssh` symlink, tailnet hop, workflow notice). Read this
 > one for the manual-bootstrap variant and the raw non-root sshd config, then follow the bridge
 > file for anything that has to survive a restart.

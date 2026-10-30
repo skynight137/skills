@@ -38,7 +38,7 @@ _MENU_ITEMS=(
   "cloudflared|cloudflared (Cloudflare Tunnel client)"
   "tailscale|tailscale (userspace tailnet client)"
   "sshx|sshx (collaborative web terminal)"
-  "remote-shell|remote-shell (sshd via tailnet, remote run)"
+  "join|join (sshd via tailnet: install tailscale, join, start)"
   "llm-wiki|llm-wiki server (knowledge base: MCP/REST + UI lewat noVNC)"
 )
 _MENU_CURSOR=0
@@ -87,7 +87,7 @@ _status_init() {
     "cloudflared|cloudflared"
     "tailscale|tailscale"
     "sshx|sshx"
-    "remote-shell|remote-shell"
+    "join|join"
     "cliproxy|cli-proxy-api"
     "camofox|camofox-browser"
     "llm-wiki|run-public.sh"
@@ -258,7 +258,7 @@ _menu_apply() {
       cloudflared) INSTALL_CLOUDFLARED=true ;;
       tailscale)   INSTALL_TAILSCALE=true ;;
       sshx)        INSTALL_SSHX=true ;;
-      remote-shell) INSTALL_REMOTE_SHELL=true; INSTALL_TAILSCALE=true ;;
+      join)        INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
     esac
   done
 }

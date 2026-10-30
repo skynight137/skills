@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-# remote-shell entry (sshd key-only) — lets the operator's box reach this one over the
-# tailnet instead of a browser canvas. Runtime story: references/remote-shell-bridge.md,
-# proxy/port facts: references/exposing-ports.md.
+# join entry (sshd key-only) — lets the operator's box reach this one over the tailnet
+# instead of a browser canvas. Runtime story: references/join-bridge.md, proxy/
+# port facts: references/exposing-ports.md.
 # ─────────────────────────────────────────────────────────────────────────────
 # Two container facts drive every path here:
 #   * $HOME is WIPED on restart, $REPL_HOME is not. So ~/.ssh itself is made a
@@ -11,9 +11,10 @@
 #   * an autostart line in a shell rc re-fires every time a terminal opens. The
 #     daemon is therefore published as a `.replit` [workflows] entry, which runs
 #     once per boot and is start/stop-able from the UI.
-# --remote-shell PREPARES only (config, host key, authorized_keys, dirs, binaries). Nothing is
-# launched: a preparing run stays quiet and exits. --start is what launches sshd and
-# tailscaled, so the daemon side is opt-in and never a surprise.
+# One mode only: join. This script always ends with sshd + tailscaled running and the
+# node joined; there is no prepare-then-exit branch. `setup.sh --tailscale` (binaries
+# only, no join) does not reach this file at all. `--wf` is the workflow variant: same
+# thing, but the log streams and the process stays in the foreground.
 # The tailnet auth key is NEVER baked in: export TAILSCALE_AUTH_KEY for the first
 # start, afterwards the stored node identity carries the login on its own.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -82,27 +83,20 @@ __rs_persist_ssh() {
 
 # .replit workflow: REPORT ONLY, never written. A boot start belongs in .replit,
 # but the file belongs to the operator: their workflow names, their tasks, their
-# ordering. Appending a block steals a name (a second `name = "remote-shell"` collides
+# ordering. Appending a block steals a name (a second `name = "join"` collides
 # with one they already use) and rewrites a file we do not own.
 __rs_workflow() {
   local rp="${REPL_HOME:-$HOME/workspace}/.replit"
   [ -f "$rp" ] || { warn ".replit tidak ada — workflow autostart dilewati"; return 0; }
   local base="${REPL_HOME:-$HOME/workspace}"
 
-  # Entries written before the rename still call the flag --e2e. Migrate the token
-  # in place first, then treat the entry like any other.
-  if grep -qE 'setup\.sh --e2e( |")' "$rp"; then
-    sed -i -E 's#(setup\.sh) --e2e( |")#\1 --remote-shell\2#' "$rp" \
-      && ok "entri workflow lama: --e2e di-rename ke --remote-shell"
-  fi
-
   # Already wired? Then only two things matter: does the command it points at still
   # exist, and does it carry --wf. Path first — a moved skill dir must not be masked
   # by the --wf check, or a dead absolute path sits there forever.
-  if grep -qE 'setup\.sh --remote-shell' "$rp"; then
+  if grep -qE 'setup\.sh --join' "$rp"; then
     local wired
-    # Only the line that carries --remote-shell: other workflows point at the same script.
-    wired="$(grep -oE 'bash +[^"]*setup\.sh --remote-shell' "$rp" | head -1 | sed -E 's/^bash +//; s/ --remote-shell$//')"
+    # Only the line that carries --join: other workflows point at the same script.
+    wired="$(grep -oE 'bash +[^"]*setup\.sh --join' "$rp" | head -1 | sed -E 's/^bash +//; s/ --join$//')"
     if [[ -n "$wired" && ! -f "$wired" && ! -f "$base/$wired" ]]; then
       warn "entri workflow menunjuk '$wired' yang tak ada (skill dipindah?) — perbarui barisnya"
     else
@@ -118,7 +112,7 @@ __rs_workflow() {
             sed -i -E "s#^args = \"TAILSCALE_NODE_NAME=$pinned #args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME #" "$rp"
             changed="$changed nama-node"
           else
-            sed -i -E "s#^args = \"(bash [^\"]*setup\.sh --remote-shell)#args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME \1#" "$rp"
+            sed -i -E "s#^args = \"(bash [^\"]*setup\.sh --join)#args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME \1#" "$rp"
             changed="$changed nama-node"
           fi
           grep -qE "^args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME " "$rp" \
@@ -126,26 +120,21 @@ __rs_workflow() {
             || warn "gagal mem-pin TAILSCALE_NODE_NAME di $rp"
         fi
       fi
-      # An old entry predates --start (and maybe --wf): a workflow MUST start, so both
-      # are appended where missing. Verified afterwards — sed on a file we do not own
-      # gets no trust from us.
-      if ! grep -qE 'setup\.sh --remote-shell --start' "$rp"; then
-        # Insert right after --remote-shell, so an entry that already carries --wf keeps it.
-        sed -i -E 's#(setup\.sh --remote-shell)( |")#\1 --start\2#' "$rp"
-        changed=" --start"
-      fi
-      if ! grep -qE 'setup\.sh --remote-shell( --start)? --wf' "$rp"; then
-        sed -i -E 's#^(args = ".*setup\.sh --remote-shell( --start)?)"$#\1 --wf"#' "$rp"
-        changed="$changed --wf"
+      # --join implies the start; only --wf can still be missing (an entry wired before
+      # that modifier existed). Verified afterwards — sed on a file we do not own gets
+      # no trust from us.
+      if ! grep -qE 'setup\.sh --join --wf' "$rp"; then
+        sed -i -E 's#^(args = ".*setup\.sh --join\b[^"]*)"$#\1 --wf"#' "$rp"
+        changed="--wf"
       fi
       if [ -n "${changed# }" ]; then
-        grep -qE 'setup\.sh --remote-shell --start --wf' "$rp" \
-          && { ok "workflow remote-shell di-upgrade ke$changed (entri lama)"; return 0; } \
-          || warn "entri workflow remote-shell ada tapi gagal ditambahi$changed — cek $rp baris 'args'"
+        grep -qE 'setup\.sh --join --wf' "$rp" \
+          && { ok "workflow join di-upgrade ke $changed (entri lama)"; return 0; } \
+          || warn "entri workflow join ada tapi gagal ditambahi $changed — cek $rp baris 'args'"
         return 0
       fi
-      grep -qE 'setup\.sh --remote-shell --start --wf' "$rp" && { ok "workflow remote-shell sudah terdaftar (--start --wf)"; return 0; }
-      skip "workflow remote-shell sudah ada di $rp — tidak diubah"
+      grep -qE 'setup\.sh --join --wf' "$rp" && { ok "workflow join sudah terdaftar (--wf)"; return 0; }
+      skip "workflow join sudah ada di $rp — tidak diubah"
       return 0
     fi
   fi
@@ -157,13 +146,13 @@ __rs_workflow() {
   # skill dir. Only an out-of-workspace copy needs the absolute path.
   echo
   ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
-  echo "    bash $(__rs_cmd) --remote-shell --start --wf"
-  ok "  nama workflow & urutannya bebas; --start yang menyalakan daemon, --wf menahan task (tail -F) supaya job tidak di-reap"
+  echo "    bash $(__rs_cmd) --tailscale --join --wf"
+  ok "  nama workflow & urutannya bebas; --join yang menyalakan daemon, --wf menahan task (tail -F) supaya job tidak di-reap"
   # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
   if __rs_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi
 }
 
-install_remote_shell() {
+install_join() {
   local user; user="$(id -un)"
   [ "$(id -u)" = 0 ] && { warn "jalankan sebagai user biasa, bukan root"; return 1; }
 
@@ -220,7 +209,7 @@ LogLevel VERBOSE
 EOF
   "$sshd" -t -f "$RS_DIR/sshd_config" || { warn "config sshd tidak valid"; return 1; }
 
-  # tailnet binaries: needed to prepare the identity dirs even without --start
+  # tailnet binaries: needed to prepare the identity dirs even without joining the tailnet
   local bin="$XDG_BIN_HOME" td="$XDG_BIN_HOME/tailscaled" tsc="$XDG_BIN_HOME/tailscale"
   if [ ! -x "$td" ] || [ ! -x "$tsc" ]; then
     warn "tailscale belum terpasang — dipasang sekarang (butuh --tailscale sekali saja)"
@@ -232,18 +221,6 @@ EOF
   mkdir -p "$state"
   record_tool_path_dirs "$bin"
   wire_tool tailscale -- "$bin"
-
-  # ── prepare stops here ──────────────────────────────────────────────────────
-  if ! $START; then
-    echo
-    ok "siap: config sshd, host key, authorized_keys, dir state, biner tailscale"
-    skip "tidak ada proses dinyalakan — itu tugas --start"
-    echo "    bash $(__rs_cmd) --remote-shell --start"
-    # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
-    if __rs_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi
-    __rs_workflow
-    return 0
-  fi
 
   # ── start ───────────────────────────────────────────────────────────────────
   if __rs_banner 127.0.0.1 "$RS_PORT" | grep -q '^SSH-2.0-'; then
@@ -290,7 +267,7 @@ EOF
     [ -n "${TAILSCALE_NODE_NAME:-}" ] && hn=(--hostname="$TAILSCALE_NODE_NAME")
     "$tsc" --socket="$sock" set --accept-routes=false "${hn[@]}" 2>&1 | tail -2 \
       || "$tsc" --socket="$sock" up --accept-routes=false 2>&1 | tail -2 \
-      || warn "login tailnet perlu auth key: TAILSCALE_AUTH_KEY=tskey-... setup.sh --remote-shell"
+      || warn "login tailnet perlu auth key: TAILSCALE_AUTH_KEY=tskey-... setup.sh --tailscale --join"
   fi
   local ip
   ip="$("$tsc" --socket="$sock" ip -4 2>/dev/null | head -1)"

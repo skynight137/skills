@@ -12,16 +12,16 @@ the transport.
 - Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
 works from its own terminal.
 
-## Procedure (`setup.sh --remote-shell`, then `--start`)
+## Procedure (`setup.sh --tailscale --join`)
 
 Everything below is already in the skill — the operator runs **one** command on B,
-no script to copy, no key to hardcode. `--remote-shell` alone only PREPARES (host key, config,
-`authorized_keys`, dirs, binaries, `~/.ssh` symlink) and launches nothing; `--start`
-is what brings the daemons up, so a preparing run never leaves a surprise listener
-behind:
+no script to copy, no key to hardcode. Satu perintah, tanpa dua fase: `--tailscale`
+memasang biner, `--join` menyiapkan sshd (host key, config, `authorized_keys`, dirs,
+symlink `~/.ssh`), menyalakan sshd + tailscaled dan join tailnet. Tanpa `--join`,
+`--tailscale` cuma memasang dan tak menyalakan apa pun:
 
 ```bash
-TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --remote-shell --start
+TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --tailscale --join
 ```
 
 The auth key is read from the **environment only** (never baked into the script, so
@@ -69,7 +69,7 @@ tar cz skills/replit | ssh "$host" 'tar xzf - -C ~/workspace/.agents/skills --st
 ```
 
 Then prove the copy landed by grepping a string only the new version has, and only then run
-`--start` there. Delete the stale sibling dir if a bad extract already nested one.
+`--join` there. Delete the stale sibling dir if a bad extract already nested one.
 
 - **`scp` is usually absent on the far box too** (`exit 127`). Ship a single file with the
   ssh side doing the write: `ssh "$host" 'cat > /tmp/gate.sh' < local.sh`. It also skips the
@@ -106,7 +106,7 @@ Replit Secrets reach app processes only, never a shell started later: to exercis
   machine entry is created; the key is tagged and no tag owner auto-approves, which leaves
   the node sitting unauthorized; the box is logged into a different tailnet.
 - A clean new machine entry means stopping the daemon on the box, deleting the state
-  (`$TAILSCALE_DATA_DIR`), then `--start` with a key. That regenerates the NODE identity
+  (`$TAILSCALE_DATA_DIR`), then `--join` with a key. That regenerates the NODE identity
   only — the sshd host key lives in the remote-shell dir and `known_hosts` stays valid.
 
 ### Auth key lifecycle: reusable + ephemeral together
@@ -128,7 +128,7 @@ Replit Secrets reach app processes only, never a shell started later: to exercis
 
 An existing workflow entry is upgraded, never blindly rewritten, so the node name has to
 be carried explicitly: with `TAILSCALE_NODE_NAME` set the task line is pinned to
-`TAILSCALE_NODE_NAME=<name> bash … --remote-shell --start --wf`, and a rename rewrites
+`TAILSCALE_NODE_NAME=<name> bash … --tailscale --join --wf`, and a rename rewrites
 the pin instead of appending a second one. Unpinned, the console keeps the last say —
 which is what a box whose name you rename on the dashboard wants.
 
@@ -140,7 +140,7 @@ delete), so a wiped identity leaves an offline ghost for you to remove there.
 
 The auth key decides which tailnet a join lands in, and a box already joined keeps its
 old identity no matter what key you hand it. To move: stop the daemon, wipe the state
-dir (`$TAILSCALE_STATE_DIR`, host key included), then `--start` with a key from the
+dir (`$TAILSCALE_STATE_DIR`, host key included), then `--join` with a key from the
 target tailnet. The node reappears as a new machine there and disappears from the old
 one only after you delete it in that console. `tailscale status` prints the tailnet
 suffix (`.MagicDNSSuffix` in `--json`): if two boxes show different suffixes they are
@@ -159,17 +159,16 @@ re-spelling it.
 
 `TAILSCALE_NODE_NAME` stays out of the rc on purpose. Which name a machine answers to
 is the operator's decision per machine, so it is pinned where the machine is described
-— in-line on the workflow `args` (`TAILSCALE_NODE_NAME=<name> bash ... --remote-shell
---start --wf`) or in a Replit secret — not exported to every shell of the box.
+— in-line on the workflow `args` (`TAILSCALE_NODE_NAME=<name> bash ... --tailscale --join --wf`) or in a Replit secret — not exported to every shell of the box.
 
-### Why the flag says `remote-shell` and the dir still says `e2e-sshd`
+### Why the flags say `tailscale`/`join` and the dir still says `e2e-sshd`
 
-`--e2e` described a test phase, but the tool is the box's inbound shell: `--remote-shell`
-(alias `--e2e`, still accepted) is what it does. The state dir keeps the old name on
-purpose — moving it would mint a new sshd host key, and every client's `known_hosts`
-would warn on the next connect.
+`--tailscale` is the binary install; `--join` is the machine entering the tailnet —
+until it joins, no other machine can reach it, so `join` names the act. The state dir
+keeps `e2e-sshd` on purpose: moving it would mint a new sshd host key and every
+client's `known_hosts` would warn.
 
-What `install_remote_shell` does, in order (all idempotent, re-run to repair):
+What `install_join` does, in order (all idempotent, re-run to repair):
 
 1. `~/.ssh` → symlink to `$REPL_HOME/.ssh` (persistent). An existing `~/.ssh` is
    moved in first, not discarded, so the operator's own `config`/keys survive a
@@ -200,7 +199,7 @@ workflow entry (a reboot would just bring it back).
 
 `$HOME` is **wiped** on every restart (`.ssh`, `.bashrc`, `.local/bin`, `~/.ts` all go);
 `$REPL_HOME` (the repl workspace) alone persists. Consequences, both already handled by
-`install_remote_shell`:
+`install_join`:
 
 - `~/.ssh` itself is a symlink into `$REPL_HOME/.ssh` (persistent, so ssh `config`
   and `known_hosts` also survive); host key, sshd config, authorized key, log →
@@ -216,10 +215,10 @@ workflow entry (a reboot would just bring it back).
   type `shell.exec`, command:
 
   ```
-  bash <skill-dir>/scripts/setup.sh --remote-shell --start --wf      # path relatif ke workspace
+  bash <skill-dir>/scripts/setup.sh --tailscale --join --wf      # path relatif ke workspace
   ```
 
-  `install_remote_shell` prints that one line and leaves `.replit` alone. The path is made
+  `install_join` prints that one line and leaves `.replit` alone. The path is made
   relative to the workspace whenever the skill lives inside it, because a workflow runs
   with the workspace as cwd — moving or renaming the skill dir then cannot leave a dead
   absolute path behind; only a copy outside the workspace is printed absolute, with a
@@ -227,7 +226,7 @@ workflow entry (a reboot would just bring it back).
   than the operator needs: the UI creates the workflow, and the name and ordering stay
   theirs without touching the file (a pasted second `name` collides with a workflow they
   already have, and `[workflows]` sits in a different place on every host). Anything that
-  already points at `setup.sh --remote-shell` counts as wired; an old entry is upgraded in place by
+  already points at `setup.sh --join` counts as wired; an old entry is upgraded in place by
   appending `--wf` to its `args`, and one that points at a path which no longer exists is
   reported (skill dir moved) instead of being silently accepted. The `--wf` check runs only
   after the path check, or a dead path hides behind the "already wired" branch. The skill dir is persistent, which is why the command
@@ -241,8 +240,8 @@ workflow entry (a reboot would just bring it back).
   without every non-default being restated (`--ssh`, `--exit-node-allow-lan-access`), which
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
   Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
-  `--start` asserts it, so pin it in the workflow `args`
-  (`TAILSCALE_NODE_NAME=hermes-agent bash <skill>/scripts/setup.sh --remote-shell --start --wf`) rather than trusting
+  `--join` asserts it, so pin it in the workflow `args`
+  (`TAILSCALE_NODE_NAME=hermes-agent bash <skill>/scripts/setup.sh --join --wf`) rather than trusting
   the OS hostname — and not in an rc, which re-fires per terminal. A retired name can linger
   in `tailscale status` until removed in the console; the live node is the one under `self`.
   `tailscale set --hostname=` returns before the control plane has applied it, so POLL the
@@ -260,28 +259,28 @@ workflow entry (a reboot would just bring it back).
   file means owning something that is not ours: a second `name = "remote-shell"` collides with a
   workflow the operator already uses, and `[workflows]` sits in a different place on every
   host. But a full `[[workflows.workflow]]` block is also more than needed — the UI creates
-  the task for them — so `--remote-shell` prints just `bash <skill-dir>/scripts/setup.sh --remote-shell --start --wf`
+  the task for them — so `--join` prints just `bash <skill-dir>/scripts/setup.sh --tailscale --join --wf`
   and leaves the file alone; name and ordering stay theirs.
 - **Print the `args` path workspace-relative, never absolute.** Workflows run with the
   workspace as cwd, so a relative path survives the operator moving or renaming the skill
   dir; an absolute `$RS_SKILL_ROOT` breaks on the next move. Only a copy outside the
   workspace is printed absolute, with a note to move it in.
-- **When an entry already points at `setup.sh --remote-shell`, check its path BEFORE the `--wf`
+- **When an entry already points at `setup.sh --join`, check its path BEFORE the `--wf`
   check.** Order the other way and a dead path hides behind the "already wired" branch
   forever: report `skill dipindah?` and print the current line instead of skipping. Also
-  grep only the line that carries `--remote-shell` (`grep -oE 'bash +[^"]*setup\.sh --remote-shell' | head -1`)
+  grep only the line that carries `--join` (`grep -oE 'bash +[^"]*setup\.sh --join' | head -1`)
   — other workflows in the same file (`--camofox`, …) point at that very script, so a bare
   `head -1` of all `setup.sh` lines reads the wrong one and flags a healthy entry.
-  Upgrading an old entry in place is additive and idempotent: `--start` is inserted
-  straight after `--remote-shell` (so an existing `--wf` survives) and `--wf` is appended when
+  Upgrading an old entry in place is additive and idempotent: `--join` is inserted
+  straight after `--join` (so an existing `--wf` survives) and `--wf` is appended when
   missing, both then verified by grep. Note GNU sed rejects `|` as the delimiter on these
   patterns — use `s#…#…#`.
 - **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
   command returns, taking the daemons with it, and a run whose output is redirected to a
-  file shows nothing. `--wf` (implies `--remote-shell --start`) prints the steps to the terminal
+  file shows nothing. `--wf` (implies `--join`) prints the steps to the terminal
   and ends with `tail -F` on the tailscaled log, so one foreground process (and visible
-  output) holds the job open. Every other flag is a one-shot install: use `--remote-shell` by hand,
-  `--remote-shell --start --wf` in `.replit [workflows]`.
+  output) holds the job open. Every other flag is a one-shot install: use `--join` by hand,
+  `--join --wf` in `.replit [workflows]`.
 - **The SOCKS relay fails intermittently** (`General SOCKS server failure` while the same
   probe answered a minute earlier). Retry the probe 2–3× before declaring the port dead, and
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success
@@ -329,15 +328,15 @@ workflow entry (a reboot would just bring it back).
   running and kills it; use `pkill -x sshd`.
 - `pkill -f 'e2e-sshd/sshd_config'` kills **every** e2e listener on the box, not just
   the port you meant: the pattern is the shared config path. Restart the one you still
-  need with `--remote-shell --start` (and `RS_PORT=` if it is not the default) right after.
+  need with `--join` (and `RS_PORT=` if it is not the default) right after.
 - GNU sed here rejects `|` as the `s` delimiter on these `args`/quote patterns
   ("unknown option to `s'"); use `s#…#…#`.
 - **`cmd && cmd` as the last statement of a branch returns 1 under `errexit`**, so a
-  prepare that only wanted to print a note exits 1 and the runner reports the step as
+  branch that only wanted to print a note exits 1 and the runner reports the step as
   failed. Wrap it: `if _rs_cmd_external; then ok "…"; fi`.
 - **Prove "nothing was launched" with the listener, not `pgrep -f` counts.** The probe
   shell's own command line contains the pattern, so pgrep reports a fresh PID on every
-  run and a prepare-only run looks like it started something. Compare the banner
+  run and a `--tailscale`-only run looks like it started something. Compare the banner
   (`SSH-2.0-…` on the port) before/after, or anchor the pattern so the wrapping shell
   cannot match: `pgrep -af '^[^ ]*(sshd|tailscaled) '` (the wrapper's cmdline starts
   with the bash path, so `^[^ ]*sshd` never matches it — `^[^ ]*tailscaled` likewise).
@@ -350,7 +349,7 @@ and let the operator copy it themselves; quote only a short hash/size for parity
 — the terminal line is identical on every failure, only the diagnostics differ.
 
 An absolute local path is only reachable on the SAME box. The skill therefore has
-to exist on B before `--remote-shell` can run there — clone/copy the skill dir once (it is
+to exist on B before `--join` can run there — clone/copy the skill dir once (it is
 persistent), then the whole setup is one command and stays re-runnable. If a file on
 B must be delivered by URL, pin it at the commit SHA
 (`.../<sha>/skills/replit/scripts/setup.sh`): a branch name drifts, a SHA cannot.
@@ -369,7 +368,7 @@ repo is already public.
   published the fallback is a reverse tunnel or the sshx canvas.
 - **A listed peer is not a reachable machine.** Three things are required, in order:
   the peer is online in `tailscale status`, sshd was prepared *on that box*
-  (`setup.sh --remote-shell --start`), and a hop key sits in its `authorized_keys` — which the
+  (`setup.sh --join`), and a hop key sits in its `authorized_keys` — which the
   prep does for you (the `hermes-e2e-hop` key is authorized by default; extend with
   `RS_AUTHORIZED_KEYS`). Onboarding a machine is therefore: join it with the auth key,
   run the prep there, then add a `Host` block here. Answer "can we reach every

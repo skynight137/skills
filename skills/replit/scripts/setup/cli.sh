@@ -43,7 +43,7 @@ main() {
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
       && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
-      && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_REMOTE_SHELL; then
+      && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN; then
       die "No tools selected. Aborting."
     fi
   else
@@ -127,9 +127,9 @@ main() {
   $INSTALL_CLOUDFLARED && run_install_step cloudflared      install_cloudflared
   $INSTALL_TAILSCALE && run_install_step tailscale         install_tailscale
   $INSTALL_SSHX     && run_install_step sshx               install_sshx
-  if $INSTALL_REMOTE_SHELL; then
+  if $INSTALL_JOIN; then
     $INSTALL_TAILSCALE || run_install_step tailscale install_tailscale
-    run_install_step remote-shell install_remote_shell
+    run_install_step join install_join
   fi
   $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
@@ -176,7 +176,7 @@ main() {
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cloudflared  tailscale  sshx  remote-shell
+   cloudflared  tailscale  sshx  join
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
@@ -196,7 +196,7 @@ SUMMARY
    java --version  adb --version  node --version
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
-   cloudflared  tailscale  sshx  remote-shell
+   cloudflared  tailscale  sshx  join
    cli-proxy-api  camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY

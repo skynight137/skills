@@ -3,8 +3,8 @@
 # usage: probe-tailnet-peers.sh [port] [socks-port]
 #
 # Answers "which machines can we actually remote into" with evidence instead of a
-# promise: a peer is only a target once it is online, has run `setup.sh --remote-shell
-# --start` there, and carries the hop key. Tailscale's own funnel-ingress nodes are
+# promise: a peer is only a target once it is online, has run `setup.sh --tailscale --join
+# --join` there, and carries the hop key. Tailscale's own funnel-ingress nodes are
 # skipped. Survey, not a gate: always exits 0.
 #
 # Needs netcat-openbsd (`-X 5`). Without it, fall back per peer to

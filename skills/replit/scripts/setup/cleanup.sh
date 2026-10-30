@@ -127,7 +127,7 @@ clean_paths_for() {
     cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
     tailscale)     echo "$XDG_BIN_HOME/tailscale tailscaled launch-tailscaled (node state PRESERVED in $TAILSCALE_DATA_DIR)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
-    remote-shell|e2e)         echo "$RS_DIR (host key/config/authorized_keys sshd; ~/.ssh symlink DIPERTAHANKAN)" ;;
+    join)         echo "$RS_DIR (host key/config/authorized_keys sshd; ~/.ssh symlink DIPERTAHANKAN)" ;;
     llm-wiki)      echo "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
     *)             echo "$1" ;;
   esac
@@ -329,16 +329,16 @@ clean_tailscale() {
   return 0
 }
 
-clean_remote_shell() {
+clean_join() {
   if ! _present "$RS_DIR"; then
-    nothing_removed "remote-shell"; return 0
+    nothing_removed "join"; return 0
   fi
-  step "Removing remote-shell sshd ($RS_DIR)"
+  step "Removing join sshd ($RS_DIR)"
   [ -f "$RS_DIR/sshd.pid" ] && { kill "$(cat "$RS_DIR/sshd.pid")" 2>/dev/null || true; sleep 1; }
   rm -rf "$RS_DIR"
-  ok "remote-shell sshd removed"
+  ok "join sshd removed"
   warn "$HOME/.ssh tetap symlink ke \$REPL_HOME/.ssh (ssh config tidak ikut hilang)"
-  warn "entri workflow yang memanggil remote-shell di .replit dibiarkan; hapus manual bila tak dipakai lagi"
+  warn "entri workflow yang memanggil --join di .replit dibiarkan; hapus manual bila tak dipakai lagi"
 }
 
 clean_sshx() {
@@ -489,7 +489,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|remote-shell|e2e)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|join)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -506,7 +506,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|remote-shell|e2e)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|join)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -551,7 +551,7 @@ clean() {
       clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|remote-shell|e2e)
+    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx|join)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -588,7 +588,7 @@ clean() {
         cloudflared)   clean_cloudflared ;;
         tailscale)     clean_tailscale ;;
         sshx)          clean_sshx ;;
-        remote-shell|e2e) clean_remote_shell ;;
+        join) clean_join ;;
       esac
       ;;
     "")

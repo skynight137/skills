@@ -14,7 +14,7 @@ metadata:
 
 Lane 5 pointer: reaching a *second* box from this one (sshd bootstrap, proxy
 port reality, `command -v`/banner-probe traps, path-not-paste delivery) lives in
-`references/remote-shell-bridge.md`. Reachability is **per node, not per tailnet**: a
+`references/join-bridge.md`. Reachability is **per node, not per tailnet**: a
 listed peer answers only once it has joined, run the prep there and carries the hop
 key. Survey with `scripts/probe-tailnet-peers.sh [port]` and never promise "any
 machine on the tailnet". The box's own row is printed as `self` there — resolve self
@@ -44,7 +44,7 @@ other lane assumes its persistence rules.
 | decide which ports may be public on Replit, and how to expose one (declared in `.replit`, edge opens only after a restart; supported list = 80, 3000-3003, 4200, 5000, 5173, 6000, 6800, 8000, 8008, 8080, 8081, 8099, 9000) | `references/public-ports.md` | — |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js`. Port lewat `LLM_WIKI_PORT` (default 8319, 8080 milik dashboard; 8319 loopback-only, pakai 8081 untuk publik); client di mesin lain butuh tunnel ssh karena tailscale di sini userspace tanpa TUN |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/remote-shell-bridge.md` | `scripts/setup.sh --remote-shell` (alias `--e2e`; prepares only: sshd key-only config + tailnet identity, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--start` launches the daemons, `--wf` = `--remote-shell --start` in workflow mode; set `TAILSCALE_NODE_NAME=<name>` inline on the workflow args (or a Replit secret) to pin the tailnet node name, otherwise the console name is left alone |
+| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/join-bridge.md` | `scripts/setup.sh --tailscale --join` (host key + key-only sshd config + tailnet join, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--tailscale` alone installs the binaries only, `--wf` = the same in workflow mode; set `TAILSCALE_NODE_NAME=<name>` inline on the workflow args (or a Replit secret) to pin the tailnet node name, otherwise the console name is left alone |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -63,7 +63,7 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    `$HOME` therefore re-registers on every boot (new `100.x`, new node name)
    and every saved URL / `.ssh/config` entry rots; keep node state in
    `$TAILSCALE_DATA_DIR` (`$REPL_HOME/.local/share/tailscale`), which
-   `setup.sh --tailscale` / `--remote-shell` already use. A tool that insists on a
+   `setup.sh --tailscale` / `--join` already use. A tool that insists on a
    `$HOME` path (`~/.ssh`, `~/.gnupg`) is **symlinked** into `$REPL_HOME`
    (move the existing dir's contents in first, then `ln -s`) — see
    `references/platform.md` §1.
@@ -208,7 +208,7 @@ on disk before moving on:
   edit applied twice.
 - **Never compose a `sed -E` script by hand once it contains quotes or `\1`**: run the
   exact expression on a scratch copy first. Two failures in a row (`|` rejected as the
-  delimiter; `(--start)?` written where the text has a space, so the pattern silently
+  delimiter; `(--join)?` written where the text has a space, so the pattern silently
   never matched while `rc=0` claimed success) look identical to a logic bug, and the
   script "succeeds" without editing anything.
 - **`sed -ed -i f1 f2` mengosongkan KEDUA file.** `-ed` menempelkan `d` ke script, jadi setiap
@@ -250,17 +250,14 @@ on disk before moving on:
 
 - **Credentials are read from the environment, never baked into a script.** The
   user treats a token quoted into chat or hardcoded in an installer as leaked
-  (they rotate/revoke it right after). Take `TAILSCALE_AUTH_KEY=… setup.sh --remote-shell --start`
+  (they rotate/revoke it right after). Take `TAILSCALE_AUTH_KEY=… setup.sh --tailscale --join`
   style input, and make everything after the first run work off the stored state
   so no second secret is needed. Printing a usage line with a placeholder
   (`tskey-auth-...`) is correct; printing the value is not.
-- **A flag that launches a daemon must be separable from the one that prepares.**
-  Bundling both means every prepare re-fires listeners and nothing can be inspected or
-  repeated without side effects. Split it: the preparing flag (`--remote-shell`) writes config,
-  keys, dirs and binaries, prints the follow-up command and exits; the launching flag
-  (`--start`) is what brings daemons up; workflow mode (`--wf`) asserts both. A guard file
-  or a "skip if alive" check is not a substitute — after the split, the prepare path must
-  not call `setsid`, `start_*` or anything else that binds a port.
+- **Install and join are two flags, not one.** `--tailscale` installs binaries and exits;
+  `--join` is the only path that writes sshd config/keys, binds `$RS_PORT` and runs
+  `tailscale up`; `--wf` is `--join` in workflow mode. There is no prepare-only mode and no
+  second flag to chain: if a box must be inspectable without listeners, stop at `--tailscale`.
 - Export only what the script owns. Replit already provides `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, and `XDG_CACHE_HOME`; re-exporting them adds nothing. `XDG_BIN_HOME` is the one PATH entry the toolchain owns, always `$REPL_HOME/.local/bin`.
 - `HERMES_HOME`, `HERMES_MANAGED_DIR` and the launcher dir are ORDINARY wire-registered tool wiring in the single managed toolchain block (`wire_tool hermes` + `record_tool_env_vars` / `record_tool_path_dirs`, mirrored in `install_hermes` and `fix_derive_wiring`). Never give a tool its own rc block outside the managed markers: a second block has to be re-appended after EVERY rewrite to keep PATH precedence stable, `strip_tool_wiring` cannot see it, and a run that does not install that tool silently drops its lines (the pre-merge `hermes-tools` block had all three problems; `lift_legacy_hermes_wiring` / `strip_legacy_hermes_block` migrate such an rc in one pass). The managed-scope dir defaults to `/etc/hermes`, which does not exist and cannot be created on Replit (`/etc` is a read-only mount, no root), so it is pinned under `$HERMES_HOME/managed`. Keep `HERMES_HOME` OUT of `_FIXED_RC_ENV_VARS`: that list suppresses the tool-var export, which is now the only thing that emits it.
 - The only Hermes PATH entry is `$HERMES_HOME/hermes-agent/.hermes/bin` (the stable launcher; it resolves the correct environment itself). Never add `installs/*/environments/*/venv/bin` or `hermes-agent/venv/bin`: those venvs belong to an isolated session run, are not stable across sessions or updates, and a public shell that picks one up calls a binary from a session that may not exist.
