@@ -521,8 +521,10 @@ console. Node duplikat muncul kalau state dibuang (atau state-nya hilang bersama
 `$HOME`): `tailscale up` lalu mendaftarkan **node baru** dan node lama nyangkut offline
 sampai kedaluwarsa.
 
-- Buang identity secara eksplisit: `TAILSCALE_PURGE_IDENTITY=true bash setup.sh --clean tailscale`
-  (baru setelah itu node lama perlu dihapus manual di admin panel).
+- **Tidak ada yang perlu diset di mesin**: ini knob sekali-jalan, bukan env per-mesin
+  (jangan taruh di `.replit`/`env` mana pun). Pakai hanya kalau memang mau identity baru:
+  `TAILSCALE_PURGE_IDENTITY=true bash setup.sh --clean tailscale` — setelah itu node lama
+  dihapus manual di admin panel.
 - Cek duplikat: `tailscale status | awk '{print $2}' | sort | uniq -c` → masing-masing 1.
 - State selalu di `$REPL_HOME/.local/share/tailscale/state` (persisten), bukan `$HOME`.
 
