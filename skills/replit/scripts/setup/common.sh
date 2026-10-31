@@ -9,6 +9,19 @@ NODE_DIR="$XDG_DATA_HOME/node"
 # location, not the (possibly empty) $NODE_DIR.
 NPM_GLOBAL_PREFIX="${npm_config_prefix:-}"
 npm_config_prefix="$NODE_DIR"
+# Replit's package firewall rewrites registries to an internal HTTP mirror
+# (http://package-firewall.replit.internal/...). npm >= 12 refuses non-https
+# URLs, so in-process npm installs (cliproxy, hermes, camofox) fail unless the
+# public https registries are forced for THIS run — emit_managed_block() only
+# writes them into the emitted rc for future shells.
+if [[ "${npm_config_registry:-}" != https://* ]]; then
+  export npm_config_registry="https://registry.npmjs.org"
+  export NPM_CONFIG_REGISTRY="https://registry.npmjs.org"
+  export PIP_INDEX_URL="https://pypi.org/simple"
+  export YARN_REGISTRY="https://registry.yarnpkg.com"
+  export YARN_NPM_REGISTRY_SERVER="https://registry.yarnpkg.com"
+  export GOPROXY="https://proxy.golang.org,direct"
+fi
 JAVA_TOOL_OPTIONS="$JAVA_TOOL_OPTS_VALUE"
 
 # uv runs its own managed Python: download whatever version a project pins
