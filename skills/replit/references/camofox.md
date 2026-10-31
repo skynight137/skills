@@ -102,6 +102,13 @@ Pin `CAMOFOX_USER_ID` in the MCP env: without it each adapter start picks a
 random `mcp-<uuid>`, so an import lands in a session that the next start
 won't reuse.
 
+**Cloudflare on the target site:** the first navigation can land on the
+"Just a moment..." interstitial (`httpStatus 403`, `navigationOk:false`, Ray ID
+in the page). Camoufox passes the challenge on its own — issue the same
+`camofox_navigate` again after a few seconds and it comes back `200` with the
+real page. Do not try to click Turnstile via `camofox_snapshot`: it lives in a
+cross-origin iframe and never appears in the AX tree.
+
 
 ⚠ **A bare `camofox-browser` dies in any shell that did not source `env.sh`.**
 The npm binary is a JS entry point: it cannot self-apply `LD_LIBRARY_PATH`, so
