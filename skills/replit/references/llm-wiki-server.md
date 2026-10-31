@@ -100,7 +100,7 @@ bash scripts/setup.sh --llm-wiki --node --sshx -y
   file tidak masuk environment server (`/proc/<pid>/environ` tetap kosong), sehingga gate
   read-only tampak "lulus" padahal auth RO tak pernah diuji. Backfill juga `.env` lama yang
   belum punya baris `LLM_WIKI_READONLY_TOKEN`, chmod tetap 600.
-- **noVNC di `:6080`, bukan `6800`** — 6800 milik sshd remote-shell; dua service di satu
+- **noVNC di `:3000`, bukan `6800`** — 6800 milik sshd remote-shell; dua service di satu
   port = yang kalah bind diam-diam, dan gejalanya muncul sebagai service yang lain mati.
 
 ## Endpoint
@@ -269,7 +269,7 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
 ## Yang tidak bisa diharapkan
 
 - UI desktop dibuka lewat browser: **tidak bisa langsung** — frontend Tauri (`invoke`),
-  jadi pakai noVNC (`run-ui.sh`: x11vnc loopback + noVNC publik `:6080`, VNC password).
+  jadi pakai noVNC (`run-ui.sh`: x11vnc loopback + noVNC publik `:3000`, VNC password).
 - Pilih project lewat file chooser GTK: enumerasi GIO kosong di box ini.
 - Multi-user/login: tidak ada; satu token, satu current project.
 - Vector search butuh `embeddingConfig` (provider + model + baseUrl, bisa
@@ -343,3 +343,11 @@ repl-test deklarasi + listener tidak membuat edge memetakannya (`000` terus) sem
 
 Tunnel ssh hanya fallback saat edge belum memetakan port 80:
 `ssh -N -L 127.0.0.1:8080:localhost:80 repl-test` lalu url loopback.
+
+### Port UI: samakan nomor lokal dan publik
+
+`.replit` memetakan `localPort -> externalPort`. Supaya tidak bingung (lokal `:6080`,
+publik `:3000`), UI sekarang **listen di 3000 dan dipetakan `3000 -> 3000`** — satu angka
+untuk dua jalan: `http://127.0.0.1:3000/vnc.html` dan
+`https://<REPLIT_DEV_DOMAIN>:3000/vnc.html` sama-sama 200. Ganti dengan
+`LLM_WIKI_UI_PORT=<port>` + entri `[[ports]]` yang cocok kalau operator mau angka lain.

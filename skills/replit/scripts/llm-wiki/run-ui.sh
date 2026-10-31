@@ -3,7 +3,7 @@
 #
 #   bash run-ui.sh            # foreground supervisor (idempotent, restarts what died)
 #
-# Ports:  VNC 127.0.0.1:5900 (never public) · noVNC 0.0.0.0:6080 (public, VNC password required)
+# Ports:  VNC 127.0.0.1:5900 (never public) · noVNC 0.0.0.0:3000 (public, VNC password required)
 # Open:   https://<host>:6080/vnc.html     (password in $STATE/vnc-password.txt)
 #
 # Why not expose the app directly: the frontend is Tauri (invoke), so there is no
@@ -26,7 +26,7 @@ export XDG_DATA_HOME="${XDG_DATA_HOME:-$REPL_HOME/.local/share}"
 STATE="${XDG_CONFIG_HOME:-${REPL_HOME:-$HOME}/.config}/llmwiki-ui"
 DISP="${LLM_WIKI_DISPLAY:-:99}"
 VNC_PORT="${LLM_WIKI_VNC_PORT:-5900}"
-WEB_PORT="${LLM_WIKI_UI_PORT:-6080}"
+WEB_PORT="${LLM_WIKI_UI_PORT:-3000}"   # same number local and public: .replit maps 3000 -> 3000
 SLEEP="${LLM_WIKI_UI_SLEEP:-15}"
 
 mkdir -p "$STATE"; chmod 700 "$STATE"
