@@ -92,7 +92,7 @@ ensure_display() {
 start_novnc() {
   port_open "$WEB_PORT" && return 0
   [ -n "$NOVNC" ] || { log "noVNC not built yet — nix_run build nixpkgs#novnc"; return 1; }
-  run_ui_bin "$NOVNC" --listen "0.0.0.0:$WEB_PORT" --vnc "127.0.0.1:$VNC_PORT" \
+  run_ui_bin "$NOVNC" --listen "0.0.0.0:$WEB_PORT" --vnc "127.0.0.1:$VNC_PORT" --file-only \
     >"$STATE/novnc.log" 2>&1 &
   for _ in $(seq 1 20); do port_open "$WEB_PORT" && { log "noVNC up (0.0.0.0:$WEB_PORT)"; return 0; }; sleep 1; done
   log "noVNC FAILED (see $STATE/novnc.log)"; return 1
