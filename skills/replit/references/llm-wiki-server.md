@@ -206,6 +206,25 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
   `set_project` ke dir itu, lalu buktikan tulis/baca lewat MCP sebelum bilang jadi.
   Current project cuma di memori — restart app balik ke default `LLM_WIKI_PROJECT`.
 
+## Menulis halaman (konvensi + mekanik)
+
+- `llm_wiki_write_page {path, content}` — `path` **relatif ke `wiki/`** (`ops/x.md`,
+  `concepts/y.md`). Menimpa halaman yang sudah ada wajib `allowOverwrite: true`; tanpa itu
+  call ditolak. Balasan sukses memuat `verified: true` + `bytes`, dan tetap baca balik
+  (`llm_wiki_read_file`) sebelum melaporkan selesai.
+- **Setelah satu batch tulis — atau setelah mengedit file wiki langsung di disk — jalankan
+  `llm_wiki_rescan_sources`.** Tanpa itu halaman ada di disk tapi belum masuk index/graph,
+  jadi pencarian tetap kosong walau tulisannya "berhasil".
+- Frontmatter wajib (spesifikasi ada di `wiki/SCHEMA.md` project): `title`, `created`,
+  `updated`, `type`, `tags`, `sources`, `confidence`, `contested`, `contradictions`.
+- **Tag provenance wajib untuk knowledge yang lahir dari pengalaman sebuah box** (tag
+  `repl` di project ini): pembaca di luar konteks Replit bisa men-skip hanya dari tag itu,
+  dan `index.md` + `log.md` memuat satu baris konteks di kepalanya. Taksonomi tag dicatat di
+  `wiki/SCHEMA.md`; tambah tag baru hanya kalau yang ada tidak cukup, lalu catat di tabelnya.
+- Satu halaman = satu topik, nama `kebab-case.md`; `log.md` append-only (entri baru di bawah,
+  tanggal + verb `create|update|fix`) dan `index.md` diperbarui di batch yang sama supaya
+  hitungan/judulnya tidak basi.
+
 ## Replit-spesifik
 
 - Taruh semuanya di bawah `$REPL_HOME` (persisten); `$HOME` dan `/tmp` kena wipe, dan
