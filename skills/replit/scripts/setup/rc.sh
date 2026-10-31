@@ -76,6 +76,10 @@ Options:
                         explicitly when a knowledge base is wanted).
                         See references/llm-wiki-server.md
   -d, --doctor              Verify the toolchain (no install) — prints versions and flags
+  -pi, --purge-identity      With --clean tailscale: also delete the tailnet node
+                        identity (state file). Default is to KEEP it, so a rejoin
+                        reuses the same node instead of stacking a new machine in
+                        the admin console; purge only when you really want a new one.
   -fx, --fix                Rewrite ALL wiring without deleting/reinstalling any
                         tool: shell rc (the single managed toolchain block,
                         hermes env + launcher included when it is installed),
@@ -158,6 +162,7 @@ parse_args() {
       -d|--doctor)               DOCTOR=true ;;
       -fx|--fix)                 FIX=true ;;
       -ls|--list|--show)         LIST_STATE=true ;;
+      -pi|--purge-identity)      TAILSCALE_PURGE_IDENTITY=true; export TAILSCALE_PURGE_IDENTITY ;;
       -c|--clean)
         CLEAN=true
         # Optional target: 'all' (or --all) = full wipe, a tool name =
