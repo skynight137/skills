@@ -198,6 +198,13 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
 - Butuh project benar-benar terpisah (data/izin berbeda)? Jalankan **stack kedua**
   (port + `LLM_WIKI_PROJECT` + token sendiri). Jangan mengandalkan satu token
   bersama untuk pemisahan.
+- **Dir project harus sudah ada di disk sebelum `llm_wiki_set_project`.** Menunjuk ke
+  path yang belum ada membuat SEMUA call balas `400 Failed to resolve project path`
+  (app tidak membuat dir; symlink ke luar project juga ditolak "path escapes project").
+  Pola multi-project (`workspace/project-1`, `project-2`, ...): `mkdir -p
+  <root>/project-N/wiki`, seed skeleton (`wiki/index.md`, `wiki/log.md`), baru
+  `set_project` ke dir itu, lalu buktikan tulis/baca lewat MCP sebelum bilang jadi.
+  Current project cuma di memori — restart app balik ke default `LLM_WIKI_PROJECT`.
 
 ## Replit-spesifik
 
@@ -268,7 +275,10 @@ sendiri. Urutannya:
 
 1. `npx -y skills add skynight137/skills -s replit --agent "*" -y` — prompt interaktif
    mati kalau stdin bukan TTY, dan tanpa `LD_LIBRARY_PATH` node mati `libatomic.so.1`.
-   Di ssh non-interaktif: `export LD_LIBRARY_PATH=$(ls -d /nix/store/*gcc-1*-lib/lib | tail -1)`.
+   Di ssh non-interaktif: `export LD_LIBRARY_PATH=$(ls -d /nix/store/*gcc-1*-lib/lib | tail -1)`,
+   dan PATH tidak punya `node`/`npx` sama sekali (`/usr/bin/env: node: No such file or
+   directory`) — prepend bin dir store: `export PATH="$(ls -d
+   /nix/store/*nodejs-slim-*/bin | head -1):$PATH"`.
 2. `bash ~/.agents/skills/replit/scripts/setup.sh --llm-wiki` (juga butuh
    `LD_LIBRARY_PATH` di atas; tanpa itu `node -e` pembuat token gagal).
 3. Cek `lldd` bersih: `LD_LIBRARY_PATH=$(cat ~/.local/share/llmwiki-app/.ldpath) ldd

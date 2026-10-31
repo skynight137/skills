@@ -9,7 +9,37 @@ Goal: get a real shell from workspace A (where the agent runs) into workspace B
 existing link is browser-only (xterm canvas, no attach subcommand). Driving the
 canvas works but is slow — use it only as a fallback, and never promise it as
 the transport.
-- Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
+
+### sshx as a fallback lane
+
+When B cannot be reached any other way (no published port, no tailnet), sshx is
+still usable from the agent by driving the browser canvas:
+
+- **Create a session ON B, then hand the URL to the agent.** `sshx` is a client,
+  not a relay you reach out to: run it on B (a real TTY is NOT needed — `</dev/null`
+  is fine) and pull the URL from the log:
+  ```bash
+  nohup sshx --name <name> >/tmp/sshx.log 2>&1 </dev/null &
+  sleep 10; grep -o 'https://sshx.io/s/[^ ]*' /tmp/sshx.log | head -1
+  ```
+- **The session dies when its host process dies.** A link created in a shell that
+  exits is dead seconds later; keep the `sshx` process alive (nohup/setsid) or the
+  link rots. Recreate when a link 404s.
+- **Join flow is browser-only:** open the link, type a name, click Join, then drive
+  the xterm. It needs a real PTY on the far side — a command that fails to allocate
+  one (plain nohup without a tty) renders a dead canvas. `bash` inside the xterm
+  works; some REPLs do not.
+- **Update a skill ON the far box with `skills add`, not file sync.** The CLI clones
+  from GitHub: `npx -y skills add owner/repo#branch` (branch refs work until the
+  branch is deleted on merge — afterwards use the default branch, `owner/repo`
+  alone). It needs `node` and `npx` on PATH because the CLI's shebang is
+  `env node`; on a minimal Replit box PATH them from the nix store
+  (`/nix/store/*nodejs-slim-*/bin`, `*-nodejs-slim-*-npm/bin`) for non-interactive
+  ssh. The installed copy lands in `.agents/skills/<name>/`, and `npx` may print an
+  npm-upgrade notice before the real output — judge by the folder appearing, not by
+  the last line.
+
+Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
 works from its own terminal.
 
 ## Procedure (`setup.sh --tailscale --join`)

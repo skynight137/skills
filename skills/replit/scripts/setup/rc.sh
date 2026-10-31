@@ -184,7 +184,7 @@ parse_args() {
         exit 0
         ;;
       *)
-        die "Unknown option '$1'. Use --help for usage (flag lama --remote-shell/--start sudah digabung jadi --join)."
+        die "Unknown option '$1'. Use --help for usage."
         ;;
     esac
     shift
