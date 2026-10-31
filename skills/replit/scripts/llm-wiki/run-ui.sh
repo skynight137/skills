@@ -10,7 +10,20 @@
 # web UI to serve; VNC is the only way to see the real desktop window in a browser.
 set -uo pipefail
 APP="$(cd "$(dirname "$0")" && pwd)"
-STATE="${XDG_CONFIG_HOME:-$HOME/.config}/llmwiki-ui"
+# Replit: $HOME is wiped on recreate — state must live under $REPL_HOME.
+# Replit env: XDG_* and PATH live in the platform env file (/run/replit/env/latest),
+# which a workflow/agent shell only sees if something sources it — no rc is sourced
+# in a workflow task. Source it, then still fall back under $REPL_HOME so the state
+# is persistent even when the file is missing ($HOME is wiped on recreate).
+[ -r /run/replit/env/latest ] && . /run/replit/env/latest
+# The file is regenerated and can lag, so do not trust it for REPL_HOME: pin the
+# roots to the bundle's parent (=$REPL_HOME) whenever they are unset. Without this
+# the state lands in $HOME and dies with the next recreate.
+REPL_HOME="${REPL_HOME:-$(cd "$APP/.." && pwd)}"
+export REPL_HOME
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$REPL_HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$REPL_HOME/.local/share}"
+STATE="${XDG_CONFIG_HOME:-${REPL_HOME:-$HOME}/.config}/llmwiki-ui"
 DISP="${LLM_WIKI_DISPLAY:-:99}"
 VNC_PORT="${LLM_WIKI_VNC_PORT:-5900}"
 WEB_PORT="${LLM_WIKI_UI_PORT:-6080}"
@@ -20,8 +33,8 @@ mkdir -p "$STATE"; chmod 700 "$STATE"
 # `nix build` here writes to a per-user store (~/.store), because /nix/store takes build
 # outputs only through the local-overlay upper layer, which is root-owned on Replit. Look
 # there first, then /nix/store for boxes that build straight into it.
-X11VNC="$(ls -d "$HOME"/.store/nix/store/*x11vnc-*/bin/x11vnc /nix/store/*x11vnc-*/bin/x11vnc 2>/dev/null | head -1)"
-NOVNC="$(ls -d "$HOME"/.store/nix/store/*novnc-*/bin/novnc /nix/store/*novnc-*/bin/novnc 2>/dev/null | head -1)"
+X11VNC="$(ls -d "${REPL_HOME:-$HOME}"/.store/nix/store/*x11vnc-*/bin/x11vnc "$HOME"/.store/nix/store/*x11vnc-*/bin/x11vnc /nix/store/*x11vnc-*/bin/x11vnc 2>/dev/null | head -1)"
+NOVNC="$(ls -d "${REPL_HOME:-$HOME}"/.store/nix/store/*novnc-*/bin/novnc "$HOME"/.store/nix/store/*novnc-*/bin/novnc /nix/store/*novnc-*/bin/novnc 2>/dev/null | head -1)"
 NIXENV="$(command -v nixenv 2>/dev/null)"
 
 # A binary built into the per-user store (~/.store) cannot run directly: its interpreter
@@ -62,7 +75,7 @@ start_vnc() {
 ensure_display() {
   [ -S "/tmp/.X11-unix/X${DISP#:}" ] && pgrep -f "Xvfb" >/dev/null && return 0
   local xvfb
-  xvfb="$(command -v Xvfb || ls -d "$HOME"/.store/nix/store/*-xorg-server-*/bin/Xvfb /nix/store/*-xorg-server-*/bin/Xvfb 2>/dev/null | head -1)"
+  xvfb="$(command -v Xvfb || ls -d "${REPL_HOME:-$HOME}"/.store/nix/store/*-xorg-server-*/bin/Xvfb "$HOME"/.store/nix/store/*-xorg-server-*/bin/Xvfb /nix/store/*-xorg-server-*/bin/Xvfb 2>/dev/null | head -1)"
   [ -n "$xvfb" ] || { log "no Xvfb found — cannot create display $DISP"; return 1; }
   rm -f "/tmp/.X11-unix/X${DISP#:}" "/tmp/.X${DISP#:}-lock"
   run_ui_bin "$xvfb" "$DISP" -screen 0 1600x1000x24 +extension GLX +extension RANDR +render -noreset >/tmp/xvfb.log 2>&1 &

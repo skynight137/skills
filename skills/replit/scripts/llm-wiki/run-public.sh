@@ -11,6 +11,13 @@
 # X display (real desktop, or Xvfb + a window manager).
 # Overridable: LLM_WIKI_PORT(80 -> https://$REPLIT_DEV_DOMAIN/mcp tanpa sufiks) LLM_WIKI_LOCAL_PORT(8199) LLM_WIKI_DISPLAY(:99)
 #              LLM_WIKI_PROJECT(default <app dir>/project) LLM_WIKI_APP_DIR LLM_WIKI_ENV_FILE
+[ -r /run/replit/env/latest ] && . /run/replit/env/latest   # workflow shells source no rc
+# env/latest is regenerated and can lag, so pin the roots ourselves: a bare ssh or
+# workflow shell would otherwise resolve REPL_HOME/XDG to $HOME (wiped on recreate).
+REPL_HOME="${REPL_HOME:-$(cd "$(dirname "$0")/.." && pwd)}"
+export REPL_HOME
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$REPL_HOME/.config}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-$REPL_HOME/.local/share}"
 set -uo pipefail
 APP="${LLM_WIKI_APP_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 ENV_FILE="${LLM_WIKI_ENV_FILE:-$APP/.env}"
