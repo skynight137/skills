@@ -25,6 +25,9 @@ install_zsh() {
   # is the GC root and lives on the durable workspace volume, so it survives
   # the $HOME wipe. `install` is the deprecated spelling of `add`, kept because
   # it is what is validated on the box.
+  # nix requires the parent of --profile to exist ("cannot read directory"
+  # otherwise); create it before the install.
+  mkdir -p -- "$(dirname -- "$ZSH_PROFILE")"
   nix profile install --profile "$ZSH_PROFILE" nixpkgs#zsh nixpkgs#fzf \
     || die "nix profile install failed ($ZSH_PROFILE)"
 
