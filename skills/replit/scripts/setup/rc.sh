@@ -41,13 +41,13 @@ Options:
                         After install, log in accounts with:
                           cli-proxy-api --config $CLIPROXY_HOME/config.yaml
                           cli-proxy-api -codex-login -no-browser   # remote-safe
-  --rclone              Install rclone (static binary from downloads.rclone.org into XDG_BIN_HOME)
-  --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
-  --aria2               Install aria2c (static musl binary from GitHub releases)
-  --ffmpeg              Install FFmpeg (BtbN static GPL build: ffmpeg/ffprobe/ffplay)
-  --cloudflared         Install cloudflared (Cloudflare Tunnel client; direct binary,
+  -r, --rclone              Install rclone (static binary from downloads.rclone.org into XDG_BIN_HOME)
+  -q, --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
+  -a2, --aria2              Install aria2c (static musl binary from GitHub releases)
+  -f, --ffmpeg              Install FFmpeg (BtbN static GPL build: ffmpeg/ffprobe/ffplay)
+  -cf, --cloudflared        Install cloudflared (Cloudflare Tunnel client; direct binary,
                         no checksum published upstream). See references/exposing-ports.md
-  --tailscale           Install tailscale + tailscaled saja (userspace client, SHA256-verified
+  -ts, --tailscale          Install tailscale + tailscaled saja (userspace client, SHA256-verified
                         dari pkgs.tailscale.com). Biner ke XDG_BIN_HOME, state node ke
                         \$TAILSCALE_DATA_DIR (PRESERVED oleh --clean tailscale). Tak ada
                         proses dinyalakan.
@@ -59,13 +59,13 @@ Options:
   -w, --workflow  Modifier entri workflow .replit: log dialirkan ke terminal dan
                         proses TIDAK keluar (job tidak dianggap selesai). Implisit --join,
                         jadi pasangannya \`--tailscale --join --workflow\`.
-  --sshx                Install sshx (collaborative web terminal; direct binary)
-  --camofox             Install Camofox (npm-global @askjo/camofox-browser: anti-detection
+  -sx, --sshx               Install sshx (collaborative web terminal; direct binary)
+  -cm, --camofox            Install Camofox (npm-global @askjo/camofox-browser: anti-detection
                         Firefox server + MCP adapter). Provisions the package-pinned
                         Camoufox engine into the persistent cache, applies the Replit
                         lib closure + WebGL auto-skip, then run: camofox-browser
                         (API on http://127.0.0.1:9377)
-  --llm-wiki            Install the llm-wiki server (knowledge base for agents):
+  -lw, --llm-wiki           Install the llm-wiki server (knowledge base for agents):
                         scripts/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
                         AppImage + shared token (.env, chmod 600). Start with
                         run-public.sh (app + REST/MCP, public port \$LLM_WIKI_PORT or
@@ -75,8 +75,8 @@ Options:
                         them. Not part of --all (the AppImage is ~116 MB; install it
                         explicitly when a knowledge base is wanted).
                         See references/llm-wiki-server.md
-  --doctor              Verify the toolchain (no install) — prints versions and flags
-  --fix                 Rewrite ALL wiring without deleting/reinstalling any
+  -d, --doctor              Verify the toolchain (no install) — prints versions and flags
+  -fx, --fix                Rewrite ALL wiring without deleting/reinstalling any
                         tool: shell rc (the single managed toolchain block,
                         hermes env + launcher included when it is installed),
                         .replit userenv keys,
@@ -108,7 +108,7 @@ Options:
                         NON-INTERACTIVE: a bare \`--clean\` with no target is
                         REFUSED (it would wipe everything, Hermes included).
                         Use \`--clean all -y\` to confirm a full wipe.
-  --list, --show        Show current toolchain state (wired tools, binaries, env vars)
+  -ls, --list, --show       Show current toolchain state (wired tools, binaries, env vars)
   -y,  --yes            Skip the cleanup confirmation prompt
   -h,  --help           Show this help
 
@@ -134,31 +134,30 @@ parse_args() {
     case "$1" in
       -a|--all)                  INSTALL_ALL=true ;;
       -at|--android-tools)       INSTALL_ANDROID=true ;;
-      --uv)                      INSTALL_UV=true ;;
-      --zsh) INSTALL_ZSH=true ;;
-      --node)                    INSTALL_NODE=true ;;
-      -oc|--opencode)       		 INSTALL_OPENCODE=true ;;
+      -u|--uv)                   INSTALL_UV=true ;;
+      -z|--zsh)                  INSTALL_ZSH=true ;;
+      -n|--node)                 INSTALL_NODE=true ;;
+      -oc|--opencode)            INSTALL_OPENCODE=true ;;
       -ol|--ollama)              INSTALL_OLLAMA=true ;;
       -cl|--claude)              INSTALL_CLAUDE=true ;;
-      -ha|--hermes) 						 INSTALL_HERMES=true ;;
-      -ori|--openrouterai) 		 INSTALL_ORI=true ;;
-      -cp|--cliproxy)           INSTALL_CLIPROXY=true ;;
-      --rclone)                 INSTALL_RCLONE=true ;;
-      --qbt)                    INSTALL_QBT=true ;;
-      --aria2)                  INSTALL_ARIA2=true ;;
-      --ffmpeg)                 INSTALL_FFMPEG=true ;;
-      --cloudflared)            INSTALL_CLOUDFLARED=true ;;
-      --tailscale)              INSTALL_TAILSCALE=true ;;
-      --sshx)                   INSTALL_SSHX=true ;;
-      --tailscale)              INSTALL_TAILSCALE=true ;;
-      --join|-j)                INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
-      -w|--workflow)      INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
-      --camofox)                INSTALL_CAMOFOX=true ;;
+      -ha|--hermes)              INSTALL_HERMES=true ;;
+      -ori|--openrouterai)       INSTALL_ORI=true ;;
+      -cp|--cliproxy)            INSTALL_CLIPROXY=true ;;
+      -r|--rclone)               INSTALL_RCLONE=true ;;
+      -q|--qbt)                  INSTALL_QBT=true ;;
+      -a2|--aria2)               INSTALL_ARIA2=true ;;
+      -f|--ffmpeg)               INSTALL_FFMPEG=true ;;
+      -cf|--cloudflared)         INSTALL_CLOUDFLARED=true ;;
+      -ts|--tailscale)           INSTALL_TAILSCALE=true ;;
+      -sx|--sshx)                INSTALL_SSHX=true ;;
+      -j|--join)                 INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
+      -w|--workflow)             INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
+      -cm|--camofox)             INSTALL_CAMOFOX=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
-      --llm-wiki)               INSTALL_LLM_WIKI=true ;;
-      --doctor)                  DOCTOR=true ;;
-      --fix)                     FIX=true ;;
-      --list|--show)             LIST_STATE=true ;;
+      -lw|--llm-wiki)            INSTALL_LLM_WIKI=true ;;
+      -d|--doctor)               DOCTOR=true ;;
+      -fx|--fix)                 FIX=true ;;
+      -ls|--list|--show)         LIST_STATE=true ;;
       -c|--clean)
         CLEAN=true
         # Optional target: 'all' (or --all) = full wipe, a tool name =
