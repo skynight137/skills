@@ -512,3 +512,20 @@ repo is already public.
   table proves nothing on its own.
 - `funnel-ingress-node` entries in `tailscale status` are Tailscale's own IPv6-only
   relay infra, not operator machines — never count them as targets.
+
+### Node identity policy (jangan bikin mesin baru tiap rejoin)
+
+`--clean tailscale` **mempertahankan** `tailscaled.state` (node key) secara default,
+jadi rejoin memakai node yang sama: offline → offline, online → mesin yang sama di
+console. Node duplikat muncul kalau state dibuang (atau state-nya hilang bersama
+`$HOME`): `tailscale up` lalu mendaftarkan **node baru** dan node lama nyangkut offline
+sampai kedaluwarsa.
+
+- Buang identity secara eksplisit: `TAILSCALE_PURGE_IDENTITY=true bash setup.sh --clean tailscale`
+  (baru setelah itu node lama perlu dihapus manual di admin panel).
+- Cek duplikat: `tailscale status | awk '{print $2}' | sort | uniq -c` → masing-masing 1.
+- State selalu di `$REPL_HOME/.local/share/tailscale/state` (persisten), bukan `$HOME`.
+
+`scripts/join-lifecycle-test.sh` menguji lifecycle join: install → uninstall detached →
+assertion (sshd mati, socket hilang, entri ssh asing **tidak** tersentuh) → rejoin.
+Test itu membuktikan sweep-nya sempit; identitas persistent diatur oleh kebijakan di atas.

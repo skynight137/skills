@@ -373,11 +373,20 @@ clean_tailscale() {
 
   rm -rf "$RS_DIR"
   ok "join sshd dihapus ($RS_DIR)"
-  [ -n "$sock" ] && rm -rf "${TAILSCALE_STATE_DIR:-$(dirname "$sock")}"
-  ok "state tailnet dihapus (host key + node identity)"
+  # Identity policy: KEEP the node key by default. Deleting it makes the next
+  # join register a NEW node while the old one lingers offline in the admin
+  # console (stacked machines). With the state kept, `tailscale up` reuses the
+  # same node: offline here = offline there, back online = the same machine.
+  if [[ "${TAILSCALE_PURGE_IDENTITY:-false}" == true ]]; then
+    [ -n "$sock" ] && rm -rf "${TAILSCALE_STATE_DIR:-$(dirname "$sock")}"
+    ok "state tailnet dihapus (host key + node identity) — purge diminta"
+    warn "node masih terdaftar di console sampai kedaluwarsa — hapus manual di admin panel"
+  else
+    ok "node identity DIPERTAHANKAN (${TAILSCALE_STATE_DIR:-$(dirname "${sock:-}")}) — rejoin memakai node yang sama"
+    warn "mau buang identity? ulangi dengan TAILSCALE_PURGE_IDENTITY=true (node lama akan nyangkut di console)"
+  fi
   rm -f "${bins[@]}"
   ok "biner tailscale/launch-tailscaled dihapus"
-  warn "node masih terdaftar di console sampai kedaluwarsa — hapus manual di admin panel"
   warn "~/.ssh tetap ada dan tidak ikut terhapus; .replit --join dibiarkan (hapus manual)"
 }
 

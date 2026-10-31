@@ -91,6 +91,9 @@ hermes mcp add camofox --command <that-wrapper> \
         CAMOFOX_SESSION_KEY=default CAMOFOX_COOKIES_DIR=/home/runner/workspace/.config/camofox/cookies
 ```
 
+The shipped template is `scripts/camofox-mcp-local.sh` (copy it, then register it
+with `hermes mcp add camofox --command <copy> --env CAMOFOX_BASE_URL=... ...`).
+
 The adapter is stdio-only and a thin proxy to `CAMOFOX_BASE_URL`. When the
 server is remote (workflow on the repl's :80), register it as an ssh-spawned
 stdio server — Hermes runs the wrapper **on the remote side**:
