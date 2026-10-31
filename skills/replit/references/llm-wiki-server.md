@@ -214,6 +214,13 @@ artinya field-nya yang salah, bukan tool-nya. Bukti sehat: respons `tools/call` 
   sebelum mendiagnosis apa pun. Daftarkan TIAP supervisor sebagai workflow sendiri di
   `.replit` (`llm-wiki-public` → `run-public.sh`, `llm-wiki-ui` → `run-ui.sh`); satu
   workflow per proses panjang, dan JANGAN berbagi `waitForPort` dengan workflow lain.
+  Nama workflow milik operator (`llm-wiki-server` / `llm-wiki-public` sama-sama sah),
+  tapi `waitForPort` HARUS sama dengan port loopback yang dipakai klien MCP (`8199`):
+  angka lain membuat health-check workflow menunggu port yang tak pernah dibuka,
+  sementara servernya sendiri sehat — entri terlihat mati padahal cuma salah port.
+  Sebelum bilang sebuah workflow tidak ada, baca SEMUA header `name = ` di `.replit`;
+  tiap workflow punya blok `[[workflows.workflow]]` sendiri dan `grep -A4` bisa
+  menampilkan blok tetangga.
 - **Supervisor jangan percaya file socket X.** `/tmp/.X11-unix/X99` menipu dua arah:
   Xvfb yang mati meninggalkan socket-nya, supervisor mengira display hidup, Xvfb tidak
   pernah dinyalakan, dan app keluar `Failed to initialize GTK` (log hanya berisi panic
