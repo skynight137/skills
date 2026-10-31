@@ -58,6 +58,42 @@ Call a public deployment with `Authorization: Bearer $CAMOFOX_ACCESS_KEY`;
 without it every route (tabs included) answers 401. `CAMOFOX_API_KEY` gates
 only the cookie-import routes and does not replace the superkey.
 
+## MCP into Hermes (verified 2026-10-31 on repl-cfx)
+
+The adapter is stdio-only and a thin proxy to `CAMOFOX_BASE_URL`. When the
+server is remote (workflow on the repl's :80), register it as an ssh-spawned
+stdio server — Hermes runs the wrapper **on the remote side**:
+
+```bash
+hermes mcp add camofox --command ssh --args <repl-alias> bash /home/runner/workspace/bin/camofox-mcp.sh
+```
+
+Remote wrapper (`bin/camofox-mcp.sh`) needs all three, or tool calls fail:
+
+```bash
+#!/bin/bash
+source /run/replit/env/latest 2>/dev/null   # ambient CAMOFOX_ACCESS_KEY lives here
+source /home/runner/workspace/.config/bashrc 2>/dev/null
+export PORT="${PORT:-80}"                   # keeps the key in env.sh AND matches the server
+. /home/runner/workspace/.config/camofox/env.sh 2>/dev/null
+export CAMOFOX_BASE_URL="${CAMOFOX_BASE_URL:-http://127.0.0.1:80}"
+export PATH=/home/runner/workspace/.local/bin:/home/runner/workspace/.local/share/node/bin:$PATH
+exec camofox-browser-mcp
+```
+
+Failure modes seen: missing `/run/replit/env/latest` → `401 Unauthorized`;
+missing `CAMOFOX_BASE_URL` → adapter defaults to :9377 → `fetch failed`.
+`hermes mcp test <name>` only lists static tool defs, so a green test does NOT
+prove the server is reachable — always issue one real tool call.
+
+**Cookies over MCP:** `camofox_import_cookies` takes `cookiesPath`, a
+Netscape-format file **relative to the cookies dir on the MACHINE RUNNING THE
+ADAPTER** (it parses locally, then uploads). Verified: import returns
+`{"imported":1}`, but a synthetic cookie did not surface on the page and a
+leading-dot domain raises Firefox `NS_ERROR_ILLEGAL_VALUE`; use real
+browser-exported cookie files, same as `camofox.py --cookies`.
+
+
 ⚠ **A bare `camofox-browser` dies in any shell that did not source `env.sh`.**
 The npm binary is a JS entry point: it cannot self-apply `LD_LIBRARY_PATH`, so
 the GTK closure must already be in the process env. A **non-interactive** shell
