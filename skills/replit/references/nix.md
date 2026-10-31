@@ -66,6 +66,8 @@ which is why `replit.nix` is the one to keep.
 nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
 ```
 
+- **`nix profile install --profile <path>` needs the parent directory to exist.** Without it nix dies with `error: cannot read directory "<parent>": No such file or directory`, and in an installer that chains the next step with `&&` the profile symlink never appears — the tool reads as uninstalled with no obvious cause. `mkdir -p "$(dirname -- "$PROFILE")"` first.
+
 Changes to `[nix] packages` (or `replit.nix`) trigger an **async rebuild**; the
 sandbox env (PATH, `REPLIT_LD_LIBRARY_PATH`) only reflects the new build after
 the rebuild and a fresh shell. The channel is `[nix] channel` in `.replit`

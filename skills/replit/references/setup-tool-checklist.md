@@ -79,11 +79,17 @@ own `install.sh` performs the download — `--llm-wiki` is the working example.
 - A lib-list file consumed as `read -a ... && for` needs a **trailing newline**:
   `read` returns non-zero at EOF without one, which short-circuits the `&&` chain,
   so every entry vanishes silently.
+- `nix profile install --profile "$X"` requires the PARENT of `$X` to exist
+  (`cannot read directory .../nix-profiles` otherwise, rc=1 before anything is
+  installed) — `mkdir -p -- "$(dirname -- "$X")"` first. Any tool that installs
+  through a nix profile (zsh's installer is the template) needs this step.
 
 ## 4. Make the flag real — `rc.sh`, `cli.sh`, `ui_menu.sh`
 
 - `rc.sh` usage(): the flag line, **and** the `--clean <targets>` list.
-- `rc.sh` parse_args(): `--<tool>) INSTALL_<TOOL>=true ;;`
+- `rc.sh` parse_args(): `--<tool>) INSTALL_<TOOL>=true ;;` — plus a short alias in
+  the SAME case arm (`-lw|--llm-wiki`) — the operator's standing standard is
+  `-x|--long` for every flag; a long-only flag reads as half-finished.
 - `rc.sh` the two `INSTALL_ALL` sites: the no-flag guard and the `if $INSTALL_ALL`
   block. Miss the guard and a run with only the new flag installs EVERYTHING.
 - `cli.sh`: the dispatch line, the menu-selection guard in `main()`, and the
@@ -141,6 +147,37 @@ bash setup.sh --<tool>                           # reinstall after the test
   ollama, zsh and friends, an `INSTALL_*` flag is missing from the no-flag guard in
   `rc.sh` (line ~180) — this is exactly how `--llm-wiki` and, before it,
   `--hermes-chromium` behaved.
+- **A full install→clean sweep of every tool fills the 4 GB overlay before the
+  middle of the list.** `zsh`'s `nix build` and a hermes install (~2.3 GB under
+  `$HOME/.hermes`) exhaust the disk; every later tool then fails in <1 s with
+  rc=1 and a misleading `no tools installed this run` wiring tail. `df -h` before
+  and periodically DURING a bulk sweep, and after any failed install remove its
+  leftover dirs (`.hermes`, partial extracts) before continuing.
+- **Give each sweep iteration its own log file.** Reusing one path across an
+  install→clean loop overwrites the evidence of the first failures — when tool 2
+  fails, the shared log already holds tool 5's output. Write `sw_<tool>.log` per
+  step (and keep each step's install log separate from its clean log).
+- **A sweep driven over ssh must redirect on the REMOTE side and return only the
+  rc.** `ssh host 'bash setup.sh --x -y >/tmp/sw_x.log 2>&1; echo rc=$?'` — when the
+  remote command's stdout stays on the ssh channel, a background child that inherits it
+  (any installer-spawned daemon) keeps ssh from seeing EOF and the driver hangs until
+  its own timeout. Unique remote logs per step survive that way too; parse the rc line
+  out of the returned text, never the ssh exit code.
+- **Never rewrite a driver script while it is running.** bash reads scripts
+  incrementally, so an overwrite lands as a syntax error at the next line the old
+  process reads; write a NEW file name for the corrected re-run instead of editing
+  in place.
+- **Verify paths are mode-dependent.** Default mode installs to `$HOME/.local/bin`;
+  replit mode to `$REPL_HOME/.local/bin`; npm-global tools (camofox, cliproxy) land
+  in the npm prefix `$XDG_DATA_HOME/node/bin` even in replit mode — and
+  `/run/replit/env/latest` may not export `XDG_BIN_HOME` at all. Probe with `find`
+  over both locations instead of a hardcoded `~/.local/bin`: a wrong-path verify
+  reads as a false FAIL on a perfectly good install.
+- **A supervisor loop undoes child kills.** Killing the app/Xvfb of a
+  `run-public.sh`-style supervisor just gets them respawned; kill the supervisor
+  process (and its bash parent chain) first, then the children — otherwise the
+  post-clean "no processes" check never goes green and a graceful-stop clean
+  times out while the loop restarts the app.
 
 - After `--clean`, confirm a **shared** `$XDG_BIN_HOME` PATH line SURVIVES: it is
   owned by every tool that has a binary there, so `owned_only_by` keeps it and

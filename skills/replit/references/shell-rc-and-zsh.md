@@ -7,6 +7,21 @@
   agent/workflow shells set `REPLIT_MODE`, so they see nothing until the
   `REPLIT_BASHRC` shim (`unset REPLIT_MODE; source ~/.bashrc`) runs. Check
   `printenv REPLIT_MODE` before assuming an rc line reached a shell.
+- **The IDE terminal's rc is a Replit wrapper, not `~/.bashrc`.** A terminal-owned
+  process shows `bash --rcfile /nix/store/*-replit-bashrc/bashrc`; the wrapper's job
+  is `source "${REPL_HOME}/.config/bashrc"` (line ~465, with `BASHRC="${REPL_HOME}/.config/bashrc"`
+  near the top). The store overlay is writable, so the wrapper file itself can be
+  clobbered by a generated toolchain block — the source line vanishes, and the
+  tell is **correct `$REPLIT_BASHRC` but dead aliases** (the file it points at
+  never gets sourced). Restore from the pristine twin: `/nix/store/*-replit-bashrc*`
+  holds several versions, and the LARGER file (20+ KB) is the original wrapper —
+  back up the clobbered one, `cp` the original over it, then verify with
+  `bash --rcfile <wrapper> -i -c 'alias | head'`.
+- **`REPL_HOME` is not provided by the platform env file.** `/run/replit/env/latest`
+  (the wrapper's `SHELL_ENV`) carries `REPLIT_*` vars but not `REPL_HOME`, and a
+  non-interactive `ssh host 'cmd'` sources no rc at all, so `$REPL_HOME` is empty
+  there by design. Export it yourself when running `setup.sh` over ssh:
+  `export REPL_HOME=/home/runner/workspace`.
 - **Daemons do not belong in any rc.** `.bashrc`/`.profile`/`.config/bashrc` are
   re-sourced every time a terminal opens, so an autostart line there re-fires per
   terminal and needs its own guard in every shell. Put long-running services

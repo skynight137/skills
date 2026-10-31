@@ -222,6 +222,36 @@ Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
 proxy answered and the port is not published.
 
+### Client-side `Host` block (the one that works from an agent box)
+
+The agent's own tailscaled is userspace without TUN, so a raw dial to a tailnet
+IP (direct, `-J` jump, or a hand-rolled SOCKS5 forward) lands on the platform
+gateway: it answers with a binary preamble (`dEob...`) and then closes, which
+reads as "banner exchange timeout" or "no sshd" on a perfectly joined box. The
+daemon's own `nc` is the only path that reaches the real sshd — a `Host` block
+using it is what makes `ssh <alias>` just work:
+
+```
+Host repl-cfx repl-wiki        # group boxes that share port/key/hop
+    Port 6800
+    User runner
+    IdentityFile <hop-key>
+    ProxyCommand <tailscale-binary> --socket=<TAILSCALE_SOCKET> nc %h %p
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    ConnectTimeout 15
+```
+
+Copy the hop form from an existing working `Host` block before inventing a new
+transport — every box on the tailnet takes the same shape.
+
+### Mapping a dev-domain URL you were handed to a machine you can ssh to
+
+`REPL_ID` in `/run/replit/env/latest` equals the slug of the `*.replit.dev`
+domain, so a URL like `https://<REPL_ID>-...<name>.replit.dev:8080` names one
+specific repl; read that env file on the boxes you can reach and match the slug
+before assuming which machine serves a given public URL.
+
 `--clean tailscale` stops both daemons (sshd via its pid file, tailscaled matched by OUR
 socket only), deletes `$RS_DIR` and the tailnet state dir, drops the `hermes-join-hop` line
 from `~/.ssh/authorized_keys`, and sweeps exactly the ssh surface join created: `~/.ssh/config`
@@ -325,6 +355,30 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success
   on connect and says nothing about the listener behind the relay.
 
+## Driving long jobs over the bridge
+
+Once the `Host` block works, the next failure mode is the ssh *call*, not the box:
+
+- **Redirect on the FAR side, and read the rc from the echoed line.**
+  `ssh B 'cd <dir> && ./setup.sh --flag -y >/tmp/run.log 2>&1; echo rc=$?'` returns as
+  soon as the command exits; redirecting only on the local side leaves the remote
+  children holding the ssh channel, so ssh waits for an EOF that never comes and a
+  finished install looks like a hung box until the call times out. Take the status from
+  the `rc=` line, not from ssh's own exit code (ssh exits 0 whenever the channel closed
+  cleanly).
+- **Detach in a SEPARATE ssh call.** `setsid <cmd> >log 2>&1 </dev/null &` followed by
+  more commands in the same ssh invocation drops everything after the `&` — the session
+  closes at the backgrounded job and the trailing probe never runs. One call starts it,
+  a second call (later) probes ports and log.
+- **Never edit a shell script while it is running.** bash re-reads the file
+  incrementally, so a mid-run rewrite drops the parser into the middle of the new text
+  and kills the run with a stray `syntax error near unexpected token` — the job dies
+  part-way and the log just stops.
+- **`pkill -f <pattern>` matches the calling shell** (its own command line contains the
+  pattern) and can kill the session mid-command; bracket one character so the pattern
+  cannot match itself: `pgrep -f 'run-publi[c].sh'`. Verify with a pattern that cannot
+  hit you, then kill by explicit PID.
+
 ## Pitfalls (each cost a round trip)
 
 - **Test the workflow notice against throwaway copies, not the live workspace.**
@@ -416,7 +470,31 @@ repo is already public.
   relay listens on `localhost:1055`; `nc -X 5 -x 127.0.0.1:1055 -z <ip> <port>` is the
   reachability test, and `scripts/probe-tailnet-peers.sh [port]` walks every real peer.
   `General SOCKS server failure` means the peer is offline or the port is closed — read
-  the `offline` marker in `tailscale status` before editing the ssh config.
+  the `offline` marker in `tailscale status` before editing the ssh config — but `online`
+  is not proof the host answers (half-alive signature below).
+- **`Online: true` is not proof the host behind the peer serves traffic.** The
+  coordination server marks a peer online from its control connection, which
+  tailscaled keeps up even when the host is dead or asleep — it keeps handshaking
+  over a DERP relay while nothing behind it answers. Half-alive signature: fresh
+  `LastHandshake`, `RxBytes`/`TxBytes` ticking via a `Relay` (DERP region), `CurAddr`
+  empty (no direct path), `tailscale ping` timing out, and EVERY TCP port refused.
+  Read `Peer.Online`, `Peer.LastSeen` (zero value = never/stale), `Peer.CurAddr`,
+  `Peer.Relay`, `Peer.LastHandshake`, `Peer.RxBytes`/`TxBytes` from
+  `tailscale --socket=$TAILSCALE_SOCKET status --json` before judging. That
+  signature is a stopped Repl container or a sleeping laptop: report "tailscaled
+  alive, host dead" and ask the operator to wake/start it — further probes just
+  repeat the same refusals.
+- **Probe a known-good peer with the same method as control before blaming the
+  suspect.** Control opens and the suspect refuses everything → the local relay is
+  fine and the suspect's host is the problem; both fail identically → the break is
+  on this box (relay, socket, state). One method, two targets, every time.
+- **`tailscale ping` is a disco-level test, not a data-plane test.** It can time out
+  against a peer whose tailscaled is healthy over a relay-only path, and it says
+  nothing about ports. Judge reachability with a real TCP probe through the SOCKS
+  relay, never by ping.
+- **`tailscale ssh` only works when Tailscale SSH is enabled on the peer.**
+  `Peer.SshHostKeys` null in `status --json` means it is off and the command falls
+  back to dialing tcp:22, which refuses. The fleet boxes run plain sshd on 6800.
 - **A re-registering node changes its `100.x` address**, so a saved `HostName` rots
   silently and `ssh` fails with `Connection closed by UNKNOWN port 65535` while the
   config still looks right. Rewrite `HostName` from live `tailscale status` output, and
