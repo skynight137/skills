@@ -79,7 +79,15 @@ flag itu dipakai. Dua jebakan yang sudah ditangani dan **jangan** dihilangkan:
 ```bash
 bash setup.sh --llm-wiki   # sekali per mesin: bundle + AppImage + token
 bash run-public.sh         # supervisor, foreground (systemd / workflow / tmux)
-bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :6080)
+bash run-ui.sh             # opsional: UI desktop lewat browser (noVNC :8000)
+```
+
+Di mesin lain (belum punya skill ini): clone repo-nya dulu, lalu flag yang sama.
+
+```bash
+git clone --depth 1 -b <branch> https://github.com/skynight137/skills.git ~/work/skills
+cd ~/work/skills/skills/replit
+bash scripts/setup.sh --llm-wiki --node --sshx -y
 ```
 
 - **`run-public.sh` menyiapkan `LD_LIBRARY_PATH` sendiri.** Shell telanjang (ssh, cron,
