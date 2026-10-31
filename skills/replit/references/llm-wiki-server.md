@@ -351,3 +351,16 @@ publik `:3000`), UI sekarang **listen di 3000 dan dipetakan `3000 -> 3000`** —
 untuk dua jalan: `http://127.0.0.1:3000/vnc.html` dan
 `https://<REPLIT_DEV_DOMAIN>:3000/vnc.html` sama-sama 200. Ganti dengan
 `LLM_WIKI_UI_PORT=<port>` + entri `[[ports]]` yang cocok kalau operator mau angka lain.
+
+## Jangan tertukar: dua "llm-wiki"
+
+| | Skill Hermes `llm-wiki` | App nashsu/llm_wiki |
+|---|---|---|
+| Wujud | SKILL.md (markdown Karpathy) | AppImage + node server + MCP |
+| Env | `WIKI_PATH` (default `~/wiki`) | `LLM_WIKI_*` (`API_TOKEN`, `PORT`, `PROJECT_PATH`) |
+| Tool | read_file/write_file/search_files | tool MCP `llm_wiki_*` |
+| Letak | `hermes-agent/skills/research/llm-wiki/`, bisa di-disable via `skills.disabled` | bundle mesin repl |
+
+`LLM_WIKI_PATH` **tidak ada** di Hermes (yang ada `WIKI_PATH`); awalan `LLM_WIKI_` milik app.
+Reference milik skill Hermes (`references/self-hosted-service.md`) memuat cara menjalankan app
+nashsu sebagai layanan (layout `wiki/**.md`, API `:19828/api/v1`, MCP-over-HTTP, token satu file).
