@@ -242,6 +242,16 @@ EOF
   # Liveness is the socket answering, not a pid guess: a SECOND daemon on another
   # socket (a test node, a second tailnet) matches the pattern and would otherwise
   # suppress the start and leave this socket dead.
+  #
+  # Identity safety: an EMPTY state file means the node key is gone, and starting
+  # the daemon from it registers a brand-new node (hostname-1) while the old one
+  # lingers offline in the console. Restore the last good copy first; refresh that
+  # copy once the daemon answers.
+  local state_bak="$TAILSCALE_DATA_DIR/tailscaled.state.bak"
+  if [[ ! -s "$state/tailscaled.state" ]] && [[ -s "$state_bak" ]]; then
+    cp -p "$state_bak" "$state/tailscaled.state"
+    ok "identity tailnet dipulihkan dari backup ($state_bak) — tidak ada node baru"
+  fi
   if ! "$tsc" --socket="$sock" status >/dev/null 2>&1; then
     setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
       --outbound-http-proxy-listen=localhost:1055 \
@@ -251,6 +261,9 @@ EOF
     for w in $(seq 1 10); do [ -S "$sock" ] && break; sleep 1; done
   fi
   [ -S "$sock" ] || { warn "tailscaled tidak siap (log: $TAILSCALE_DATA_DIR/tailscaled.log)"; return 1; }
+  if [[ -s "$state/tailscaled.state" ]] && ! cmp -s "$state/tailscaled.state" "$state_bak"; then
+    cp -p "$state/tailscaled.state" "$state_bak" 2>/dev/null || true
+  fi
 
   # --hostname is asserted only where it must be: the first join, or when the operator
   # pins TAILSCALE_NODE_NAME. A later start that kept re-sending $(hostname) would undo any

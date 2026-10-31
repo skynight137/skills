@@ -379,6 +379,7 @@ clean_tailscale() {
   # same node: offline here = offline there, back online = the same machine.
   if [[ "${TAILSCALE_PURGE_IDENTITY:-false}" == true ]]; then
     [ -n "$sock" ] && rm -rf "${TAILSCALE_STATE_DIR:-$(dirname "$sock")}"
+    rm -f "${TAILSCALE_DATA_DIR:-}/tailscaled.state.bak"
     ok "state tailnet dihapus (host key + node identity) — purge diminta"
     warn "node masih terdaftar di console sampai kedaluwarsa — hapus manual di admin panel"
   else
