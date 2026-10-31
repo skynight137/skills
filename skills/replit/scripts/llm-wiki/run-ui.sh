@@ -73,7 +73,13 @@ start_vnc() {
 # shows a black page. run-public.sh starts the same display; whichever supervisor comes
 # first wins and the other just finds it there.
 ensure_display() {
-  [ -S "/tmp/.X11-unix/X${DISP#:}" ] && pgrep -f "Xvfb" >/dev/null && return 0
+  # Truth = a live Xvfb for THIS display. The /tmp/.X11-unix socket can vanish
+  # (tmpfs sweep) while the server keeps running; trusting the socket then starts a
+  # second Xvfb that dies with "server already running" and spams FAILED every loop.
+  if pgrep -f "Xvfb.*[[:space:]]${DISP}([[:space:]]|$)" >/dev/null 2>&1; then
+    [ -S "/tmp/.X11-unix/X${DISP#:}" ] || log "display $DISP alive (socket swept, server fine)"
+    return 0
+  fi
   local xvfb
   xvfb="$(command -v Xvfb || ls -d "${REPL_HOME:-$HOME}"/.store/nix/store/*-xorg-server-*/bin/Xvfb "$HOME"/.store/nix/store/*-xorg-server-*/bin/Xvfb /nix/store/*-xorg-server-*/bin/Xvfb 2>/dev/null | head -1)"
   [ -n "$xvfb" ] || { log "no Xvfb found — cannot create display $DISP"; return 1; }
