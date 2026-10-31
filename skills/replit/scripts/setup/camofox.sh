@@ -240,7 +240,7 @@ camofox_write_env_snippet() {
     echo "export CAMOFOX_COOKIES_DIR=\"$CAMOFOX_COOKIES_DIR\""
     echo "export CAMOFOX_UPLOADS_DIR=\"$CAMOFOX_UPLOADS_DIR\""
     echo "export CAMOFOX_TRACES_DIR=\"$CAMOFOX_TRACES_DIR\""
-    echo 'if [[ "${CAMOFOX_BIND_HOST:-127.0.0.1}" = 127.0.0.1 ]]; then unset CAMOFOX_ACCESS_KEY; fi'
+    echo 'if [[ "${CAMOFOX_BIND_HOST:-127.0.0.1}" = 127.0.0.1 && "${PORT:-9377}" = "9377" ]]; then unset CAMOFOX_ACCESS_KEY; fi'
   } > "$f"
   ok "camofox env snippet: $f"
 }
@@ -325,13 +325,12 @@ fi
 # Prerequisites OK. env.sh APPENDS the closure, so an inherited LD_LIBRARY_PATH
 # (the [userenv.shared] pool with libatomic) is preserved, not clobbered.
 #
-# env.sh drops the ambient CAMOFOX_ACCESS_KEY for loopback convenience, but
-# this launcher is the PUBLIC path: the .replit workflow publishes the port
-# (waitForPort=80), so the superkey must survive — without it every route,
-# tabs included, is open to anyone holding the URL.
-_CAMOFOX_KEY="${CAMOFOX_ACCESS_KEY:-}"
+# PORT defaults to 80 here: this launcher is the PUBLIC path (the .replit
+# workflow waits on :80), and env.sh only drops CAMOFOX_ACCESS_KEY on the
+# default loopback port (:9377). Exporting 80 first keeps the superkey in
+# place under its own name — no snapshot variable.
+export PORT="${PORT:-80}"
 . "$ENVSH"
-[ -n "$_CAMOFOX_KEY" ] && export CAMOFOX_ACCESS_KEY="$_CAMOFOX_KEY"
 exec camofox-browser "$@"
 EOF
   chmod +x "$f"
