@@ -153,3 +153,23 @@ Bentuk perintahnya bukan pilihan gaya — salah bentuk menghasilkan build yang s
 | node crashes with `undefined symbol: ...` after export | closure shadowing base libs (old sqlite/openssl) | §3: exclude base families, prepend node's own linked dirs |
 | `nix eval` parse error | `.` instead of `#` | `nixpkgs#gtk3` |
 | new nix dep not visible | rebuild not finished / stale shell | wait for rebuild, open a fresh shell |
+
+### Always pass `--store /nix/store` on Replit
+
+`/etc/nix/nix.conf` on a repl points the default store at a local-overlay whose
+lower layer is read-only:
+
+```
+store = local-overlay://?lower-store=%2Fmnt%2Fcacache%3Fread-only%3Dtrue&upper-layer=/mnt/nix/store&check-mount=false
+```
+
+so a bare `nix build nixpkgs#x` dies with:
+
+```
+error: creating directory "/mnt/cacache/nix/store": Permission denied
+```
+
+Rule: every nix invocation passes `--store /nix/store`
+(`nix --store /nix/store build nixpkgs#… --no-link --print-out-paths`).
+`scripts/setup/common.sh` injects it automatically when `/etc/nix/nix.conf`
+mentions `local-overlay`; hand-run commands must do it themselves.
