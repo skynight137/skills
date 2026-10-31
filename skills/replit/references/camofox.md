@@ -60,6 +60,37 @@ only the cookie-import routes and does not replace the superkey.
 
 ## MCP into Hermes (verified 2026-10-31 on repl-cfx)
 
+**Two config files, and `${VAR}` is NOT expanded in `mcp_servers.*.env`.**
+Writing `CAMOFOX_ACCESS_KEY: ${CAMOFOX_ACCESS_KEY}` hands the adapter that
+literal string → every call 401s. Keep secrets OUT of the config: have the
+command be a wrapper that reads them from the profile `.env` (single source).
+Also note the CLI resolves `hermes chat` against the *profile* config
+(`.hermes/profiles/<p>/config.yaml`) while `hermes mcp add` without `-p` writes
+the *default* one (`.hermes/config.yaml`) — update BOTH (`hermes -p <p> mcp
+add ...`) or one path keeps a stale server.
+
+Local wrapper (adapter on the agent box, DIRECT https to the repl) — the shape
+that works, verified end-to-end incl. cookie import:
+
+```bash
+#!/bin/bash
+E=/home/runner/workspace/.hermes/profiles/<p>/.env
+if [ -z "${CAMOFOX_ACCESS_KEY:-}" ] && [ -r "$E" ]; then
+  CAMOFOX_ACCESS_KEY=$(grep -m1 '^CAMOFOX_ACCESS_KEY=' "$E" | cut -d= -f2-)
+  CAMOFOX_API_KEY=$(grep -m1 '^CAMOFOX_API_KEY=' "$E" | cut -d= -f2-)
+fi
+export CAMOFOX_ACCESS_KEY CAMOFOX_API_KEY
+export LD_LIBRARY_PATH="/home/runner/workspace/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="/home/runner/workspace/.local/share/node/bin:$PATH"
+exec node /home/runner/workspace/.local/share/node/lib/node_modules/@askjo/camofox-browser-mcp/server.mjs
+```
+
+```bash
+hermes mcp add camofox --command <that-wrapper> \
+  --env CAMOFOX_BASE_URL=https://<repl>.replit.dev CAMOFOX_USER_ID=hermes-default \
+        CAMOFOX_SESSION_KEY=default CAMOFOX_COOKIES_DIR=/home/runner/workspace/.config/camofox/cookies
+```
+
 The adapter is stdio-only and a thin proxy to `CAMOFOX_BASE_URL`. When the
 server is remote (workflow on the repl's :80), register it as an ssh-spawned
 stdio server — Hermes runs the wrapper **on the remote side**:
