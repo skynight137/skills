@@ -87,11 +87,20 @@ missing `CAMOFOX_BASE_URL` → adapter defaults to :9377 → `fetch failed`.
 prove the server is reachable — always issue one real tool call.
 
 **Cookies over MCP:** `camofox_import_cookies` takes `cookiesPath`, a
-Netscape-format file **relative to the cookies dir on the MACHINE RUNNING THE
-ADAPTER** (it parses locally, then uploads). Verified: import returns
-`{"imported":1}`, but a synthetic cookie did not surface on the page and a
-leading-dot domain raises Firefox `NS_ERROR_ILLEGAL_VALUE`; use real
-browser-exported cookie files, same as `camofox.py --cookies`.
+Netscape-format file **relative to `$(XDG_CONFIG_HOME)/camofox/cookies` on the
+machine running the adapter** — NOT `CAMOFOX_COOKIES_DIR` and not `~/.camofox`
+(both are ignored for this path resolution). The adapter parses the file
+locally, then uploads. Verified 2026-10-31: a browser-exported Replit cookie
+set (12 cookies, JSON → Netscape: strip the leading dot, keep httpOnly out of
+the `#HttpOnly_` prefix, map session expiry to a far-future timestamp) imported
+clean as `{"imported":12}` and opened https://replit.com/@<user>/<repl>
+already authenticated (`loggedIn:true`, `replit_authed` + `connect.sid`
+present). Synthetic cookies with a leading-dot domain raise Firefox
+`NS_ERROR_ILLEGAL_VALUE`; real exports do not.
+
+Pin `CAMOFOX_USER_ID` in the MCP env: without it each adapter start picks a
+random `mcp-<uuid>`, so an import lands in a session that the next start
+won't reuse.
 
 
 ⚠ **A bare `camofox-browser` dies in any shell that did not source `env.sh`.**
