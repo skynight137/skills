@@ -41,6 +41,14 @@ exactly this):
 bash -c '. "${XDG_CONFIG_HOME:-$HOME/.config}/camofox/env.sh"; exec camofox-browser'
 ```
 
+Verified on repl-cfx (2026-10-31): headless launch works **without Xvfb**
+(the "xvfb not available, falling back to headless" warn is non-fatal), but the
+engine takes ~24s to warm up — poll `/health` for `browserRunning:true` before
+first navigation, don't treat an early `running:false` as a failure. In a
+**non-interactive** ssh/workflow shell, env.sh alone is NOT enough: node itself
+dies `libatomic.so.1` unless the toolchain rc was sourced first, so use
+`source "$REPL_HOME/.config/bashrc"; . "$XDG_CONFIG_HOME/camofox/env.sh"`.
+
 ⚠ **A bare `camofox-browser` dies in any shell that did not source `env.sh`.**
 The npm binary is a JS entry point: it cannot self-apply `LD_LIBRARY_PATH`, so
 the GTK closure must already be in the process env. A **non-interactive** shell
