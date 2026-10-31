@@ -324,7 +324,14 @@ fi
 
 # Prerequisites OK. env.sh APPENDS the closure, so an inherited LD_LIBRARY_PATH
 # (the [userenv.shared] pool with libatomic) is preserved, not clobbered.
+#
+# env.sh drops the ambient CAMOFOX_ACCESS_KEY for loopback convenience, but
+# this launcher is the PUBLIC path: the .replit workflow publishes the port
+# (waitForPort=80), so the superkey must survive — without it every route,
+# tabs included, is open to anyone holding the URL.
+_CAMOFOX_KEY="${CAMOFOX_ACCESS_KEY:-}"
 . "$ENVSH"
+[ -n "$_CAMOFOX_KEY" ] && export CAMOFOX_ACCESS_KEY="$_CAMOFOX_KEY"
 exec camofox-browser "$@"
 EOF
   chmod +x "$f"
