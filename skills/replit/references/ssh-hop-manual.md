@@ -51,7 +51,7 @@ StrictModes no
 LogLevel VERBOSE
 ```
 
-Keep it under `~/.ssh/join-sshd/` so the user's own `authorized_keys` and
+Keep it under `~/.ssh/join-tailnet/` so the user's own `authorized_keys` and
 `sshd_config` are untouched.
 
 - **Allocate a free high port (6800-family) and check the owner first.** On a

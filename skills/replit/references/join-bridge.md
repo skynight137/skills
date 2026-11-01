@@ -195,15 +195,17 @@ is the operator's decision per machine, so it is pinned where the machine is des
 
 `--tailscale` is the binary install; `--join` is the machine entering the tailnet —
 until it joins, no other machine can reach it, so `join` names the act. The state dir
-keeps `join-sshd` on purpose: moving it would mint a new sshd host key and every
-client's `known_hosts` would warn.
+is `join-tailnet`: it holds the whole join state (host key, sshd config, hop key,
+logs), not just sshd. It was `join-sshd` until the 2026-11 rename — the rename mints
+a new sshd host key on any box that updates in place, so expect one `known_hosts`
+warning per client on first reconnect; `clean_tailscale` sweeps the legacy dir.
 
 What `install_join` does, in order (all idempotent, re-run to repair):
 
 1. `~/.ssh` → symlink to `$REPL_HOME/.ssh` (persistent). An existing `~/.ssh` is
    moved in first, not discarded, so the operator's own `config`/keys survive a
    restart too.
-2. host key + `authorized_keys` + `sshd_config` under `$REPL_HOME/.ssh/join-sshd/`;
+2. host key + `authorized_keys` + `sshd_config` under `$REPL_HOME/.ssh/join-tailnet/`;
    the hop key is added once, duplicates are grepped out.
 3. `sshd -t`, start detached, then **verify the banner and loopback auth**; a live
    `sshd` is skipped rather than killed (killing it cuts the current session).
@@ -272,7 +274,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
 
 - `~/.ssh` itself is a symlink into `$REPL_HOME/.ssh` (persistent, so ssh `config`
   and `known_hosts` also survive); host key, sshd config, authorized key, log →
-  `$REPL_HOME/.ssh/join-sshd/`; tailnet node state →
+  `$REPL_HOME/.ssh/join-tailnet/`; tailnet node state →
   `$REPL_HOME/.local/share/tailscale/state/`; managed `tailscale`/`tailscaled` binaries →
   `$REPL_HOME/.local/bin/`. Nothing a reboot needs may live in `$HOME`.
 - a node whose key sits in `$HOME` re-registers from scratch on every boot: new `100.x`
@@ -419,7 +421,7 @@ Once the `Host` block works, the next failure mode is the ssh *call*, not the bo
   the bind race and you debug the bind failure instead of the real error.
 - `pkill -f "sshd -f …"` also matches the wrapper of the very command you are
   running and kills it; use `pkill -x sshd`.
-- `pkill -f 'join-sshd/sshd_config'` kills **every** join listener on the box, not just
+- `pkill -f 'join-tailnet/sshd_config'` kills **every** join listener on the box, not just
   the port you meant: the pattern is the shared config path. Restart the one you still
   need with `--join` (and `RS_PORT=` if it is not the default) right after.
 - GNU sed here rejects `|` as the `s` delimiter on these `args`/quote patterns

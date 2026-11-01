@@ -351,6 +351,19 @@ clean_tailscale() {
   pkill -f -- "$RS_DIR/sshd_config" 2>/dev/null || true
   sleep 1
 
+  # Pre-rename state dir (join-sshd era): a box whose skill was updated in
+  # place still runs its sshd from the legacy dir until the workflow
+  # restarts — stop that listener too, or the rename leaves a live daemon
+  # behind on the same port.
+  local legacy_dir="${REPL_HOME:-$WORKSPACE}/.ssh/join-sshd"
+  if [[ "$legacy_dir" != "$RS_DIR" && -d "$legacy_dir" ]]; then
+    if [ -f "$legacy_dir/sshd.pid" ]; then
+      kill "$(cat "$legacy_dir/sshd.pid")" 2>/dev/null || true
+    fi
+    pkill -f -- "$legacy_dir/sshd_config" 2>/dev/null || true
+    sleep 1
+  fi
+
   # tailscaled: matched through OUR socket, not by name, so a client on another
   # socket (test node, second tailnet) keeps running.
   if [ -n "$sock" ]; then
@@ -391,6 +404,10 @@ clean_tailscale() {
 
   rm -rf "$RS_DIR"
   ok "join sshd dihapus ($RS_DIR)"
+  if [[ "$legacy_dir" != "$RS_DIR" && -d "$legacy_dir" ]]; then
+    rm -rf "$legacy_dir"
+    ok "legacy join sshd dihapus ($legacy_dir)"
+  fi
   # Identity policy: KEEP the node key by default. Deleting it makes the next
   # join register a NEW node while the old one lingers offline in the admin
   # console (stacked machines). With the state kept, `tailscale up` reuses the

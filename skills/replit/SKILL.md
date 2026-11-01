@@ -348,10 +348,11 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
    whole join down (binaries + sshd + node state + the ssh wiring) because tailscale is what
    backs it; `--clean join` only reads like the install flag and misleads. One target, one
    owner, nothing left behind for a second call to find.
-4. **Feature names, not legacy prefixes.** State dir `$RS_DIR` is `$REPL_HOME/.ssh/join-sshd`
-   and the hop key tag is `hermes-join-hop`; the merge-era `e2e-sshd`/`e2e-hop` names are gone.
-   Renaming the state dir mints a new sshd host key — old `known_hosts` lines rot, so the
-   clean sweeps `[host]:$RS_PORT` too.
+4. **Feature names, not legacy prefixes.** State dir `$RS_DIR` is `$REPL_HOME/.ssh/join-tailnet`
+   and the hop key tag is `hermes-join-hop`; the merge-era `e2e-sshd`/`e2e-hop` names and the
+   later `join-sshd` dir name are gone (the dir holds the whole tailnet-join state, not just
+   sshd). Renaming the state dir mints a new sshd host key — old `known_hosts` lines rot, so
+   the clean sweeps `[host]:$RS_PORT` too, and `clean_tailscale` sweeps the legacy dir name.
 5. Make the unknown-option arm `die` with the new spelling in the hint (`die "Unknown option
    '$1'. … sudah digabung jadi --join"`). Without it an unknown flag leaves every
    `INSTALL_*` false and the guard at the bottom falls through to `INSTALL_ALL` — one stale
