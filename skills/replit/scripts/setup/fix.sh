@@ -71,12 +71,6 @@ fix_derive_wiring() {
   if [[ -x "$XDG_BIN_HOME/ori" ]]; then
     record_tool_env_vars ORI_CONFIG_DIR; record_tool_path_dirs "$XDG_BIN_HOME"
   fi
-  # CLIProxyAPI: the app dir is baked as an env var so login flags and the
-  # serve command can be run without repeating --config. The rc block prepends
-  # the dir too (the binary itself is symlinked into XDG_BIN_HOME).
-  if [[ -x "$CLIPROXY_HOME/cli-proxy-api" ]]; then
-    record_tool_env_vars CLIPROXY_HOME; record_tool_path_dirs "$XDG_BIN_HOME" "$CLIPROXY_HOME"
-  fi
   # Camofox: the npm binary is the marker (installed globally, on PATH).
   if [[ -x "$XDG_BIN_HOME/camofox-browser" || -x "$NODE_DIR/bin/camofox-browser" ]]; then
     record_tool_env_vars CAMOUFOX_INSTALL_DIR; record_tool_path_dirs "$XDG_BIN_HOME"

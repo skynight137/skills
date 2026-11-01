@@ -32,15 +32,6 @@ Options:
                         Its \$HERMES_HOME/tools/* dirs stay OFF the user PATH, so
                         a user's `npm i -g` cannot land in Hermes' prefix.
   -ori, --openrouterai  Install ORI coding tool (direct SHA256-verified binary into XDG_BIN_HOME)
-  -cp, --cliproxy       Install CLIProxyAPI (CLIProxyAPI_<ver>_linux_<arch> release
-                        tarball, SHA256-verified against checksums.txt) into
-                        $CLIPROXY_HOME + 'cli-proxy-api' symlink on PATH.
-                        Bridges CLI OAuth subscriptions (Codex/Claude/Antigravity/
-                        Gemini CLI/Kimi/xAI) into OpenAI/Claude/Gemini APIs on
-                        port 8317. Existing config.yaml is NEVER overwritten.
-                        After install, log in accounts with:
-                          cli-proxy-api --config $CLIPROXY_HOME/config.yaml
-                          cli-proxy-api -codex-login -no-browser   # remote-safe
   -r, --rclone              Install rclone (static binary from downloads.rclone.org into XDG_BIN_HOME)
   -q, --qbt                 Install qBittorrent-nox (static binary from GitHub releases)
   -a2, --aria2              Install aria2c (static musl binary from GitHub releases)
@@ -95,9 +86,10 @@ Options:
                         Bare --clean / -c opens the CLEAN PICK-MENU (tick the
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
-                        --clean node|uv|android-tools|oc|opencode|ollama|
-                        claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|
-                        cloudflared|tailscale|sshx removes one tool
+                        --clean node|uv|android-tools|zsh|oc|opencode|ollama|
+                        claude|hermes|ori|camofox|hermes-chromium|llm-wiki|
+                        rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx
+                        removes one tool
                         (tailscale = biner + sshd join + state + wiring ssh).
                         Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
@@ -107,8 +99,7 @@ Options:
                         to $XDG_CONFIG_HOME/hermes/hermes-backup.zip BEFORE its
                         dir is removed (left intact if the backup fails);
                         ollama models and
-                        camofox server state are preserved; cliproxy keeps
-                        config + OAuth logins.
+                        camofox server state are preserved.
                         NON-INTERACTIVE: a bare \`--clean\` with no target is
                         REFUSED (it would wipe everything, Hermes included).
                         Use \`--clean all -y\` to confirm a full wipe.
@@ -146,7 +137,6 @@ parse_args() {
       -cl|--claude)              INSTALL_CLAUDE=true ;;
       -ha|--hermes)              INSTALL_HERMES=true ;;
       -ori|--openrouterai)       INSTALL_ORI=true ;;
-      -cp|--cliproxy)            INSTALL_CLIPROXY=true ;;
       -r|--rclone)               INSTALL_RCLONE=true ;;
       -q|--qbt)                  INSTALL_QBT=true ;;
       -a2|--aria2)               INSTALL_ARIA2=true ;;
@@ -198,9 +188,9 @@ parse_args() {
   # Every install flag belongs in this guard: one that is missing makes a run
   # with ONLY that flag fall through to INSTALL_ALL (= installs everything).
   if ! $CLEAN && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
-     && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
+     && ! $INSTALL_ZSH && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
-     && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
+     && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
      && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN \
      && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
@@ -226,7 +216,6 @@ parse_args() {
     INSTALL_TAILSCALE=true
     INSTALL_SSHX=true
     INSTALL_JOIN=true
-    INSTALL_CLIPROXY=true
     INSTALL_CAMOFOX=true
     INSTALL_HERMES_CHROMIUM=true
   fi
@@ -461,6 +450,8 @@ if [ -r /etc/ssl/certs/ca-certificates.crt ]; then
   export SSL_CERT_DIR=/etc/ssl/certs
   export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
   export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+  export GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt
+  export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 fi
 
 # Hermes PM stages its own x64 Node tarball AND --node installs the official
@@ -914,6 +905,7 @@ _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
   GIT_CONFIG_GLOBAL \
   npm_config_dangerously_allow_all_scripts NIX_SSL_CERT_FILE \
   SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE \
+  GIT_SSL_CAINFO AWS_CA_BUNDLE \
   TAILSCALE_NODE_NAME)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT

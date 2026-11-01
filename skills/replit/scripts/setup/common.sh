@@ -11,7 +11,7 @@ NPM_GLOBAL_PREFIX="${npm_config_prefix:-}"
 npm_config_prefix="$NODE_DIR"
 # Replit's package firewall rewrites registries to an internal HTTP mirror
 # (http://package-firewall.replit.internal/...). npm >= 12 refuses non-https
-# URLs, so in-process npm installs (cliproxy, hermes, camofox) fail unless the
+# URLs, so in-process npm installs (hermes, camofox) fail unless the
 # public https registries are forced for THIS run — emit_managed_block() only
 # writes them into the emitted rc for future shells.
 if [[ "${npm_config_registry:-}" != https://* ]]; then
@@ -53,8 +53,12 @@ if [[ -r /etc/ssl/certs/ca-certificates.crt ]]; then
   SSL_CERT_DIR=/etc/ssl/certs
   NODE_EXTRA_CA_CERTS="$SSL_CERT_FILE"
   REQUESTS_CA_BUNDLE="$SSL_CERT_FILE"
-  export SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE
-  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE)
+  # git, the AWS SDKs and requests each read their OWN variable name and do
+  # not fall back to SSL_CERT_FILE — point all three at the same bundle.
+  GIT_SSL_CAINFO="$SSL_CERT_FILE"
+  AWS_CA_BUNDLE="$SSL_CERT_FILE"
+  export SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE GIT_SSL_CAINFO AWS_CA_BUNDLE
+  _TLS_ENV_VARS=(SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE GIT_SSL_CAINFO AWS_CA_BUNDLE)
 fi
 
 ORI_CONFIG_DIR="$XDG_CONFIG_HOME/ori"
@@ -88,18 +92,6 @@ ZSH_PROFILE="$NIX_PROFILE_DIR/zsh"
 ZSH_DIR="$XDG_DATA_HOME/oh-my-zsh"
 ZSH_DOTDIR="$XDG_CONFIG_HOME/zsh"
 export ZDOTDIR="$ZSH_DOTDIR"
-
-# CLIProxyAPI — persistent app dir. Follows the XDG rule every other tool
-# uses ($XDG_CONFIG_HOME/<tool>), so it does NOT scatter a dir in the
-# workspace root next to the user's repos. A pre-existing legacy manual
-# install at $REPL_HOME/cli-proxy is still honored (see install_cliproxy),
-# so nobody's config/ OAuth logins get orphaned by the move.
-CLIPROXY_LEGACY_HOME="${REPL_HOME:-$HOME}/cli-proxy"
-if [[ -f "$CLIPROXY_LEGACY_HOME/config.yaml" ]]; then
-  CLIPROXY_HOME="$CLIPROXY_LEGACY_HOME"
-else
-  CLIPROXY_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/cli-proxy"
-fi
 
 OLLAMA_INSTALL_DIR="$XDG_DATA_HOME/ollama"
 OLLAMA_MODELS="$OLLAMA_INSTALL_DIR/models"
@@ -226,6 +218,7 @@ seed_tool_wiring(){
   # install functions) so --clean can resolve line owners without
   # running an installer. wire_tool is an idempotent map assignment.
   wire_tool uv UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH -- "$XDG_BIN_HOME"
+  wire_tool zsh ZDOTDIR -- "$XDG_BIN_HOME"
   wire_tool android JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS -- "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
   wire_tool node NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   wire_tool opencode OPENCODE_CONFIG_DIR -- "$XDG_BIN_HOME"
@@ -240,7 +233,6 @@ seed_tool_wiring(){
   wire_tool cloudflared -- "$XDG_BIN_HOME"
   wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET -- "$XDG_BIN_HOME"
   wire_tool sshx -- "$XDG_BIN_HOME"
-  wire_tool cliproxy CLIPROXY_HOME -- "$XDG_BIN_HOME" "$CLIPROXY_HOME"
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
     CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"
   wire_tool hermes-chromium HERMES_CHROME_STATE -- "$XDG_BIN_HOME"
@@ -271,7 +263,6 @@ INSTALL_TAILSCALE=false
 INSTALL_SSHX=false
 INSTALL_JOIN=false
 WF=false # --workflow: workflow mode (stream logs to the terminal, keep the job alive)
-INSTALL_CLIPROXY=false
 INSTALL_CAMOFOX=false
 INSTALL_HERMES_CHROMIUM=false
 INSTALL_LLM_WIKI=false

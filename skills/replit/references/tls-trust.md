@@ -49,7 +49,7 @@ missing file, and a missing `SSL_CERT_FILE` fails every TLS client hard (Node th
 
 Current generator (`setup/rc.sh`, `setup/common.sh`): guarded on
 `[ -r /etc/ssl/certs/ca-certificates.crt ]` and exports the system bundle for
-`SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` and `REQUESTS_CA_BUNDLE`.
+`SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO` and `AWS_CA_BUNDLE`.
 `NIX_SSL_CERT_FILE` is not set: nix resolves its own cache without it
 (`nix flake metadata nixpkgs` verified against Replit's mirror) and nothing else reads
 it. Confirm the state on your branch before assuming:

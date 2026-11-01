@@ -21,7 +21,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 : "${RS_PORT:=6800}"
-RS_DIR="${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/join-sshd}"
+RS_DIR="${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/join-tailnet}"
 RS_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")/../.." 2>/dev/null && pwd)"
 
 __rs_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }

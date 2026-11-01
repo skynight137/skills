@@ -39,6 +39,7 @@ other lane assumes its persistence rules.
 | You want to… | Read | Scripts |
 |---|---|---|
 | persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `dot_replit.py` |
+| add a tool to setup.sh, decide where its payload/config/cache lives, name a flag or var | `references/toolchain-layout.md` | `scripts/setup/` |
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `start-replit-chromium.sh` |
 | open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
@@ -46,7 +47,6 @@ other lane assumes its persistence rules.
 | run a desktop GUI app (AppImage/Tauri/GTK) headless — Xvfb, window manager, software GL, EGL/loader traps | `headless-gui-linux` skill | `start.sh`-style launcher, `xwininfo -root -tree` gates |
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
 | compare every browser lane on this box (versions, loads, webdriver/stealth, WebGL) — full run report | `references/browser-compare-report.md` | `start-replit-chromium.sh`, `resolve-libs.sh`, `launch-hermes-chrome` |
-| bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 | make an HTTPS client (Python, Node, git, uv) trust the Replit proxy without disabling verification | `references/tls-trust.md` | `setup/rc.sh`, `setup/common.sh` (TLS block) |
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | decide which ports may be public on Replit, and how to expose one (declared in `.replit`, edge opens only after a restart; supported list = 80, 3000-3003, 4200, 5000, 5173, 6000, 6800, 8000, 8008, 8080, 8081, 8099, 9000) | `references/public-ports.md` | — |
@@ -154,7 +154,7 @@ without ripgrep.
     archive copied to `$XDG_CONFIG_HOME/hermes/hermes-backup.zip` (OUTSIDE the
     removed dir) first and left intact if the backup fails (manual-zip
     fallback when the CLI is unavailable); ollama models + camofox server state
-    are preserved; cliproxy keeps config/OAuth logins. A bare non-interactive
+    are preserved. A bare non-interactive
     `--clean` is REFUSED (use `--clean all -y`).
   - **A `clean_*` must undo everything its `install_*` created, not just the directory.**
     The leftovers are the ones that rot: entries the installer appended to shared files
@@ -192,11 +192,7 @@ without ripgrep.
   Pitfall encoded in the script: `--fix` never execs the `hermes` launcher —
   any subcommand can boot the full source-update cycle (venv sync, npm build,
   GB-scale runtime clone). config.yaml is edited with `yq -i` when available
-  (awk fallback), then verified. `--cliproxy` installs CLIProxyAPI (its
-  `$CLIPROXY_HOME` follows XDG: `$XDG_CONFIG_HOME/cli-proxy`, honoring a
-  legacy `$REPL_HOME/cli-proxy`) — see `references/cliproxy.md`;
-  `--clean cliproxy` keeps config + OAuth logins.
-  `--camofox` installs the **npm-global** Camofox browser
+  (awk fallback), then verified. `--camofox` installs the **npm-global** Camofox browser
   (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
   `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + WebGL
   auto-skip, and writes a runtime env snippet **plus a launcher shim**
@@ -352,10 +348,11 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
    whole join down (binaries + sshd + node state + the ssh wiring) because tailscale is what
    backs it; `--clean join` only reads like the install flag and misleads. One target, one
    owner, nothing left behind for a second call to find.
-4. **Feature names, not legacy prefixes.** State dir `$RS_DIR` is `$REPL_HOME/.ssh/join-sshd`
-   and the hop key tag is `hermes-join-hop`; the merge-era `e2e-sshd`/`e2e-hop` names are gone.
-   Renaming the state dir mints a new sshd host key — old `known_hosts` lines rot, so the
-   clean sweeps `[host]:$RS_PORT` too.
+4. **Feature names, not legacy prefixes.** State dir `$RS_DIR` is `$REPL_HOME/.ssh/join-tailnet`
+   and the hop key tag is `hermes-join-hop`; the merge-era `e2e-sshd`/`e2e-hop` names and the
+   later `join-sshd` dir name are gone (the dir holds the whole tailnet-join state, not just
+   sshd). Renaming the state dir mints a new sshd host key — old `known_hosts` lines rot, so
+   the clean sweeps `[host]:$RS_PORT` too, and `clean_tailscale` sweeps the legacy dir name.
 5. Make the unknown-option arm `die` with the new spelling in the hint (`die "Unknown option
    '$1'. … sudah digabung jadi --join"`). Without it an unknown flag leaves every
    `INSTALL_*` false and the guard at the bottom falls through to `INSTALL_ALL` — one stale
@@ -394,7 +391,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
 - Do NOT delete the user-bin launcher forwarders (`hermes`, `hermes-acp`, `hermes-agent` in `$HOME/.local/bin`). Hermes publishes them itself (`_launchers.py::expose_cli` → `_publish_conveniences`) and re-creates them on every install/update, so removing them is futile; and `hermes-agent` exists ONLY as that forwarder (`.hermes/bin` stages `hermes` + `hermes-acp` only), so removing it deletes the command outright. The forwarders exec the durable `$HERMES_HOME/hermes-agent/.hermes/bin/*` launcher, not an ephemeral path — check whether the framework owns and republishes a file before treating it as stale clutter.
 - Every tool's wiring has to exist in THREE places, or it is half-wired: the installer (`record_tool_env_vars` / `record_tool_path_dirs`), `fix_derive_wiring`, and a `doctor` gate. `fix_derive_wiring` is what makes `--fix` able to rebuild the line on a box where that tool is present but is not being installed this run; without that branch `--fix` silently cannot restore it, so the wiring survives only until something rewrites the rc. Gate the doctor check on the block's CONTENT (`grep -qE '^export[[:space:]]+ZDOTDIR=' "$BASHRC"`), never on a marker or on a file existing — a marker check passes while the export is gone.
 - Do not define `XDG_STATE_HOME`. No script reads it, so it is dead config.
-- Point the TLS variables at the platform store, never at `$SYSTEM_CERTIFICATE_PATH`. `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` and `REQUESTS_CA_BUNDLE` come from `/etc/ssl/certs/ca-certificates.crt` when it is readable. The Nix cacert bundle has **none** of the Replit roots (0 Replit-named subjects vs 2 in the system bundle: "Replit internal proxy Root CA …", "Replit Localhost Development CA"), so wiring it in replaces a store that knows the proxy with one that does not — public hosts keep answering 200 while proxied ones fail — and being a `/nix/store` path it can be GC'd into a missing `SSL_CERT_FILE`, which breaks every TLS client outright. `NIX_SSL_CERT_FILE` is deliberately not set: nothing we run reads it and nix resolves its own cache without it.
+- Point the TLS variables at the platform store, never at `$SYSTEM_CERTIFICATE_PATH`. `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO` and `AWS_CA_BUNDLE` come from `/etc/ssl/certs/ca-certificates.crt` when it is readable. The Nix cacert bundle has **none** of the Replit roots (0 Replit-named subjects vs 2 in the system bundle: "Replit internal proxy Root CA …", "Replit Localhost Development CA"), so wiring it in replaces a store that knows the proxy with one that does not — public hosts keep answering 200 while proxied ones fail — and being a `/nix/store` path it can be GC'd into a missing `SSL_CERT_FILE`, which breaks every TLS client outright. `NIX_SSL_CERT_FILE` is deliberately not set: nothing we run reads it and nix resolves its own cache without it.
 - Never set `npm_config_dangerously_allow_all_scripts`. It bypasses npm's install-script review for every install (upstream: "strongly discouraged"), including packages explicitly denied. npm ≥ 12 blocks unapproved dependency install scripts while npm 10/11 only warn, so the flag buys nothing on a box running npm 11 and silently disables the guard the moment npm 12 shows up. Allow scripts per project: `allowScripts` in `package.json`, or `npm approve-scripts`.
 - Generated `hermes` aliases call bare `hermes`, not `$XDG_BIN_HOME/hermes`. The managed block registers the real launcher dir (`$HERMES_LAUNCHER_DIR` = `$HERMES_HOME/hermes-agent/.hermes/bin`), which is the only provider of `hermes` / `hermes-acp` on this box, so bare `hermes` resolves there — or through Hermes' own `$HOME/.local/bin` forwarder, which execs the same binary. A `$XDG_BIN_HOME/hermes` alias points outside both.
 - Verify generated rc output before committing: call the emitter directly (`emit_managed_block` with `REPLIT_MODE=true`), `bash -n` the output, grep for the removed names, then source the output in a clean shell and run each alias. A text check passes an alias that cannot run.
@@ -403,7 +400,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
 - The block text in `emit_managed_block` sits in an UNQUOTED heredoc (`<<EOF`), so `$VAR` expands at emit time and **backticks or `$(...)` inside it execute**. A backtick pair in a comment (`` `npm i -g` ``) ran `hermes`/`hermes-acp` at emit time, which then hung the whole `setup.sh` run waiting on stdin. Write emitted prose without backticks; escape (`\$VAR`) anything that must reach the file literally. Test the emitter against a COPY of the rc and with stdin closed (`</dev/null`) before running it for real: with `BASHRC` unset, the strip step's `awk "$BASHRC"` reads **stdin** and blocks forever instead of failing. After an emit, grep the file for a stray backtick and the log for `command not found` — those are the fingerprints of a comment that ran (a stray `` `npm approve-scripts` `` in a comment is enough to make `npm` execute during `setup.sh`).
 - Test an alias from a sourced file, not on the line that sources it: bash parses the file's aliases only after that line. Run `shopt -s expand_aliases`, then `source rc.sh`, then the alias on its own line.
 - Registry settings in the emitted block are plain exports, not `${VAR:-default}`, so the public registries win over a firewall value set earlier. `PIP_TRUSTED_HOST` is also a plain export.
-- **The emitted rc is for future shells — a run that itself installs npm packages must override the registry env IN-PROCESS too (common.sh at source time).** On Replit the inherited `npm_config_registry` is the internal HTTP mirror (`http://package-firewall.replit.internal/...`) and npm >= 12 refuses non-https, so npm-based installs (cliproxy, hermes, camofox) die during the very run that should install them; force the public https registries when the inherited value is not `https://*`.
+- **The emitted rc is for future shells — a run that itself installs npm packages must override the registry env IN-PROCESS too (common.sh at source time).** On Replit the inherited `npm_config_registry` is the internal HTTP mirror (`http://package-firewall.replit.internal/...`) and npm >= 12 refuses non-https, so npm-based installs (hermes, camofox) die during the very run that should install them; force the public https registries when the inherited value is not `https://*`.
 - `--fix` runs the `setup/` code of the checkout it is launched from. Run it from the branch under test. A `main` checkout re-emits the old block, so the live `.config/bashrc` will not show a fix that is still in review.
 
 ## Camofox tuning

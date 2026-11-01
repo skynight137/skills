@@ -113,13 +113,14 @@ clean_paths_for() {
     android)       echo "$JAVA_HOME $SDK (binaries: java/adb/sdkmanager/…)" ;;
     uv)            echo "uv/uvx binaries, $XDG_DATA_HOME/uv, uv cache" ;;
     node)          echo "$NODE_DIR + node/npm/npx symlinks" ;;
+    zsh)           echo "$ZSH_PROFILE (nix profile), $ZSH_DIR, $ZSH_DOTDIR, zsh/fzf symlinks" ;;
     opencode)      echo "$XDG_BIN_HOME/opencode, $OPENCODE_CONFIG_DIR" ;;
     ollama)        echo "$OLLAMA_INSTALL_DIR binaries (MODELS PRESERVED)" ;;
     claude)        echo "$XDG_BIN_HOME/claude" ;;
-    hermes)        echo "$HERMES_HOME (backed up via hermes CLI first), hermes launchers" ;;
+    hermes)        echo "$HERMES_HOME (backed up via hermes CLI first), hermes launchers, hermes-chromium closure prep" ;;
     ori)           echo "$XDG_BIN_HOME/ori" ;;
-    cliproxy)      echo "cli-proxy-api binary (config + OAuth logins PRESERVED)" ;;
     camofox)       echo "npm package, $CAMOUFOX_INSTALL_DIR engine, closure (server state PRESERVED)" ;;
+    hermes-chromium) echo "$HERMES_CHROME_STATE closure + launch-hermes-chrome launcher (the browser itself is Hermes-managed; untouched)" ;;
     rclone)        echo "$XDG_BIN_HOME/rclone" ;;
     qbt)           echo "$XDG_BIN_HOME/qbittorrent-nox" ;;
     aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
@@ -189,6 +190,16 @@ clean_node() {
   ok "Node.js removed"
 }
 
+clean_zsh() {
+  if ! _present "$ZSH_PROFILE" "$ZSH_DIR" "$ZSH_DOTDIR" "$XDG_BIN_HOME/zsh"; then
+    nothing_removed "zsh"; return 0
+  fi
+  step "Removing zsh"
+  rm -rf "$ZSH_PROFILE" "$ZSH_DIR" "$ZSH_DOTDIR"
+  rm_bin zsh fzf
+  ok "zsh removed"
+}
+
 clean_opencode() {
   if ! _present "$XDG_BIN_HOME/opencode" "$OPENCODE_CONFIG_DIR" \
        && ! _npm_global_installed "opencode-ai"; then
@@ -237,22 +248,29 @@ clean_claude() {
 }
 
 clean_hermes() {
-  if ! _present "$HERMES_HOME" "$XDG_BIN_HOME/hermes"; then
-    nothing_removed "Hermes Agent"; return 0
+  if _present "$HERMES_HOME" "$XDG_BIN_HOME/hermes"; then
+    step "Removing Hermes Agent"
+    # User data (config.yaml, .env, auth.json, sessions, memories, cron, skills,
+    # state.db) lives in $HERMES_HOME — back it up BEFORE the rm. If the backup
+    # cannot be produced, do NOT delete: a silent loss of the whole agent config
+    # is exactly the failure this guards against.
+    if ! back_up_tool hermes; then
+      warn "Hermes NOT removed — backup failed; $HERMES_HOME left intact"
+      _CLEAN_SKIPPED+=("hermes")
+      return 0
+    fi
+    rm_data hermes "$HERMES_HOME"
+    rm_bin hermes hermes-agent hermes-acp
+    ok "Hermes Agent removed"
+  else
+    nothing_removed "Hermes Agent"
   fi
-  step "Removing Hermes Agent"
-  # User data (config.yaml, .env, auth.json, sessions, memories, cron, skills,
-  # state.db) lives in $HERMES_HOME — back it up BEFORE the rm. If the backup
-  # cannot be produced, do NOT delete: a silent loss of the whole agent config
-  # is exactly the failure this guards against.
-  if ! back_up_tool hermes; then
-    warn "Hermes NOT removed — backup failed; $HERMES_HOME left intact"
-    _CLEAN_SKIPPED+=("hermes")
-    return 0
-  fi
-  rm_data hermes "$HERMES_HOME"
-  rm_bin hermes hermes-agent hermes-acp
-  ok "Hermes Agent removed"
+  # The Chromium closure prep (hermes-chromium) exists only to serve Hermes:
+  # without Hermes its closure dir, launcher and env wiring are orphans, so
+  # sweep them with their owner. The backup-failure return above skips this —
+  # a surviving Hermes keeps its browser prep. The standalone
+  # `--clean hermes-chromium` remains for closure-only resets.
+  clean_hermes_chromium
 }
 
 clean_ori() {
@@ -318,8 +336,12 @@ clean_cloudflared() {
 
 clean_tailscale() {
   local home ours=() sock="${TAILSCALE_SOCKET:-}"
+  local legacy_dir="${REPL_HOME:-$WORKSPACE}/.ssh/join-sshd"
   home="$(cd "$HOME" && pwd)"
   [ -d "$RS_DIR" ] && ours+=("$RS_DIR")
+  # The legacy dir counts toward presence too: a box with only the
+  # pre-rename dir left must not short-circuit to "nothing removed".
+  [ -d "$legacy_dir" ] && ours+=("$legacy_dir")
   [ -n "$sock" ] && ours+=("$sock")
   local bins=("$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled")
   _present "${ours[@]}" "${bins[@]}" || { nothing_removed "tailscale"; return 0; }
@@ -332,6 +354,18 @@ clean_tailscale() {
   fi
   pkill -f -- "$RS_DIR/sshd_config" 2>/dev/null || true
   sleep 1
+
+  # Pre-rename state dir (join-sshd era): a box whose skill was updated in
+  # place still runs its sshd from the legacy dir until the workflow
+  # restarts — stop that listener too, or the rename leaves a live daemon
+  # behind on the same port.
+  if [[ "$legacy_dir" != "$RS_DIR" && -d "$legacy_dir" ]]; then
+    if [ -f "$legacy_dir/sshd.pid" ]; then
+      kill "$(cat "$legacy_dir/sshd.pid")" 2>/dev/null || true
+    fi
+    pkill -f -- "$legacy_dir/sshd_config" 2>/dev/null || true
+    sleep 1
+  fi
 
   # tailscaled: matched through OUR socket, not by name, so a client on another
   # socket (test node, second tailnet) keeps running.
@@ -373,6 +407,10 @@ clean_tailscale() {
 
   rm -rf "$RS_DIR"
   ok "join sshd dihapus ($RS_DIR)"
+  if [[ "$legacy_dir" != "$RS_DIR" && -d "$legacy_dir" ]]; then
+    rm -rf "$legacy_dir"
+    ok "legacy join sshd dihapus ($legacy_dir)"
+  fi
   # Identity policy: KEEP the node key by default. Deleting it makes the next
   # join register a NEW node while the old one lingers offline in the admin
   # console (stacked machines). With the state kept, `tailscale up` reuses the
@@ -411,18 +449,6 @@ clean_llm_wiki() {
   step "Removing llm-wiki server"
   rm -rf "$dir"
   ok "llm-wiki removed ($dir — wiki data untouched)"
-}
-
-# CLIProxyAPI — removes the symlink + binary only. $CLIPROXY_HOME (config.yaml
-# with keys/OAuth logins, server.log, ~/.cli-proxy-api auth dir) is the user's
-# data and is deliberately PRESERVED; delete the dir by hand for a full wipe.
-clean_cliproxy() {
-  if ! _present "$XDG_BIN_HOME/cli-proxy-api" "$CLIPROXY_HOME/cli-proxy-api"; then
-    nothing_removed "CLIProxyAPI"; return 0
-  fi
-  step "Removing CLIProxyAPI (config + OAuth logins kept in $CLIPROXY_HOME)"
-  rm -f "$XDG_BIN_HOME/cli-proxy-api" "$CLIPROXY_HOME/cli-proxy-api"
-  ok "CLIProxyAPI removed (preserved: $CLIPROXY_HOME)"
 }
 
 # Strip the '# >>> toolchain >>>' … '# <<< toolchain <<<' managed block from a
@@ -539,7 +565,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -556,7 +582,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -584,6 +610,7 @@ clean() {
       clean_android
       clean_uv
       clean_node
+      clean_zsh
       clean_opencode
       clean_ollama
       clean_claude
@@ -596,12 +623,12 @@ clean() {
       clean_cloudflared
       clean_tailscale
       clean_sshx
-      clean_cliproxy
       clean_camofox
+      clean_hermes_chromium
       clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -616,18 +643,22 @@ clean() {
       # markers, which strip_tool_wiring cannot see — drop it here too, so a
       # clean on an rc never re-written after the merge still works.
       [[ "$wire_label" == hermes ]] && strip_legacy_hermes_block "$BASHRC"
+      # hermes-chromium's wiring is part of hermes' lifecycle: its
+      # AGENT_BROWSER_EXECUTABLE_PATH export must not outlive Hermes.
+      [[ "$wire_label" == hermes && -f "$BASHRC" ]] && strip_tool_wiring hermes-chromium "$BASHRC"
       local replit_file="${REPL_HOME:-$WORKSPACE}/.replit"
       [[ "$REPLIT_MODE" == true && -f "$replit_file" ]] && strip_userenv_keys "$wire_label" "$replit_file"
+      [[ "$REPLIT_MODE" == true && -f "$replit_file" && "$wire_label" == hermes ]] && strip_userenv_keys hermes-chromium "$replit_file"
       case "$CLEAN_TARGET" in
         android-tools) clean_android ;;
         uv)            clean_uv ;;
         node)          clean_node ;;
+        zsh)           clean_zsh ;;
         oc|opencode)   clean_opencode ;;
         ollama)        clean_ollama ;;
         claude)        clean_claude ;;
         hermes)        clean_hermes ;;
         ori)           clean_ori ;;
-        cliproxy)      clean_cliproxy ;;
         camofox)       clean_camofox ;;
         llm-wiki)      clean_llm_wiki ;;
         hermes-chromium) clean_hermes_chromium ;;
@@ -668,19 +699,23 @@ clean() {
           claude)   clean_claude ;;
           hermes)   clean_hermes ;;
           ori)      clean_ori ;;
-          cliproxy) clean_cliproxy ;;
           camofox)  clean_camofox ;;
+          hermes-chromium) clean_hermes_chromium ;;
+          zsh)      clean_zsh ;;
           llm-wiki) clean_llm_wiki ;;
           rclone)   clean_rclone ;;
           qbt)      clean_qbt ;;
           aria2)    clean_aria2 ;;
           ffmpeg)   clean_ffmpeg ;;
+          cloudflared) clean_cloudflared ;;
+          tailscale)   clean_tailscale ;;
+          sshx)        clean_sshx ;;
           *)        warn "Unknown clean target '$label' — skipped" ;;
         esac
       done
       ;;
     *)
-      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, camofox, llm-wiki, rclone, qbt, aria2, ffmpeg"
+      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, zsh, oc, opencode, ollama, claude, hermes, ori, camofox, hermes-chromium, llm-wiki, rclone, qbt, aria2, ffmpeg, cloudflared, tailscale, sshx"
       ;;
   esac
   cat <<CLEANMSG

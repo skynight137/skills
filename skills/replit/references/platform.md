@@ -276,8 +276,9 @@ shells get the same view):
   ("Replit internal proxy Root CA …", "Replit Localhost Development CA") and it
   is a pinned `/nix/store` path, so a rebuild or GC turns `SSL_CERT_FILE` into a
   missing file, which breaks every TLS client. The rc block guards on the system
-  bundle and exports `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS` and
-  `REQUESTS_CA_BUNDLE` from it. `NIX_SSL_CERT_FILE` is no longer set — nix
+  bundle and exports `SSL_CERT_FILE`, `SSL_CERT_DIR`, `NODE_EXTRA_CA_CERTS`,
+  `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO` and `AWS_CA_BUNDLE` from it.
+  `NIX_SSL_CERT_FILE` is no longer set — nix
   resolves its own cache without it (`nix flake metadata nixpkgs` verified) —
   and curl/node/python all reach the registry with these unset.
 
