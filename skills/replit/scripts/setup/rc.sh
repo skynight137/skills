@@ -450,6 +450,8 @@ if [ -r /etc/ssl/certs/ca-certificates.crt ]; then
   export SSL_CERT_DIR=/etc/ssl/certs
   export NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
   export REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+  export GIT_SSL_CAINFO=/etc/ssl/certs/ca-certificates.crt
+  export AWS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 fi
 
 # Hermes PM stages its own x64 Node tarball AND --node installs the official
@@ -903,6 +905,7 @@ _FIXED_RC_ENV_VARS=("${_REGISTRY_ENV_VARS[@]}" \
   GIT_CONFIG_GLOBAL \
   npm_config_dangerously_allow_all_scripts NIX_SSL_CERT_FILE \
   SSL_CERT_FILE SSL_CERT_DIR NODE_EXTRA_CA_CERTS REQUESTS_CA_BUNDLE \
+  GIT_SSL_CAINFO AWS_CA_BUNDLE \
   TAILSCALE_NODE_NAME)
 
 # Carry forwards tool vars a previous run left in [userenv.shared] WITHOUT
