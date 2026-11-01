@@ -59,13 +59,6 @@ TAILSCALE_PKGS_BASE="https://pkgs.tailscale.com/stable"
 # tarball the sshx.io/get script pulls. No checksum published.
 SSHX_DOWNLOAD_BASE="https://s3.amazonaws.com/sshx"
 
-# CLIProxyAPI (router-for-me) — OAuth CLI-subscription bridge (Claude Code /
-# Codex / Antigravity / Gemini CLI / Kimi / xAI → OpenAI+Claude+Gemini APIs).
-# Release asset name embeds the version (CLIProxyAPI_<N>_linux_amd64.tar.gz),
-# so the tarball URL comes from a resolved tag (see cliproxy_asset_name).
-CLIPROXY_REPO="router-for-me/CLIProxyAPI"
-CLIPROXY_RELEASE_BASE="https://github.com/router-for-me/CLIProxyAPI/releases"
-
 # AI agent
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 
@@ -191,7 +184,6 @@ source "$SCRIPT_DIR/setup/node_opencode.sh"
 source "$SCRIPT_DIR/setup/download.sh"
 source "$SCRIPT_DIR/setup/expose.sh"
 source "$SCRIPT_DIR/setup/join.sh"
-source "$SCRIPT_DIR/setup/cliproxy.sh"
 source "$SCRIPT_DIR/setup/camofox.sh"
 source "$SCRIPT_DIR/setup/hermes_chromium.sh"
 source "$SCRIPT_DIR/setup/llm-wiki.sh"

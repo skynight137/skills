@@ -29,7 +29,7 @@ _MENU_ITEMS=(
   "claude|Claude Code (AI Coding)"
   "hermes|Hermes (AI Agent)"
   "ori|ORI (AI Coding)"
-  "cliproxy|CLIProxyAPI (CLI OAuth → API: Codex/Claude/Antigravity)"
+  ""
   "camofox|Camofox browser (anti-detection Firefox server)"
   "rclone|rclone (cloud storage sync)"
   "qbt|qBittorrent-nox (headless BitTorrent)"
@@ -86,7 +86,6 @@ _status_init() {
     "cloudflared|cloudflared"
     "tailscale|tailscale"
     "sshx|sshx"
-    "cliproxy|cli-proxy-api"
     "camofox|camofox-browser"
     "llm-wiki|run-public.sh"
   )
@@ -246,7 +245,6 @@ _menu_apply() {
       claude)   INSTALL_CLAUDE=true ;;
       hermes)   INSTALL_HERMES=true ;;
       ori)      INSTALL_ORI=true ;;
-      cliproxy) INSTALL_CLIPROXY=true ;;
       camofox)  INSTALL_CAMOFOX=true ;;
       llmwiki|llm-wiki) INSTALL_LLM_WIKI=true ;;
       rclone)   INSTALL_RCLONE=true ;;

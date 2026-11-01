@@ -47,7 +47,6 @@ other lane assumes its persistence rules.
 | run a desktop GUI app (AppImage/Tauri/GTK) headless — Xvfb, window manager, software GL, EGL/loader traps | `headless-gui-linux` skill | `start.sh`-style launcher, `xwininfo -root -tree` gates |
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
 | compare every browser lane on this box (versions, loads, webdriver/stealth, WebGL) — full run report | `references/browser-compare-report.md` | `start-replit-chromium.sh`, `resolve-libs.sh`, `launch-hermes-chrome` |
-| bridge CLI coding subscriptions (Codex/Claude Code/Antigravity/Gemini CLI/Kimi/xAI) into OpenAI+Claude APIs on the box | `references/cliproxy.md` | `setup.sh --cliproxy` |
 | make an HTTPS client (Python, Node, git, uv) trust the Replit proxy without disabling verification | `references/tls-trust.md` | `setup/rc.sh`, `setup/common.sh` (TLS block) |
 | expose a service to a browser (declared ports, port-in-URL, HTTP-only router, Tailscale userspace, `[[workflows]]` wiring, hardcoded binds) | `references/exposing-ports.md` | `.replit` `[[ports]]` / `[[workflows]]` |
 | decide which ports may be public on Replit, and how to expose one (declared in `.replit`, edge opens only after a restart; supported list = 80, 3000-3003, 4200, 5000, 5173, 6000, 6800, 8000, 8008, 8080, 8081, 8099, 9000) | `references/public-ports.md` | — |
@@ -155,7 +154,7 @@ without ripgrep.
     archive copied to `$XDG_CONFIG_HOME/hermes/hermes-backup.zip` (OUTSIDE the
     removed dir) first and left intact if the backup fails (manual-zip
     fallback when the CLI is unavailable); ollama models + camofox server state
-    are preserved; cliproxy keeps config/OAuth logins. A bare non-interactive
+    are preserved. A bare non-interactive
     `--clean` is REFUSED (use `--clean all -y`).
   - **A `clean_*` must undo everything its `install_*` created, not just the directory.**
     The leftovers are the ones that rot: entries the installer appended to shared files
@@ -193,11 +192,7 @@ without ripgrep.
   Pitfall encoded in the script: `--fix` never execs the `hermes` launcher —
   any subcommand can boot the full source-update cycle (venv sync, npm build,
   GB-scale runtime clone). config.yaml is edited with `yq -i` when available
-  (awk fallback), then verified. `--cliproxy` installs CLIProxyAPI (its
-  `$CLIPROXY_HOME` follows XDG: `$XDG_CONFIG_HOME/cli-proxy`, honoring a
-  legacy `$REPL_HOME/cli-proxy`) — see `references/cliproxy.md`;
-  `--clean cliproxy` keeps config + OAuth logins.
-  `--camofox` installs the **npm-global** Camofox browser
+  (awk fallback), then verified. `--camofox` installs the **npm-global** Camofox browser
   (`@askjo/camofox-browser` + `camofox-browser-mcp` on PATH, engine in
   `$XDG_CACHE_HOME/camoufox`), applies the Replit lib closure + WebGL
   auto-skip, and writes a runtime env snippet **plus a launcher shim**
@@ -404,7 +399,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
 - The block text in `emit_managed_block` sits in an UNQUOTED heredoc (`<<EOF`), so `$VAR` expands at emit time and **backticks or `$(...)` inside it execute**. A backtick pair in a comment (`` `npm i -g` ``) ran `hermes`/`hermes-acp` at emit time, which then hung the whole `setup.sh` run waiting on stdin. Write emitted prose without backticks; escape (`\$VAR`) anything that must reach the file literally. Test the emitter against a COPY of the rc and with stdin closed (`</dev/null`) before running it for real: with `BASHRC` unset, the strip step's `awk "$BASHRC"` reads **stdin** and blocks forever instead of failing. After an emit, grep the file for a stray backtick and the log for `command not found` — those are the fingerprints of a comment that ran (a stray `` `npm approve-scripts` `` in a comment is enough to make `npm` execute during `setup.sh`).
 - Test an alias from a sourced file, not on the line that sources it: bash parses the file's aliases only after that line. Run `shopt -s expand_aliases`, then `source rc.sh`, then the alias on its own line.
 - Registry settings in the emitted block are plain exports, not `${VAR:-default}`, so the public registries win over a firewall value set earlier. `PIP_TRUSTED_HOST` is also a plain export.
-- **The emitted rc is for future shells — a run that itself installs npm packages must override the registry env IN-PROCESS too (common.sh at source time).** On Replit the inherited `npm_config_registry` is the internal HTTP mirror (`http://package-firewall.replit.internal/...`) and npm >= 12 refuses non-https, so npm-based installs (cliproxy, hermes, camofox) die during the very run that should install them; force the public https registries when the inherited value is not `https://*`.
+- **The emitted rc is for future shells — a run that itself installs npm packages must override the registry env IN-PROCESS too (common.sh at source time).** On Replit the inherited `npm_config_registry` is the internal HTTP mirror (`http://package-firewall.replit.internal/...`) and npm >= 12 refuses non-https, so npm-based installs (hermes, camofox) die during the very run that should install them; force the public https registries when the inherited value is not `https://*`.
 - `--fix` runs the `setup/` code of the checkout it is launched from. Run it from the branch under test. A `main` checkout re-emits the old block, so the live `.config/bashrc` will not show a fix that is still in review.
 
 ## Camofox tuning

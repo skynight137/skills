@@ -13,8 +13,7 @@ tinggal di lokasi yang kena wipe.
 
 Konsekuensinya mutlak: binary, payload, config, cache, kredensial, dan state
 daemon harus berada di bawah root persisten. Default upstream yang menaruh state
-di `$HOME` (mis. `~/.cli-proxy-api`) WAJIB dipin ke lokasi persisten oleh modul
-install-nya — lihat `cliproxy_pin_authdir` sebagai contoh polanya.
+di `$HOME` WAJIB dipin ke lokasi persisten oleh modul install-nya.
 
 ## Pola path (mode Replit: XDG dir di-root ke `$REPL_HOME`)
 
@@ -22,13 +21,13 @@ install-nya — lihat `cliproxy_pin_authdir` sebagai contoh polanya.
 |---|---|---|
 | Binary / symlink di PATH | `$XDG_BIN_HOME/<tool>` | `.local/bin/rclone` |
 | Payload (dir install tool) | `$XDG_DATA_HOME/<tool>` | `.local/share/ollama`, `.local/share/llmwiki-app` |
-| Config | `$XDG_CONFIG_HOME/<tool>` | `.config/cli-proxy`, `.config/opencode` |
+| Config | `$XDG_CONFIG_HOME/<tool>` | `.config/opencode` |
 | Cache / engine besar | `$XDG_CACHE_HOME/<tool>` | `.cache/camoufox` |
-| Var home tool | `<TOOL>_HOME` → menunjuk dir data/config di atas | `CLIPROXY_HOME`, `OLLAMA_INSTALL_DIR` |
+| Var home tool | `<TOOL>_HOME` → menunjuk dir data/config di atas | `OLLAMA_INSTALL_DIR` |
 
 Pengecualian warisan (jangan ditiru tool baru, jangan diutak-atik tanpa migrasi):
 `HERMES_HOME=$REPL_HOME/.hermes`, `TAILSCALE_DATA_DIR`, `ZSH_PROFILE` di
-`$REPL_HOME/.local/nix-profiles/zsh`, dan adopt-dir lama `CLIPROXY_HOME`.
+`$REPL_HOME/.local/nix-profiles/zsh`.
 
 Mode default (non-Replit) memakai pola yang sama dengan root `$HOME` —
 didefinisikan sekali di `setup/common.sh`; modul tidak pernah meng-hardcode
@@ -48,9 +47,8 @@ didefinisikan sekali di `setup/common.sh`; modul tidak pernah meng-hardcode
 
 Kegagalan klasik di repo ini adalah permukaan yang ketinggalan: flag ada tapi
 guard tidak, fungsi clean ada tapi labelnya tidak terdaftar. Audit e2e
-2026-11-01 menemukan tiga kasus nyata (`--zsh` memicu INSTALL_ALL,
-`--clean hermes-chromium` tidak terjangkau, `cliproxy_pin_authdir` dipanggil
-tapi tidak pernah didefinisikan). Maka:
+2026-11-01 menemukan kasus nyata (`--zsh` memicu INSTALL_ALL,
+`--clean hermes-chromium` tidak terjangkau). Maka:
 
 1. `scripts/setup/<tool>.sh` — `install_<tool>()`: idempotent, unduhan
    diverifikasi checksum bila upstream menyediakan, paket sistem report-only.

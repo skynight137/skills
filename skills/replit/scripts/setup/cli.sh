@@ -41,7 +41,7 @@ main() {
       && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
       && ! $INSTALL_ZSH && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
-      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
+      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
       && ! $INSTALL_CAMOFOX && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
       && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN; then
       die "No tools selected. Aborting."
@@ -131,7 +131,6 @@ main() {
     $INSTALL_TAILSCALE || run_install_step tailscale install_tailscale
     run_install_step join install_join
   fi
-  $INSTALL_CLIPROXY && run_install_step cliproxy           install_cliproxy
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
   # llm-wiki's server half is plain Node: on a fresh box without node the install used to
@@ -177,7 +176,7 @@ main() {
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
    cloudflared  tailscale  sshx
-   cli-proxy-api  camofox-browser
+   camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   else
@@ -197,7 +196,7 @@ SUMMARY
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
    cloudflared  tailscale  sshx
-   cli-proxy-api  camofox-browser
+   camofox-browser
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi

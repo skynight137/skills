@@ -94,18 +94,6 @@ doctor() {
     warn "Camofox: NOT FOUND (camofox-browser) — install with --camofox, or ignore if not used"
     fail=1
   fi
-  # CLIProxyAPI has NO --version flag: any unknown flag prints the version
-  # banner and exits 2, so the generic check_tool would report a false
-  # 'FAILED to run'. Probe the banner text instead of the exit code.
-  if [[ -x "$XDG_BIN_HOME/cli-proxy-api" || -x "$CLIPROXY_HOME/cli-proxy-api" ]]; then
-    local _cpa_bin="$XDG_BIN_HOME/cli-proxy-api"; [[ -x "$_cpa_bin" ]] || _cpa_bin="$CLIPROXY_HOME/cli-proxy-api"
-    local _cpa_out; _cpa_out="$("$_cpa_bin" --help 2>&1 | grep -m1 '^CLIProxyAPI Version' || true)"
-    if [[ -n "$_cpa_out" ]]; then ok "CLIProxyAPI: $_cpa_out"; else warn "CLIProxyAPI: present but did not print its version banner ($_cpa_bin)"; fail=1; fi
-  else
-    warn "CLIProxyAPI: NOT FOUND ($XDG_BIN_HOME/cli-proxy-api) — install with --cliproxy, or ignore if not used"
-    fail=1
-  fi
-
   case ":$_ENTRY_PATH:" in
     *":$XDG_BIN_HOME:"*) ok "XDG_BIN_HOME on PATH" ;;
     *) warn "XDG_BIN_HOME NOT on PATH (open a new shell)"; fail=1 ;;

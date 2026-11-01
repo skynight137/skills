@@ -168,7 +168,7 @@ bash setup.sh --<tool>                           # reinstall after the test
   process reads; write a NEW file name for the corrected re-run instead of editing
   in place.
 - **Verify paths are mode-dependent.** Default mode installs to `$HOME/.local/bin`;
-  replit mode to `$REPL_HOME/.local/bin`; npm-global tools (camofox, cliproxy) land
+  replit mode to `$REPL_HOME/.local/bin`; npm-global tools (camofox) land
   in the npm prefix `$XDG_DATA_HOME/node/bin` even in replit mode — and
   `/run/replit/env/latest` may not export `XDG_BIN_HOME` at all. Probe with `find`
   over both locations instead of a hardcoded `~/.local/bin`: a wrong-path verify
