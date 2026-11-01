@@ -24,6 +24,9 @@
 #   * a window manager is mandatory — without one GTK windows are created but never mapped
 #   * shared-mime-info must be on XDG_DATA_DIRS, or gdk-pixbuf rejects every image format
 #   * the app needs node >= 18 for the server, and curl for the download
+#   * the bundle's own libwayland-client must not be the copy mesa's EGL loads, or the
+#     WebProcess aborts (EGL_BAD_PARAMETER) and the window stays blank — the module
+#     pins the nix wayland + mesa into .libdirs.pre, which start-app.sh reads first
 
 # Xvfb + a window manager are system-ish; the container has neither root nor apt, so
 # they come from nix. Always into a PER-USER store + the nixenv mount namespace, never
@@ -124,7 +127,7 @@ install_llm_wiki() {
   # unless its /lib is listed in .ldpath — so the binary extracts fine and then dies
   # with "libX11.so.6: cannot open shared object file". install.sh cannot know which
   # libs the bundle wants; resolve them from the binary's own "not found" list.
-  local bin="$dest/squashfs-root/usr/bin/llm-wiki" miss dirs="" p d lib
+  local bin="$dest/squashfs-root/usr/bin/llm-wiki" miss dirs="" pre="" p d lib
   miss=$(ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u)
   if [ -n "$miss" ] && [ -n "$(nix_bin)" ]; then
     step "llm-wiki: resolving $(wc -l <<<"$miss") shared libs from nix"
@@ -136,9 +139,13 @@ install_llm_wiki() {
     for p in $("$(nix_bin)" --store "$st" build --no-link --print-out-paths \
       nixpkgs#xorg.libX11 nixpkgs#xorg.libxcb nixpkgs#libdrm nixpkgs#mesa nixpkgs#expat \
       nixpkgs#fribidi nixpkgs#harfbuzz nixpkgs#zlib nixpkgs#libgpg-error \
-      nixpkgs#stdenv.cc.cc.lib 2>/dev/null); do
+      nixpkgs#wayland nixpkgs#stdenv.cc.cc.lib 2>/dev/null); do
       d="$st/nix/store/${p##*/}/lib"
       [ -d "$d" ] && dirs="${dirs:+$dirs:}$d"
+      # wayland + mesa are also pinned into .libdirs.pre below: collect their dirs
+      # here, identified by the soname each one must actually provide.
+      [ -e "$d/libwayland-client.so.0" ] && pre="${pre:+$pre:}$d"
+      [ -e "$d/libEGL_mesa.so.0" ] && pre="${pre:+$pre:}$d"
     done
     # Some libs sit in a non-default output (libcom_err in e2fsprogs), so nothing above
     # covers them: locate the file by name and take its directory. Our own store first.
@@ -168,6 +175,22 @@ install_llm_wiki() {
       done
       [ -n "$dirs" ] && printf '%s\n' "$dirs" >"$dest/.ldpath"
       miss=$(LD_LIBRARY_PATH="$dirs" ldd "$bin" 2>/dev/null | awk '/not found/{print $1}' | sort -u | tr '\n' ' ')
+    fi
+    # Pin the nix wayland + mesa ahead of the bundle (start-app.sh reads
+    # .libdirs.pre FIRST). The bundle ships its own libwayland-client and the app
+    # binary resolves it via $ORIGIN/../lib, so wayland never appears in the
+    # "not found" list above and the closure never contained a nix copy. Harmless
+    # for GTK — fatal for EGL: WebKit dlopens mesa's libEGL_mesa, whose
+    # libwayland-client is by then already loaded (the bundle's Ubuntu build), and
+    # eglGetDisplay fails with EGL_BAD_PARAMETER. The WebProcess aborts, the API
+    # and MCP stay healthy, and the desktop window renders blank — the failure
+    # looks like a VNC problem and is not. Probed per-library on repl-wiki
+    # (2026-11-01): of the bundle's libs only libwayland-client breaks the nix
+    # mesa EGL stack. install.sh creates .libdirs.pre empty; a non-empty file is
+    # an operator override and is never clobbered.
+    if [ -n "$pre" ] && [ ! -s "$dest/.libdirs.pre" ]; then
+      printf '%s\n' "$pre" >"$dest/.libdirs.pre"
+      echo "  llm-wiki: .libdirs.pre <- nix wayland + mesa (the bundle libwayland breaks mesa EGL)"
     fi
     [ -n "$miss" ] && warn "llm-wiki: still unresolved: $miss (add the dir to $dest/.ldpath)"
   fi

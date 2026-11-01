@@ -173,7 +173,10 @@ fi
 # start-app.sh already assembles LD_LIBRARY_PATH (bundle/lib + system dirs + whatever
 # .ldpath/.libdirs.pre list) and finds shared-mime-info itself, including in the nix
 # store. These files only matter when GTK still cannot load a library on THIS machine.
-[ -f "$APP/.libdirs.pre" ] || { : >"$APP/.libdirs.pre"; say "created empty .libdirs.pre (fill it only if the app fails to load a library)"; }
+# Under setup.sh the module fills .libdirs.pre itself (nix wayland + mesa — the
+# bundle's libwayland-client breaks mesa's EGL and blanks the window); left empty
+# here, it stays a manual override: dirs that must resolve BEFORE the bundle.
+[ -f "$APP/.libdirs.pre" ] || { : >"$APP/.libdirs.pre"; say "created empty .libdirs.pre (setup.sh fills it on nix; otherwise fill only if the app fails to load a library)"; }
 
 # --- 5. display sanity ------------------------------------------------------
 command -v Xvfb >/dev/null 2>&1 || say "note: no Xvfb — the app needs a display (nix build nixpkgs#xvfb)"

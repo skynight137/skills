@@ -51,6 +51,18 @@ Node ≥ 18 sudah ada di box ini (dipasang `setup.sh --node`); di host non-nix p
   tanpa database MIME, semua gambar "unrecognized" dan GTK abort di `gtkiconhelper.c`.
 - AppImage ini **tidak** menyertakan loader PNG; kalau GTK mati karena ikon, pakai
   `pixbuf/loaders.cache` (loader harus cocok ABI: header 2.42.8 untuk lib bundle 2.42.8).
+- **Window blank padahal API/MCP sehat** — `WebKitWebProcess` tidak pernah lahir,
+  log app memuat `Could not create default EGL display: EGL_BAD_PARAMETER.
+  Aborting...`. Akar masalahnya bukan VNC: bundle membawa `libwayland-client.so.0`
+  sendiri dan binary app me-resolve-nya lewat `$ORIGIN/../lib`, jadi lib itu tidak
+  pernah muncul di daftar "not found" dan closure nix tidak pernah berisi wayland.
+  WebKit me-dlopen `libEGL_mesa` milik mesa nix, yang `libwayland-client`-nya sudah
+  terlanjur ter-load dari bundle (build Ubuntu) → `eglGetDisplay` NO_DISPLAY.
+  Bisect per-lib (probe EGL via ctypes, repl-wiki 2026-11-01): dari seluruh lib
+  bundle hanya `libwayland-client.so.0` yang membunuh display. Fix: modul setup
+  menulis dir lib wayland + mesa nix ke `.libdirs.pre` (dibaca `start-app.sh`
+  paling pertama, sebelum bundle) — jalan dari `setup.sh --llm-wiki` saja; file
+  yang sudah terisi manual tidak ditimpa.
 
 ### Xvfb/fluxbox otomatis (`_llm_wiki_provision_display`)
 
