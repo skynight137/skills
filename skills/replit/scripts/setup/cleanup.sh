@@ -336,8 +336,12 @@ clean_cloudflared() {
 
 clean_tailscale() {
   local home ours=() sock="${TAILSCALE_SOCKET:-}"
+  local legacy_dir="${REPL_HOME:-$WORKSPACE}/.ssh/join-sshd"
   home="$(cd "$HOME" && pwd)"
   [ -d "$RS_DIR" ] && ours+=("$RS_DIR")
+  # The legacy dir counts toward presence too: a box with only the
+  # pre-rename dir left must not short-circuit to "nothing removed".
+  [ -d "$legacy_dir" ] && ours+=("$legacy_dir")
   [ -n "$sock" ] && ours+=("$sock")
   local bins=("$XDG_BIN_HOME/tailscale" "$XDG_BIN_HOME/tailscaled" "$XDG_BIN_HOME/launch-tailscaled")
   _present "${ours[@]}" "${bins[@]}" || { nothing_removed "tailscale"; return 0; }
@@ -355,7 +359,6 @@ clean_tailscale() {
   # place still runs its sshd from the legacy dir until the workflow
   # restarts — stop that listener too, or the rename leaves a live daemon
   # behind on the same port.
-  local legacy_dir="${REPL_HOME:-$WORKSPACE}/.ssh/join-sshd"
   if [[ "$legacy_dir" != "$RS_DIR" && -d "$legacy_dir" ]]; then
     if [ -f "$legacy_dir/sshd.pid" ]; then
       kill "$(cat "$legacy_dir/sshd.pid")" 2>/dev/null || true
@@ -704,6 +707,9 @@ clean() {
           qbt)      clean_qbt ;;
           aria2)    clean_aria2 ;;
           ffmpeg)   clean_ffmpeg ;;
+          cloudflared) clean_cloudflared ;;
+          tailscale)   clean_tailscale ;;
+          sshx)        clean_sshx ;;
           *)        warn "Unknown clean target '$label' — skipped" ;;
         esac
       done
