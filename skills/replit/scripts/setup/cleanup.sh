@@ -718,6 +718,27 @@ clean() {
       die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, zsh, oc, opencode, ollama, claude, hermes, ori, camofox, hermes-chromium, llm-wiki, rclone, qbt, aria2, ffmpeg, cloudflared, tailscale, sshx"
       ;;
   esac
+  # Manifest mop-up: remove anything install recorded for the labels this
+  # run cleaned that the per-tool clean did not reach (e.g. a payload whose
+  # derived location moved between install and clean). Labels in
+  # _CLEAN_SKIPPED are exempt — a tool that refused removal (Hermes backup
+  # failure) keeps its payload, manifest or not. tailscale has no manifest
+  # records by design, so it is a no-op there.
+  local -a _sweep_labels=()
+  case "$CLEAN_TARGET" in
+    all) _sweep_labels=(android uv node zsh opencode ollama claude hermes ori camofox hermes-chromium llm-wiki rclone qbt aria2 ffmpeg cloudflared sshx) ;;
+    "")  _sweep_labels=("${CLEAN_TOOLS[@]}") ;;
+    *)   local _one="$CLEAN_TARGET"
+         [[ "$_one" == android-tools ]] && _one=android
+         [[ "$_one" == oc ]] && _one=opencode
+         _sweep_labels=("$_one") ;;
+  esac
+  local _lbl
+  for _lbl in "${_sweep_labels[@]}"; do
+    [[ " ${_CLEAN_SKIPPED[*]} " == *" $_lbl "* ]] && continue
+    manifest_sweep "$_lbl" || true
+  done
+
   cat <<CLEANMSG
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  Cleanup complete for: $summary

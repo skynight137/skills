@@ -134,10 +134,22 @@ without ripgrep.
 
 ## Scripts (entry point in `scripts/`, modules in `scripts/setup/`)
 
-- `setup.sh` — thin entry point: mode/path/version config, then `source`s the
-  modules in `scripts/setup/` (`common` → `ui_menu`/`bin`/`fix`/
+- `setup.sh` — thin entry point: install-root resolution + version config,
+  then `source`s the modules in `scripts/setup/` (`common` → `ui_menu`/`bin`/`fix`/
   `rc`/`doctor`/installers/`cleanup` → `cli`). All wiring helpers resolve via
   `$SCRIPT_DIR`, so every module and `setup/` must sit beside `setup.sh`.
+  **Install root**: resolved ONCE by `setup/root.sh` before anything derives
+  a path — `SETUP_ROOT` env (explicit operator choice, recorded for later
+  runs) → recorded root → platform workspace (`$REPL_HOME`) → die. There is
+  no silent fallback layout any more; every run prints
+  `setup root: <path> (source: …)`, and a root outside the persistent
+  workspace warns (it is wiped on recreate) but proceeds when chosen
+  explicitly. Installs record their payload paths in a manifest
+  (`<root>/.config/replit-setup/manifest.tsv`) via `run_install_step`;
+  `clean()` sweeps those exact paths after the per-tool clean
+  (Hermes-backup-skipped labels exempt; tailscale/join are not recorded —
+  live-daemon state owned by `clean_tailscale`). Layout rules:
+  `references/toolchain-layout.md`.
   It is idempotent toolchain/env provisioning (node/uv/python pins, LD
   paths, rc chain); run it after any recreate. `--doctor` verifies installs +
   wiring read-only (exit 2 = wiring gaps); `--fix` rewrites ALL wiring

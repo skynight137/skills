@@ -118,6 +118,8 @@ Examples:
   bash setup.sh --clean --all   same thing (flag form)
   bash setup.sh --clean node    remove Node.js
   bash setup.sh --clean all -y  remove everything, no prompt
+  SETUP_ROOT=/path bash setup.sh --uv   install under /path instead of the
+                        workspace (choice is recorded; later runs reuse it)
 
 After setup, every new shell sources the generated shell rc automatically, so
 'java', 'python', 'uv', 'node', 'adb', 'opencode' are on PATH directly.

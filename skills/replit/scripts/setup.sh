@@ -7,18 +7,29 @@ set -e
 # (dot_replit.py) lives next to setup.sh.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-# Mode (auto-detected from the environment — no flag) ─────────────────────────
-# Set BEFORE the XDG defaults below because the path roots depend on mode:
-#   replit:  everything under $REPL_HOME (persistent; $HOME is wiped)
-#   default: $HOME (foklow/official layout: ~/.local, ~/.config, ~/.bashrc)
-# "Are we on Replit?" is asked of the environment, not arguments: the
-# Replit agent sets REPL_HOME to the workspace. If $REPL_HOME is a real
-# directory we install the persistent Replit layout; otherwise the $HOME layout.
-if [[ -n "${REPL_HOME:-}" && -d "${REPL_HOME:-}" ]]; then
-  REPLIT_MODE=true
-else
-  REPLIT_MODE=false
+# Install root (resolved once — no flag, one env override) ──────────────────
+# Set BEFORE the XDG defaults below because every path root depends on it.
+# Resolve the install root ONCE, before anything else derives a path
+# (setup/root.sh). The resolver owns $REPL_HOME from here on: explicit
+# $SETUP_ROOT -> recorded root -> platform workspace -> die. The old silent
+# default layout (WORKSPACE=$(pwd), $HOME roots) was a trap — a shell missing
+# the platform env installed into the wiped $HOME tree without a word — so
+# it is gone: every root uses the persistent layout, and an unresolvable
+# root stops the run before anything installs.
+source "$SCRIPT_DIR/setup/root.sh"
+resolve_setup_root || exit 1
+[[ "$SETUP_ROOT_SOURCE" == env ]] && record_setup_root
+setup_root_persistence_check
+mkdir -p "$SETUP_ROOT"
+# A root other than the platform home must also own the XDG dirs: the
+# platform pre-sets them under ITS workspace, and "pre-set wins" below
+# would otherwise leak installs back into the platform workspace.
+if [[ "$SETUP_ROOT" != "$(__setup_platform_home)" ]]; then
+  unset XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_BIN_HOME
 fi
+REPL_HOME="$SETUP_ROOT"
+REPLIT_MODE=true
+printf 'setup root: %s (source: %s)\n' "$SETUP_ROOT" "$SETUP_ROOT_SOURCE"
 
 # Version / URL config ──────────────────────────────────────────────────────
 JAVA_MAJOR="24"
@@ -63,40 +74,25 @@ SSHX_DOWNLOAD_BASE="https://s3.amazonaws.com/sshx"
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 
 # Paths ──────────────────────────────────────────────────────────────────────
-# replit mode (auto): $REPL_HOME is the only persistent dir ($HOME wiped on
-# restart), so the workspace and every XDG dir must live under it.
-# default (foklow/official layout): workspace is the current dir, XDG dirs
-# under $HOME.
-if [[ "$REPLIT_MODE" == true ]]; then
-  WORKSPACE="$REPL_HOME"
-else
-  WORKSPACE="$(pwd)"
-fi
+# The resolved root ($REPL_HOME, owned by the resolver above) is the
+# persistent dir ($HOME is wiped on restart), so the workspace and every
+# XDG dir live under it.
+WORKSPACE="$REPL_HOME"
 cd "$WORKSPACE"
 
-# XDG roots per mode (the design decision env auto-detection drives) ──────────
-# Both branches must end with the FIVE vars below set, each honoring a
-# pre-set XDG_* value (the platform/operator may have chosen one):
-#   XDG_CONFIG_HOME XDG_CACHE_HOME XDG_DATA_HOME XDG_BIN_HOME
-# replit:  pre-set wins, else fall back UNDER $WORKSPACE (persistent).
-#          $HOME is forbidden — wiped on restart.
-# default: pre-set wins, else canonical $HOME paths (~/.config, ...).
-# NOTE (soft assumption — tweak if needed): the rc target in replit mode is
-# replit rc target: $WORKSPACE/.config/bashrc - the Replit bootstrap auto-sources it (see _bashrc_candidate).
-# fallback file if that is ever not writable. XDG_BIN_HOME is the single PATH
-# entry every tool binary lands in. Var names below are load-bearing: the
-# rest of the script, the emitted shell rc, and [userenv.shared] all read them.
-if [[ "$REPLIT_MODE" == true ]]; then
-  XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$WORKSPACE/.config}"
-  XDG_CACHE_HOME="${XDG_CACHE_HOME:-$WORKSPACE/.cache}"
-  XDG_DATA_HOME="${XDG_DATA_HOME:-$WORKSPACE/.local/share}"
-  XDG_BIN_HOME="${XDG_BIN_HOME:-$REPL_HOME/.local/bin}"
-else
-  XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
-  XDG_CACHE_HOME="${XDG_CACHE_HOME:-$HOME/.cache}"
-  XDG_DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
-  XDG_BIN_HOME="${XDG_BIN_HOME:-${REPL_HOME:-$HOME}/.local/bin}"
-fi
+# XDG roots ──────────────────────────────────────────────────────────────────
+# The FOUR vars below must end set, each honoring a pre-set XDG_* value
+# (the platform/operator may have chosen one) and otherwise falling back
+# UNDER $WORKSPACE (persistent). $HOME is forbidden — wiped on restart.
+# NOTE (soft assumption — tweak if needed): the rc target is
+# $WORKSPACE/.config/bashrc — the Replit bootstrap auto-sources it (see
+# _bashrc_candidate). XDG_BIN_HOME is the single PATH entry every tool
+# binary lands in. Var names below are load-bearing: the rest of the
+# script, the emitted shell rc, and [userenv.shared] all read them.
+XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$WORKSPACE/.config}"
+XDG_CACHE_HOME="${XDG_CACHE_HOME:-$WORKSPACE/.cache}"
+XDG_DATA_HOME="${XDG_DATA_HOME:-$WORKSPACE/.local/share}"
+XDG_BIN_HOME="${XDG_BIN_HOME:-$REPL_HOME/.local/bin}"
 export XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_BIN_HOME WORKSPACE
 
 # Binaries live in XDG_BIN_HOME (single PATH entry). Use directly —
@@ -122,12 +118,7 @@ export XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_BIN_HOME WORKSPACE
 #     value (and $BASHRC) legitimately win. For workflows the pin is the
 #     only thing that reaches them. The platform overriding the key in
 #     consoles is harmless — $BASHRC still wins there.
-# default (non-replit): $HOME/.bashrc.
 _bashrc_candidate(){
-  if [[ "$REPLIT_MODE" != true ]]; then
-    echo "$HOME/.bashrc"
-    return
-  fi
   echo "$WORKSPACE/.config/bashrc"
 }
 BASHRC="${BASHRC:-$(_bashrc_candidate)}"

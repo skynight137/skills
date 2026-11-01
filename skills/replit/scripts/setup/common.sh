@@ -326,6 +326,9 @@ run_install_step() {
     _INSTALL_FAILURES+=("$label")
     return 0
   fi
+  # Record what this install created (setup/root.sh): clean() later sweeps
+  # exactly these paths instead of only re-deriving them.
+  manifest_record_for "$label"
   return 0
 }
 
