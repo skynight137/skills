@@ -95,9 +95,10 @@ Options:
                         Bare --clean / -c opens the CLEAN PICK-MENU (tick the
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
-                        --clean node|uv|android-tools|oc|opencode|ollama|
-                        claude|hermes|ori|cliproxy|camofox|rclone|qbt|aria2|ffmpeg|
-                        cloudflared|tailscale|sshx removes one tool
+                        --clean node|uv|android-tools|zsh|oc|opencode|ollama|
+                        claude|hermes|ori|cliproxy|camofox|hermes-chromium|llm-wiki|
+                        rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx
+                        removes one tool
                         (tailscale = biner + sshd join + state + wiring ssh).
                         Flag-driven cleanup prompts for confirmation
                         unless -y/--yes is given.
@@ -198,7 +199,7 @@ parse_args() {
   # Every install flag belongs in this guard: one that is missing makes a run
   # with ONLY that flag fall through to INSTALL_ALL (= installs everything).
   if ! $CLEAN && ! $INSTALL_ANDROID && ! $INSTALL_NODE && ! $INSTALL_UV \
-     && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
+     && ! $INSTALL_ZSH && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
      && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG && ! $INSTALL_CLIPROXY \
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \

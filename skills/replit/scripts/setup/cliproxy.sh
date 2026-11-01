@@ -17,6 +17,29 @@ cliproxy_arch() {
   esac
 }
 
+# Pin oauth.auth-dir inside $CLIPROXY_HOME (the caller explains why: the
+# upstream default "~/.cli-proxy-api" sits under $HOME, which Replit wipes on
+# recreate). Only rewrites when the value is exactly that volatile default —
+# a user-chosen path is left alone — and copies, never moves, any creds that
+# already landed in the default dir.
+cliproxy_pin_authdir() {
+  local cfg="$CLIPROXY_HOME/config.yaml" def="$HOME/.cli-proxy-api" cur=""
+  if [ -f "$cfg" ]; then
+    cur="$(sed -n 's/^[[:space:]]*auth-dir:[[:space:]]*//p' "$cfg" | head -1 | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//')"
+    cur="${cur%\"}"; cur="${cur#\"}"; cur="${cur%\'}"; cur="${cur#\'}"
+    case "$cur" in
+      '~/.cli-proxy-api'|"$def")
+        sed -i "s|^\([[:space:]]*auth-dir:[[:space:]]*\).*|\1\"$CLIPROXY_HOME/auths\"|" "$cfg"
+        echo "  cliproxy: pinned oauth.auth-dir -> $CLIPROXY_HOME/auths (the upstream default is under \$HOME, wiped on recreate)"
+        ;;
+    esac
+  fi
+  if [ -d "$def" ]; then
+    mkdir -p "$CLIPROXY_HOME/auths"
+    cp -an "$def/." "$CLIPROXY_HOME/auths/" 2>/dev/null || true
+  fi
+}
+
 install_cliproxy() {
   step "CLIProxyAPI (CLI OAuth → API bridge)"
   need_cmd tar

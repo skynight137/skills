@@ -226,6 +226,7 @@ seed_tool_wiring(){
   # install functions) so --clean can resolve line owners without
   # running an installer. wire_tool is an idempotent map assignment.
   wire_tool uv UV_PYTHON_DOWNLOADS UV_PYTHON_PREFERENCE PYTHONPATH -- "$XDG_BIN_HOME"
+  wire_tool zsh ZDOTDIR -- "$XDG_BIN_HOME"
   wire_tool android JAVA_HOME ANDROID_HOME JAVA_TOOL_OPTIONS -- "$JAVA_HOME/bin" "$SDK/cmdline-tools/bin" "$SDK/platform-tools" "$XDG_BIN_HOME"
   wire_tool node NODE_DIR npm_config_prefix "${_TLS_ENV_VARS[@]}" -- "$NODE_DIR/bin" "$WORKSPACE/node_modules/.bin" "$XDG_BIN_HOME"
   wire_tool opencode OPENCODE_CONFIG_DIR -- "$XDG_BIN_HOME"

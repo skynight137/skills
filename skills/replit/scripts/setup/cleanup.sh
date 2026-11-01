@@ -113,6 +113,7 @@ clean_paths_for() {
     android)       echo "$JAVA_HOME $SDK (binaries: java/adb/sdkmanager/…)" ;;
     uv)            echo "uv/uvx binaries, $XDG_DATA_HOME/uv, uv cache" ;;
     node)          echo "$NODE_DIR + node/npm/npx symlinks" ;;
+    zsh)           echo "$ZSH_PROFILE (nix profile), $ZSH_DIR, $ZSH_DOTDIR, zsh/fzf symlinks" ;;
     opencode)      echo "$XDG_BIN_HOME/opencode, $OPENCODE_CONFIG_DIR" ;;
     ollama)        echo "$OLLAMA_INSTALL_DIR binaries (MODELS PRESERVED)" ;;
     claude)        echo "$XDG_BIN_HOME/claude" ;;
@@ -120,6 +121,7 @@ clean_paths_for() {
     ori)           echo "$XDG_BIN_HOME/ori" ;;
     cliproxy)      echo "cli-proxy-api binary (config + OAuth logins PRESERVED)" ;;
     camofox)       echo "npm package, $CAMOUFOX_INSTALL_DIR engine, closure (server state PRESERVED)" ;;
+    hermes-chromium) echo "$HERMES_CHROME_STATE closure + launch-hermes-chrome launcher (the browser itself is Hermes-managed; untouched)" ;;
     rclone)        echo "$XDG_BIN_HOME/rclone" ;;
     qbt)           echo "$XDG_BIN_HOME/qbittorrent-nox" ;;
     aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
@@ -187,6 +189,16 @@ clean_node() {
   rm_data node "$NODE_DIR"
   rm_bin node npm npx
   ok "Node.js removed"
+}
+
+clean_zsh() {
+  if ! _present "$ZSH_PROFILE" "$ZSH_DIR" "$ZSH_DOTDIR" "$XDG_BIN_HOME/zsh"; then
+    nothing_removed "zsh"; return 0
+  fi
+  step "Removing zsh"
+  rm -rf "$ZSH_PROFILE" "$ZSH_DIR" "$ZSH_DOTDIR"
+  rm_bin zsh fzf
+  ok "zsh removed"
 }
 
 clean_opencode() {
@@ -539,7 +551,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -556,7 +568,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -584,6 +596,7 @@ clean() {
       clean_android
       clean_uv
       clean_node
+      clean_zsh
       clean_opencode
       clean_ollama
       clean_claude
@@ -598,10 +611,11 @@ clean() {
       clean_sshx
       clean_cliproxy
       clean_camofox
+      clean_hermes_chromium
       clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|cliproxy|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -622,6 +636,7 @@ clean() {
         android-tools) clean_android ;;
         uv)            clean_uv ;;
         node)          clean_node ;;
+        zsh)           clean_zsh ;;
         oc|opencode)   clean_opencode ;;
         ollama)        clean_ollama ;;
         claude)        clean_claude ;;
@@ -670,6 +685,8 @@ clean() {
           ori)      clean_ori ;;
           cliproxy) clean_cliproxy ;;
           camofox)  clean_camofox ;;
+          hermes-chromium) clean_hermes_chromium ;;
+          zsh)      clean_zsh ;;
           llm-wiki) clean_llm_wiki ;;
           rclone)   clean_rclone ;;
           qbt)      clean_qbt ;;
@@ -680,7 +697,7 @@ clean() {
       done
       ;;
     *)
-      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, oc, opencode, ollama, claude, hermes, ori, cliproxy, camofox, llm-wiki, rclone, qbt, aria2, ffmpeg"
+      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, zsh, oc, opencode, ollama, claude, hermes, ori, cliproxy, camofox, hermes-chromium, llm-wiki, rclone, qbt, aria2, ffmpeg, cloudflared, tailscale, sshx"
       ;;
   esac
   cat <<CLEANMSG
