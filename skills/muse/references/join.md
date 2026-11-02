@@ -77,6 +77,26 @@ status line before deciding no join is needed.
   pattern remains the answer for peers whose own access path mangles the
   stream (the Replit SOCKS/`nc` hop), and as belt-and-braces generally.
 
+## Fleet hop: one distributed pubkey per side
+
+Key exchange does not scale as a mesh. Both skills use a star instead:
+one **hop** identity per fleet side, whose pubkey is authorized by
+default on every box the setup touches — Replit side: `hermes-join-hop`
+(the `RS_AUTHORIZED_KEYS` default in the replit join setup); Muse side:
+**`muse-join-hop`** — the operator's main Muse VM (this box,
+`muse-join`) — seeded by `scripts/setup.sh` into the new box's
+`sshd-dir/authorized_keys` unless `RS_AUTHORIZED_KEYS` overrides it.
+Onboarding a Muse VM is then: run setup, fill the auth key, done — the
+hop can already log in; no per-machine pubkey ping-pong. A box's own
+client key needs distributing only if that box must initiate somewhere
+specific. Any-to-any traffic goes through the side's hop; cross-side
+(muse ↔ repl) uses the hop-to-hop links that already exist.
+
+`repl-test` is NOT the muse hop: it stays the Replit-side e2e target and
+the landing peer for this box's legacy reverse forward (16801). Boxes
+that still reverse into a shared peer must take distinct forward ports
+per box — the port, not the peer, is the contended resource.
+
 ## The pattern that works: reverse SSH
 
 The VM dials OUT to the peer and leaves `-R 127.0.0.1:<rport>:127.0.0.1:6800`
