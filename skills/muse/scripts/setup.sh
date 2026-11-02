@@ -182,7 +182,8 @@ TAILSCALE_NODE_NAME=muse-join
 #RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-hop default)
 #RS_REVERSE_PEER= (HOP ONLY: peer IP that receives this box's reverse forward. Leaves leave
 #  this unset — a leaf runs NO reverse loop; only the fleet hop opens one, to the repl hop.)
-#RS_REVERSE_PORT=16801 (forward port on the peer when RS_REVERSE_PEER is set)
+#RS_REVERSE_PORT=16801 (forward port on the peer when RS_REVERSE_PEER is set;
+# "auto" = claim the first free port in 16801-16899 on the peer at first run and pin it here)
 EOF
   chmod 600 "$SSHDIR/.env"
   echo "created $SSHDIR/.env — fill TAILSCALE_AUTH_KEY (600, never commit it), then re-run this script"
@@ -356,12 +357,19 @@ gen_loop() {
 #!/usr/bin/env bash
 set -u
 exec 9>"$REVDIR/\$(basename $log .log).lock"; flock -n 9 || exit 0
+PORT=$port
+if [ "\$PORT" = auto ]; then
+  . "$REVDIR/reverse-alloc.sh"
+  PORT=\$(alloc_claim_port "$SSHDIR" "$PEER" "$log" $extra) || { echo "[alloc] no port claimed in 16801-16899" >>"$log"; exit 1; }
+  if grep -q "^RS_REVERSE_PORT=" "$SSHDIR/.env" 2>/dev/null; then sed -i "s/^RS_REVERSE_PORT=.*/RS_REVERSE_PORT=\$PORT/" "$SSHDIR/.env"; else echo "RS_REVERSE_PORT=\$PORT" >>"$SSHDIR/.env"; fi
+  echo "[alloc] claimed peer port \$PORT (pinned to .env RS_REVERSE_PORT)" >>"$log"
+fi
 delay=5
 while true; do
   start=\$(date +%s)
   echo "[\$(basename $file)] dialing \$(date -Is)" >>"$log"
   ${CLEANENV[@]@Q} ssh -N \\
-    -R 127.0.0.1:$port:127.0.0.1:6800 \\
+    -R 127.0.0.1:\$PORT:127.0.0.1:6800 \\
     -p 6800 -i "$SSHDIR/id_ed25519" -o IdentitiesOnly=yes \\
     -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \\
     -o ExitOnForwardFailure=yes \\
@@ -381,6 +389,40 @@ gen_loop "$REVDIR/start-reverse.sh" "$REVDIR/reverse.log" 16800 \
 REVPORT="$(grep -E '^RS_REVERSE_PORT=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"; REVPORT="${REVPORT:-16801}"
 gen_loop "$REVDIR/start-reverse-node.sh" "$REVDIR/reverse-node.log" "$REVPORT" \
   "-o ProxyCommand=\"$BINDIR/tailscale --socket=$TSDIR/tailscaled.sock nc %h %p\""
+cat > "$REVDIR/reverse-alloc.sh" <<'EOS'
+#!/usr/bin/env bash
+# reverse-alloc.sh — claim a reverse-forward port on the peer for a
+# generated start-reverse loop whose port is "auto" (RS_REVERSE_PORT=auto).
+# The claim IS the bind: the probe ssh registers the forward with
+# ExitOnForwardFailure and runs `true`; exit 0 means the port was ours
+# for that session. A passive "is it free?" check would race — two
+# claimants can both SEE a port free, they cannot both BIND it; the
+# peer's sshd is the arbiter. "forwarding failed" advances to the
+# next candidate; any other failure retries the SAME candidate (peer
+# or network not ready — burning the range would help nobody).
+# Args: $1=SSHDIR $2=PEER $3=LOG; transport ssh args follow as $4.. (word-split by the caller's source-level expansion, like the loop's own ssh line)
+# Prints the claimed port on stdout; the caller pins it into .env.
+alloc_claim_port() {
+  local sshdir=$1 peer=$2 log=$3; shift 3
+  local cand=16801 out rc
+  while [ $cand -le 16899 ]; do
+    out=$(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy \
+      ssh -R 127.0.0.1:$cand:127.0.0.1:6800 \
+      -p 6800 -i "$sshdir/id_ed25519" -o IdentitiesOnly=yes \
+      -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+      -o ExitOnForwardFailure=yes -o ConnectTimeout=20 \
+      "$@" \
+      runner@$peer true 2>&1); rc=$?
+    if [ $rc -eq 0 ]; then echo $cand; return 0; fi
+    case "$out" in
+      *"forwarding failed"*) cand=$((cand+1));;
+      *) echo "[alloc] candidate $cand transient failure (rc=$rc), retrying same port" >>"$log"; sleep 15;;
+    esac
+  done
+  return 1
+}
+EOS
+chmod +x "$REVDIR/reverse-alloc.sh"
 # The node-carried loop must run as root (runner cannot read the client key).
 cat > "$REVDIR/check-reverse.sh" <<'EOS'
 #!/usr/bin/env bash
@@ -401,9 +443,16 @@ probe() {
 }
 probe 16800 connector
 probe 16801 node
+echo \"peer listeners 16800-16899:\"
+while read sl la ra st rest; do
+  if [ \"$st\" = 0A ]; then
+    ph=${la##*:}
+    case $ph in 41[ABCDEF][0-9A-F]|420[0-3]) echo \"  $((16#$ph))\";; esac
+  fi
+done < /proc/net/tcp
 ' 2>&1 | grep -v "Warning: Permanently"
 EOS
-sed -i "s/^probe 16801 node/probe $REVPORT node/" "$REVDIR/check-reverse.sh"
+case "$REVPORT" in *[!0-9]*|'') : ;; *) sed -i "s/^probe 16801 node/probe $REVPORT node/" "$REVDIR/check-reverse.sh";; esac
 chmod +x "$REVDIR/check-reverse.sh"
 
 }
