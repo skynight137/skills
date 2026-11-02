@@ -461,6 +461,16 @@ repo is already public.
   isolated `AuthorizedKeysFile`) is what it honours.
 - Outbound-only boxes can never be reached by dialling in; when no port is
   published the fallback is a reverse tunnel or the sshx canvas.
+- **Reverse forwards go stale silently.** A `-R` registration lives as long as
+  the sshd session does; if the client dies ungracefully (redeploy, dead
+  relay) and sshd never probes it, the port stays bound for hours and every
+  re-registration fails with `remote port forwarding failed for listen port`
+  — while the peer looks perfectly healthy. Defenses: `ClientAliveInterval 30`
+  + `ClientAliveCountMax 3` in the join sshd_config (in the setup template),
+  and on the client `ExitOnForwardFailure=yes` + `ServerAliveInterval` +
+  an exponential-backoff redial loop (5s → 300s cap), never a fixed 5s loop:
+  one unguarded loop burned 1,424 failed redials in a night against a stale
+  forward (observed 2026-11-02, repl-test ↔ muse VM).
 - **A listed peer is not a reachable machine.** Three things are required, in order:
   the peer is online in `tailscale status`, sshd was prepared *on that box*
   (`setup.sh --join`), and a hop key sits in its `authorized_keys` — which the
