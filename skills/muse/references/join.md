@@ -121,6 +121,24 @@ This removes the two failure modes of the per-box design: pubkey
 ping-pong for every new box, and several boxes contending for one
 forward port on a shared peer.
 
+## Forward port allocation (on the peer's loopback)
+
+A reverse forward registers on the PEER's 127.0.0.1, so the port
+number — not the node name — is the contended resource. One forward
+per owner per peer; the owner pins its port with `RS_REVERSE_PORT`
+in its `.env` (see Topology: leaves never register one).
+
+| Port | Owner | Status |
+| --- | --- | --- |
+| 16800 | — | retired (was the connector-carried forward) |
+| 16801 | muse-hop | active → muse-hop's join sshd, via repl-hop |
+| 16802+ | unallocated | the next hop that needs a forward takes the next free port, in order, and records it in this table |
+
+Contention needs both halves: a second box running a loop to the
+same peer AND its key accepted by that peer's sshd. The star
+topology denies both to leaves, so this table grows by one row per
+new hop, not per box.
+
 ## Session environment: sshd injects it, rc only lands you
 
 Do not deliver env vars to ssh sessions through shell rc — login,
