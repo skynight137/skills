@@ -1,0 +1,60 @@
+---
+name: muse
+description: "Muse sandbox toolkit: platform facts for the Muse personal-agent VM (systemd-nspawn container, btrfs home vs ephemeral overlay root, fake-IP DNS + CONNECT-proxy egress and its permission categories, no SHELL_ENV injection), the two Tailscale join routes (built-in connector vs userspace auth-key node) and why inbound only works as reverse SSH, and the automation trio (systemd units vs runtime cron vs hooks). Use for anything running ON a Muse VM."
+version: 1.1.0
+license: MIT
+platforms: [linux]
+compatibility: "Muse VM (hostname htch-runtime, HOME=/home/hatch, shell runs as root). Facts verified live 2026-11-01/02; re-verify with the commands in references/platform.md before quoting numbers."
+metadata:
+  hermes:
+    tags: [Muse, sandbox, nspawn, systemd, persistence, overlay, btrfs, egress, proxy, dns, tailscale, reverse-ssh, hooks, cron]
+---
+
+# Muse toolkit — one skill, four lanes
+
+Everything here is specific to running **on a Muse VM**. The platform breaks
+normal Linux assumptions (the box is a container that gets replaced, DNS lies,
+egress is gated per category), and each lane below is a verified playbook for
+one job. Facts are dated 2026-11-02; this machine's own records beat this file
+when they disagree — re-run the probes instead of trusting stale text.
+
+| You want to… | Read |
+|---|---|
+| know what survives a redeploy, where to store things, how env/users/ssh config really resolve | `references/platform.md` |
+| reach the internet or another machine, understand a blocked/reset connection, pick a permission to ask for | `references/egress.md` |
+| join a tailnet, accept or originate SSH, build remote access into this box | `references/join.md` |
+| keep a daemon alive, schedule work, or react to a condition — systemd vs cron vs hooks | `references/automation.md` |
+| stand up a FRESH Muse VM as a join/e2e target (the muse-test pattern) | `scripts/setup.sh` (self-contained installer; secrets via a 600 `.env` it templates for you). In a full repo clone, the repo-root `./setup.sh --machine muse` is the same entry via the shared dispatcher |
+
+## Hard rules (the ones that cost a night when forgotten)
+
+1. **Only `/home/hatch` persists.** The root filesystem is an overlay whose
+   writable layer lives in `/run`; a redeploy boots a fresh container from
+   the base image and re-attaches the home volume. Processes, `/etc`
+   (including users), and `/root` all reset. Anything that must survive
+   lives under `~`, and anything that must *run* needs a bootstrap that
+   reinstalls it after each redeploy.
+2. **DNS lies by design.** The built-in resolver answers every name with a
+   fake 198.18.x address. Real answers come from `dig @8.8.8.8` (only that
+   resolver answers) once External DNS is permitted. Never debug a
+   connection against a name resolved by the stock resolver.
+3. **Egress is TCP-through-gates, UDP is absent.** The gateway proxy
+   (`198.19.0.1:3128`, HTTP CONNECT) or an approved direct-TCP dial are the
+   only ways out. UDP has no plumbing at all — a permission toggle for it
+   changes nothing on the wire (verified: netcheck UDP false, raw `sendto`
+   EPERM). Design everything as outbound-initiated TCP.
+4. **Approvals attach to foreground runs.** Work that needs an egress
+   approval (a daemon's first direct dials, a first tunnel-proxy request to
+   a new address) must be launched from a foreground agent turn; background
+   jobs hit the same walls with no one to approve them and report phantom
+   "service down" failures.
+5. **Inbound does not exist; reverse does.** Neither Tailscale route accepts
+   inbound connections in this sandbox (connector by design, userspace node
+   by transport). Remote access into this box = the box dials out and
+   leaves a reverse SSH forward. Guard the redial loop with exponential
+   backoff or it will spam thousands of attempts against a stale port.
+6. **ssh reads the passwd home, not `$HOME`.** The shell runs as root
+   (passwd home `/root`, ephemeral) while `HOME=/home/hatch` (persistent).
+   Keep the canonical ssh store in the persistent tree and symlink the
+   lookup locations to it, or `ssh` silently ignores your config after
+   every redeploy.
