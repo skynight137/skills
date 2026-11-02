@@ -85,7 +85,7 @@ default on every box the setup touches — Replit side: `hermes-join-hop`
 (the `RS_AUTHORIZED_KEYS` default in the replit join setup); Muse side:
 **`muse-hop`** — the operator's main Muse VM (node
 `muse-hop`, 100.113.127.73; the node itself carries the hop name) — seeded by `scripts/setup.sh` into the new box's
-`sshd-dir/authorized_keys` unless `RS_AUTHORIZED_KEYS` overrides it.
+`join-tailnet/authorized_keys` unless `RS_AUTHORIZED_KEYS` overrides it.
 Onboarding a Muse VM is then: run setup, fill the auth key, done — the
 hop can already log in; no per-machine pubkey ping-pong. A box's own
 client key needs distributing only if that box must initiate somewhere
