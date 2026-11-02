@@ -132,7 +132,31 @@ in its `.env` (see Topology: leaves never register one).
 | --- | --- | --- |
 | 16800 | — | retired (was the connector-carried forward) |
 | 16801 | muse-hop | active → muse-hop's join sshd, via repl-hop |
-| 16802+ | unallocated | the next hop that needs a forward takes the next free port, in order, and records it in this table |
+| 16802+ | unallocated | the next hop that needs a forward claims the next free port (see Auto-allocation) and records it in this table |
+
+**Auto-allocation (`RS_REVERSE_PORT=auto`).** A box that needs a
+door does not have to be told which port is free — nobody off-box
+can know that reliably anyway. With `auto`, the generated loop
+claims one at first run (`reverse-alloc.sh`): it probes the peer
+with real registration attempts, lowest port first (16801–16899),
+each with `ExitOnForwardFailure`. **The claim is the bind** — a
+passive "is it free?" check races (two claimants can both see a
+port free; they cannot both bind it), so the peer's sshd is the
+arbiter: a probe whose forward registers wins, `forwarding failed`
+advances to the next candidate, and any other failure retries the
+same candidate (peer or network not ready). The won port is pinned
+into `.env` as a numeric `RS_REVERSE_PORT`, so every later start —
+and the next setup run, which regenerates the loop from `.env` —
+is steady on the same port; scanning happens once, not per start.
+`check-reverse.sh` prints the peer's live 16800–16899 listener map
+under its verdicts, so who holds what is always one probe away.
+Verified live 2026-11-02: a scratch loop on muse-hop with `auto`
+skipped the held 16801, claimed 16802, pinned it, and a hop through
+16802 landed on muse-hop as runner; after cleanup the peer map
+returned to 16801 only. One operational note: killing a loop's
+shell does not kill its `ssh -N` child — stop the child too (its
+cmdline carries the `-R 127.0.0.1:<port>` string), or the port
+stays held by a live session, not a zombie.
 
 Contention needs both halves: a second box running a loop to the
 same peer AND its key accepted by that peer's sshd. The star
