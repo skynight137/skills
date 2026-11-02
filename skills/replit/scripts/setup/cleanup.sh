@@ -126,7 +126,7 @@ clean_paths_for() {
     aria2)         echo "$XDG_BIN_HOME/aria2c" ;;
     ffmpeg)        echo "$XDG_BIN_HOME/ffmpeg ffprobe ffplay" ;;
     cloudflared)   echo "$XDG_BIN_HOME/cloudflared" ;;
-    tailscale)     echo "$XDG_BIN_HOME/{tailscale,tailscaled,launch-tailscaled} + $RS_DIR + state tailnet + blok ssh config & [host]:$RS_PORT di known_hosts + baris hermes-join-hop ($HOME/.ssh tetap ada)" ;;
+    tailscale)     echo "$XDG_BIN_HOME/{tailscale,tailscaled,launch-tailscaled} + $RS_DIR + state tailnet + blok ssh config & [host]:$RS_PORT di known_hosts + baris repl-hop ($HOME/.ssh tetap ada)" ;;
     sshx)          echo "$XDG_BIN_HOME/sshx" ;;
     llm-wiki)      echo "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app} (AppImage + bundle + token; WIKI DATA PRESERVED)" ;;
     *)             echo "$1" ;;
@@ -374,8 +374,8 @@ clean_tailscale() {
     sleep 1
   fi
 
-  # Hop key we appended to ~/.ssh/authorized_keys (tag: hermes-join-hop).
-  [ -f "$home/.ssh/authorized_keys" ] &&     sed -i '/hermes-join-hop/d' "$home/.ssh/authorized_keys"
+  # Hop key we appended to ~/.ssh/authorized_keys (tag: repl-hop).
+  [ -f "$home/.ssh/authorized_keys" ] &&     sed -i '/repl-hop/d' "$home/.ssh/authorized_keys"
 
   # ~/.ssh/config: remove only blocks that are ours — a Host/Match block whose body
   # names our port and a tailnet hop. Any other block stays byte-identical.

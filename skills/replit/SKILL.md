@@ -361,7 +361,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
    backs it; `--clean join` only reads like the install flag and misleads. One target, one
    owner, nothing left behind for a second call to find.
 4. **Feature names, not legacy prefixes.** State dir `$RS_DIR` is `$REPL_HOME/.ssh/join-tailnet`
-   and the hop key tag is `hermes-join-hop`; the merge-era `e2e-sshd`/`e2e-hop` names and the
+   and the hop key tag is `repl-hop`; the merge-era `e2e-sshd`/`e2e-hop` names and the
    later `join-sshd` dir name are gone (the dir holds the whole tailnet-join state, not just
    sshd). Renaming the state dir mints a new sshd host key — old `known_hosts` lines rot, so
    the clean sweeps `[host]:$RS_PORT` too, and `clean_tailscale` sweeps the legacy dir name.

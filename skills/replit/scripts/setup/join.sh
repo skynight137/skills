@@ -176,7 +176,7 @@ install_join() {
 
   # the operator pastes hop keys here; a key already present is not duplicated
   local k
-  for k in ${RS_AUTHORIZED_KEYS:-"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJiPaPIegqJyzbg21stqeclMtRUmUpFqJbMCj8W1vKN hermes-join-hop"}; do
+  for k in ${RS_AUTHORIZED_KEYS:-"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA7sltdUAAm1gZGopAj3je5mpEX73kSGTiFH74NmPfxh repl-hop"}; do
     [ -n "$k" ] || continue
     grep -qF "$k" "$RS_DIR/authorized_keys" 2>/dev/null || printf '%s\n' "$k" >>"$RS_DIR/authorized_keys"
   done
@@ -186,7 +186,7 @@ install_join() {
   local home; home="$(__rs_homedir)"
   mkdir -p "$home/.ssh"
   touch "$home/.ssh/authorized_keys" && chmod 600 "$home/.ssh/authorized_keys"
-  grep -qF "hermes-join-hop" "$home/.ssh/authorized_keys" || tail -n 1 "$RS_DIR/authorized_keys" >>"$home/.ssh/authorized_keys"
+  grep -qF "repl-hop" "$home/.ssh/authorized_keys" || tail -n 1 "$RS_DIR/authorized_keys" >>"$home/.ssh/authorized_keys"
 
   cat >"$RS_DIR/sshd_config" <<EOF
 Port $RS_PORT

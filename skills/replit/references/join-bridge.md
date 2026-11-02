@@ -255,7 +255,7 @@ specific repl; read that env file on the boxes you can reach and match the slug
 before assuming which machine serves a given public URL.
 
 `--clean tailscale` stops both daemons (sshd via its pid file, tailscaled matched by OUR
-socket only), deletes `$RS_DIR` and the tailnet state dir, drops the `hermes-join-hop` line
+socket only), deletes `$RS_DIR` and the tailnet state dir, drops the `repl-hop` line
 from `~/.ssh/authorized_keys`, and sweeps exactly the ssh surface join created: `~/.ssh/config`
 blocks whose body names `$RS_PORT` plus a tailnet hop, and `[host]:$RS_PORT` lines in
 `known_hosts`. Foreign config blocks, the `~/.ssh` symlink and the `.replit` workflow entry are
@@ -474,7 +474,7 @@ repo is already public.
 - **A listed peer is not a reachable machine.** Three things are required, in order:
   the peer is online in `tailscale status`, sshd was prepared *on that box*
   (`setup.sh --join`), and a hop key sits in its `authorized_keys` — which the
-  prep does for you (the `hermes-join-hop` key is authorized by default; extend with
+  prep does for you (the `repl-hop` key is authorized by default; extend with
   `RS_AUTHORIZED_KEYS`). Onboarding a machine is therefore: join it with the auth key,
   run the prep there, then add a `Host` block here. Answer "can we reach every
   machine?" as "every machine that has done this", never as "any host on the tailnet".

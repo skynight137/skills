@@ -18,7 +18,7 @@ the user a place to paste a bootstrap script, then leave it.
 ## Shape
 
 1. Agent box (server 1): make a dedicated keypair, never reuse a GitHub key.
-   `ssh-keygen -q -t ed25519 -N '' -f <keys>/join-hop -C hermes-join-hop`
+   `ssh-keygen -q -t ed25519 -N '' -f <keys>/join-hop -C repl-hop`
    The public key is safe to embed and to print; the private key stays put.
 2. Write one bootstrap script for the second box and deliver it as a **file
    path** the user opens and pastes (a gzip+base64 single line only if the
