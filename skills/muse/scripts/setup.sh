@@ -504,7 +504,12 @@ mkdir -p "$TS/state"
 # and a node stuck Logged out). Probe the candidates and pin the first
 # that actually answers; .102 is the known-good fallback.
 IP=""
-for cand in $(dig +short +time=4 +tries=1 @8.8.8.8 controlplane.tailscale.com A 2>/dev/null | grep -E '^[0-9.]+$'); do
+# Fixed preference order first: the egress approvals are keyed per
+# destination IP, so re-pinning the SAME control IP every boot reuses the
+# existing approval instead of minting a new prompt. dig's rotating order
+# is only a fallback source of fresh candidates.
+for cand in $(printf '%s
+' 192.200.0.102 192.200.0.107 192.200.0.110 192.200.0.104 192.200.0.106 192.200.0.112 $(dig +short +time=4 +tries=1 @8.8.8.8 controlplane.tailscale.com A 2>/dev/null | grep -E '^[0-9.]+$') | awk '!seen[$0]++'); do
   if timeout 8 curl -s -o /dev/null --noproxy '*' --resolve "controlplane.tailscale.com:443:$cand" --max-time 6 "https://controlplane.tailscale.com/key?v=148"; then IP="$cand"; break; fi
 done
 [[ -n "$IP" ]] || IP="192.200.0.102"
