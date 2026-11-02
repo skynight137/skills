@@ -224,9 +224,13 @@ Session env for this sshd does **not** come from shell rc. `install_join` sets
 `PermitUserEnvironment yes` and renders `~/.ssh/environment` with static
 `REPL_HOME`, XDG dirs and `PATH`, so login, non-login and `ssh host 'cmd'`
 sessions all receive them; `[userenv.shared]` only reaches processes the
-platform starts itself. Interactive landing is separate: `~/.bash_profile`
-chains to the platform `.bashrc` (a `/nix/store` symlink — never append to it)
-and cds a login shell that starts in `$HOME` into `$REPL_HOME`.
+platform starts itself. The file also mirrors the `REPLIT_BASHRC` pin
+(the canonical shim target owned by `write_replit_bashrc` — join never
+creates or rewrites the shim or the pin, it only hands ssh sessions the
+same pointer). Interactive landing is separate: `~/.bash_profile` enters
+through that shim when it is readable (fallback: the platform `.bashrc`,
+a `/nix/store` symlink — never append to it) and cds a login shell that
+starts in `$HOME` into `$REPL_HOME`.
 
 Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
