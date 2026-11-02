@@ -145,6 +145,7 @@ ClientAliveInterval 30
 ClientAliveCountMax 3
 Subsystem sftp $SSHDIR/rootfs/usr/lib/openssh/sftp-server
 EOF
+chown runner:runner "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
 [[ -f "$SSHDIR/id_ed25519" ]] || ssh-keygen -t ed25519 -f "$SSHDIR/id_ed25519" -N '' >/dev/null
 [[ -e "$HOME/.ssh" ]] || ln -s "$SSHDIR" "$HOME/.ssh"
 if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
@@ -234,6 +235,7 @@ chmod 777 "$SSHDIR/join-tailnet"
 chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
 chown root:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
 chown runner:runner "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
+chown runner:runner "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
 chown runner:runner "$SSHDIR/home/.ssh/environment" 2>/dev/null || true; chmod 600 "$SSHDIR/home/.ssh/environment" 2>/dev/null || true
 runuser -u runner -- test -r "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || { chown runner:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; }
 if [[ -f "$SSHDIR/join-tailnet/sshd.pid" ]] && kill -0 "$(cat "$SSHDIR/join-tailnet/sshd.pid")" 2>/dev/null; then
@@ -386,7 +388,7 @@ EOS
 }
 gen_loop "$REVDIR/start-reverse.sh" "$REVDIR/reverse.log" 16800 \
   "-F $REVDIR/ssh_config_ts"
-REVPORT="$(grep -E '^RS_REVERSE_PORT=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"; REVPORT="${REVPORT:-16801}"
+REVPORT="$(grep -E '^RS_REVERSE_PORT=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"; REVPORT="${REVPORT:-16801}"
 gen_loop "$REVDIR/start-reverse-node.sh" "$REVDIR/reverse-node.log" "$REVPORT" \
   "-o ProxyCommand=\"$BINDIR/tailscale --socket=$TSDIR/tailscaled.sock nc %h %p\""
 cat > "$REVDIR/reverse-alloc.sh" <<'EOS'
