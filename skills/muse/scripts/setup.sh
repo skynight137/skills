@@ -55,6 +55,12 @@ say "layout + users"
 chmod o+x "$HOME" "$WS"
 mkdir -p "$SSHDIR/sshd-dir" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$SSHDIR/home"
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
+# sshd runs as runner and must write its log + pid inside sshd-dir, read
+# its host key and authorized_keys, and land in a home it owns. Pin the
+# end state here AND in start-sshd.sh (below): without this, both test
+# boxes needed manual permission surgery before sshd would start.
+chmod 777 "$SSHDIR/sshd-dir"
+chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
 id runner >/dev/null 2>&1 || useradd -d "$SSHDIR/home" -s /bin/bash runner
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
 mkdir -p /run/sshd && chmod 755 /run/sshd
@@ -72,6 +78,8 @@ fi
 say "sshd stack"
 [[ -f "$SSHDIR/sshd-dir/ssh_host_ed25519_key" ]] || \
   ssh-keygen -t ed25519 -f "$SSHDIR/sshd-dir/ssh_host_ed25519_key" -N '' >/dev/null
+chown root:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true
+chmod 640 "$SSHDIR/sshd-dir/ssh_host_ed25519_key"
 touch "$SSHDIR/sshd-dir/authorized_keys"; chmod 600 "$SSHDIR/sshd-dir/authorized_keys"
 # Default trust: the fleet hop (mirrors the replit skill's hermes-join-hop).
 # Every box stood up with this setup authorizes the muse-join-hop key —
@@ -89,6 +97,8 @@ if [[ -n "${RS_AUTHORIZED_KEYS:-}" ]]; then
 else
   seed_key "$HOP_KEY" "$(echo "$HOP_KEY" | awk '{print $2}')"
 fi
+chown runner:runner "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || true
+chmod 600 "$SSHDIR/sshd-dir/authorized_keys"
 cat > "$SSHDIR/sshd-dir/sshd_config" <<EOF
 Port 6800
 ListenAddress 0.0.0.0
@@ -168,6 +178,11 @@ chmod o+x "$HOME" "$HOME/workspace"
 id runner >/dev/null 2>&1 || useradd -d "$SSHDIR/home" -s /bin/bash runner
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
 mkdir -p /run/sshd && chmod 755 /run/sshd
+chmod 777 "$SSHDIR/sshd-dir"
+chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
+chown root:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true
+chown runner:runner "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || true; chmod 600 "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || true
+runuser -u runner -- test -r "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || { chown runner:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key"; chmod 600 "$SSHDIR/sshd-dir/ssh_host_ed25519_key"; }
 if [[ -f "$SSHDIR/sshd-dir/sshd.pid" ]] && kill -0 "$(cat "$SSHDIR/sshd-dir/sshd.pid")" 2>/dev/null; then
   echo "sshd already running"; exit 0
 fi
