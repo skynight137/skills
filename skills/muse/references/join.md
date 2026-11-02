@@ -64,9 +64,18 @@ status line before deciding no join is needed.
   forward and a test connection demonstrably reached the local sshd — but
   the stream died during SSH banner exchange over the double-userspace
   DERP path, repeatedly. **Verdict: inbound via the node IP is not a
-  working SSH path here.** (A wedged `foreground listener already exists`
-  serve state, left by a killed foreground `serve` run, clears only on
-  daemon restart.)
+  working SSH path from that Replit peer.** (A wedged `foreground listener
+  already exists` serve state, left by a killed foreground `serve` run,
+  clears only on daemon restart.)
+- **Refinement (2026-11-02, muse-test e2e): the failure is peer-specific,
+  not a property of the node.** From a second Muse VM's userspace node,
+  ssh to the first node's IP:6800 (ProxyCommand = the local daemon's
+  `tailscale nc`) completed the full SSH transport — banner, kex, auth
+  methods — and failed only at pubkey authorization, exactly as expected
+  with an unexchanged key. Node-to-node between Muse VMs is a working
+  direct path once `authorized_keys` are exchanged; the reverse-forward
+  pattern remains the answer for peers whose own access path mangles the
+  stream (the Replit SOCKS/`nc` hop), and as belt-and-braces generally.
 
 ## The pattern that works: reverse SSH
 
