@@ -82,13 +82,13 @@ chown root:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true
 chmod 640 "$SSHDIR/sshd-dir/ssh_host_ed25519_key"
 touch "$SSHDIR/sshd-dir/authorized_keys"; chmod 600 "$SSHDIR/sshd-dir/authorized_keys"
 # Default trust: the fleet hop (mirrors the replit skill's hermes-join-hop).
-# Every box stood up with this setup authorizes the muse-join-hop key —
+# Every box stood up with this setup authorizes the muse-hop key —
 # the operator's main Muse VM — from birth, so onboarding never needs a
 # per-machine key exchange; the hop reaches every fleet box directly and
 # any-to-any goes through it (star, not mesh: one distributed pubkey).
 # The hop's private key never leaves the hop machine. Override by setting
 # RS_AUTHORIZED_KEYS (one pubkey per line) in the .env before running.
-HOP_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtOrYNU7XhUsf+6dygX5j9xdDlT7hId3NO7gwi8GhBq muse-join-hop"
+HOP_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtOrYNU7XhUsf+6dygX5j9xdDlT7hId3NO7gwi8GhBq muse-hop"
 seed_key() { grep -q " $2 " "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || echo "$1" >> "$SSHDIR/sshd-dir/authorized_keys"; }
 if [[ -n "${RS_AUTHORIZED_KEYS:-}" ]]; then
   while IFS= read -r line; do
@@ -157,7 +157,7 @@ if [[ ! -f "$SSHDIR/.env" ]]; then
   cat > "$SSHDIR/.env" <<EOF
 TAILSCALE_AUTH_KEY=
 TAILSCALE_NODE_NAME=muse-join
-#RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-join-hop default)
+#RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-hop default)
 #RS_REVERSE_PEER= (HOP ONLY: peer IP that receives this box's reverse forward. Leaves leave
 #  this unset — a leaf runs NO reverse loop; only the fleet hop opens one, to the repl hop.)
 #RS_REVERSE_PORT=16801 (forward port on the peer when RS_REVERSE_PEER is set)
@@ -461,5 +461,5 @@ fi
 say "handoff"
 echo "client pubkey (register it ONLY at the fleet hop, and only if this box must initiate ssh to the hop):"
 cat "$SSHDIR/id_ed25519.pub"
-echo "authorized_keys already trusts the muse-join-hop key (seeded above) — nothing else belongs there by default"
+echo "authorized_keys already trusts the muse-hop key (seeded above) — nothing else belongs there by default"
 echo "redeploy restore order: start-sshd.sh -> start-tailscale.sh (foreground) -> reverse loop (hop boxes only)"
