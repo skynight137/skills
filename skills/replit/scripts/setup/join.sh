@@ -201,6 +201,10 @@ PubkeyAuthentication yes
 PermitRootLogin no
 PermitEmptyPasswords no
 UsePAM no
+# Environment sesi disuntik sshd sendiri (~/.ssh/environment), bukan
+# lewat rc: sesi login/non-login/`ssh host cmd` membaca rc yang
+# berbeda-beda, dan [userenv.shared] hanya sampai ke proses platform.
+PermitUserEnvironment yes
 StrictModes no
 PrintMotd no
 X11Forwarding no
@@ -211,6 +215,35 @@ ClientAliveCountMax 3
 LogLevel VERBOSE
 EOF
   "$sshd" -t -f "$RS_DIR/sshd_config" || { warn "config sshd tidak valid"; return 1; }
+
+  # File environment untuk PermitUserEnvironment di atas: statis,
+  # dirender dari nilai yang sama dengan yang dipakai stack ini.
+  # ~/.ssh adalah symlink ke $REPL_HOME/.ssh, jadi file ini persisten.
+  local env_base="${REPL_HOME:-$home/workspace}"
+  mkdir -p "$home/.ssh"
+  cat >"$home/.ssh/environment" <<ENVEOF
+REPL_HOME=$env_base
+XDG_DATA_HOME=${XDG_DATA_HOME:-$env_base/.local/share}
+XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$env_base/.config}
+XDG_CACHE_HOME=${XDG_CACHE_HOME:-$env_base/.cache}
+XDG_BIN_HOME=${XDG_BIN_HOME:-$env_base/.local/bin}
+PATH=${XDG_BIN_HOME:-$env_base/.local/bin}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENVEOF
+  chmod 600 "$home/.ssh/environment" 2>/dev/null || true
+  # Landing: sesi interaktif mulai di workspace. cwd urusan shell
+  # (sshd tidak bisa mengaturnya); var di atas tidak bergantung rc.
+  # ~/.bashrc di platform ini symlink ke /nix/store (milik platform,
+  # read-only) — jangan disentuh. Channel-nya ~/.bash_profile, yang
+  # dibaca login shell: rantai ke .bashrc platform, lalu landing.
+  if [ ! -L "$home/.bash_profile" ] && ! grep -q "repl landing" "$home/.bash_profile" 2>/dev/null; then
+    cat >>"$home/.bash_profile" <<'RCEOF'
+
+# >>> repl landing >>>
+[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+case $- in *i*) [[ "$PWD" == "$HOME" ]] && cd "${REPL_HOME:-$HOME/workspace}" ;; esac
+# <<< repl landing <<<
+RCEOF
+  fi
 
   # tailnet binaries: needed to prepare the identity dirs even without joining the tailnet
   local bin="$XDG_BIN_HOME" td="$XDG_BIN_HOME/tailscaled" tsc="$XDG_BIN_HOME/tailscale"
