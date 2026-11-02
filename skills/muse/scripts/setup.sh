@@ -29,7 +29,7 @@
 # a template and stops short of the join while the key is empty.
 # The peer (default 100.106.114.30 = repl-test) is the machine that will
 # hold the reverse forwards; its public key must be added to
-# <ws>/.ssh/sshd-dir/authorized_keys and this VM's client pubkey
+# <ws>/.ssh/join-tailnet/authorized_keys and this VM's client pubkey
 # (<ws>/.ssh/id_ed25519.pub, printed at the end) to the peer's sshd.
 set -euo pipefail
 
@@ -69,13 +69,13 @@ fi
 phase_sshd() {
 say "layout + users"
 chmod o+x "$HOME" "$WS"
-mkdir -p "$SSHDIR/sshd-dir" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$SSHDIR/home"
+mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$SSHDIR/home"
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
-# sshd runs as runner and must write its log + pid inside sshd-dir, read
+# sshd runs as runner and must write its log + pid inside join-tailnet, read
 # its host key and authorized_keys, and land in a home it owns. Pin the
 # end state here AND in start-sshd.sh (below): without this, both test
 # boxes needed manual permission surgery before sshd would start.
-chmod 777 "$SSHDIR/sshd-dir"
+chmod 777 "$SSHDIR/join-tailnet"
 chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
 id runner >/dev/null 2>&1 || useradd -d "$SSHDIR/home" -s /bin/bash runner
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
@@ -92,11 +92,11 @@ fi
 [[ -x "$SSHDIR/rootfs/usr/sbin/sshd" ]] && ln -sf "$SSHDIR/rootfs/usr/sbin/sshd" "$SSHDIR/bin/sshd"
 
 say "sshd stack"
-[[ -f "$SSHDIR/sshd-dir/ssh_host_ed25519_key" ]] || \
-  ssh-keygen -t ed25519 -f "$SSHDIR/sshd-dir/ssh_host_ed25519_key" -N '' >/dev/null
-chown root:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true
-chmod 640 "$SSHDIR/sshd-dir/ssh_host_ed25519_key"
-touch "$SSHDIR/sshd-dir/authorized_keys"; chmod 600 "$SSHDIR/sshd-dir/authorized_keys"
+[[ -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" ]] || \
+  ssh-keygen -t ed25519 -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" -N '' >/dev/null
+chown root:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
+touch "$SSHDIR/join-tailnet/authorized_keys"; chmod 600 "$SSHDIR/join-tailnet/authorized_keys"
 # Default trust: the fleet hop (mirrors the replit skill's hermes-join-hop).
 # Every box stood up with this setup authorizes the muse-hop key —
 # the operator's main Muse VM — from birth, so onboarding never needs a
@@ -105,7 +105,7 @@ touch "$SSHDIR/sshd-dir/authorized_keys"; chmod 600 "$SSHDIR/sshd-dir/authorized
 # The hop's private key never leaves the hop machine. Override by setting
 # RS_AUTHORIZED_KEYS (one pubkey per line) in the .env before running.
 HOP_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtOrYNU7XhUsf+6dygX5j9xdDlT7hId3NO7gwi8GhBq muse-hop"
-seed_key() { grep -q " $2 " "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || echo "$1" >> "$SSHDIR/sshd-dir/authorized_keys"; }
+seed_key() { grep -q " $2 " "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || echo "$1" >> "$SSHDIR/join-tailnet/authorized_keys"; }
 if [[ -n "${RS_AUTHORIZED_KEYS:-}" ]]; then
   while IFS= read -r line; do
     [[ -n "$line" ]] && seed_key "$line" "$(echo "$line" | awk '{print $2}')"
@@ -113,15 +113,15 @@ if [[ -n "${RS_AUTHORIZED_KEYS:-}" ]]; then
 else
   seed_key "$HOP_KEY" "$(echo "$HOP_KEY" | awk '{print $2}')"
 fi
-chown runner:runner "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || true
-chmod 600 "$SSHDIR/sshd-dir/authorized_keys"
-cat > "$SSHDIR/sshd-dir/sshd_config" <<EOF
+chown runner:runner "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
+chmod 600 "$SSHDIR/join-tailnet/authorized_keys"
+cat > "$SSHDIR/join-tailnet/sshd_config" <<EOF
 Port 6800
 ListenAddress 0.0.0.0
 Protocol 2
-HostKey $SSHDIR/sshd-dir/ssh_host_ed25519_key
-PidFile $SSHDIR/sshd-dir/sshd.pid
-AuthorizedKeysFile $SSHDIR/sshd-dir/authorized_keys
+HostKey $SSHDIR/join-tailnet/ssh_host_ed25519_key
+PidFile $SSHDIR/join-tailnet/sshd.pid
+AuthorizedKeysFile $SSHDIR/join-tailnet/authorized_keys
 PasswordAuthentication no
 PubkeyAuthentication yes
 # StrictModes off is load-bearing on this platform: the idmapped home
@@ -194,16 +194,16 @@ chmod o+x "$HOME" "$HOME/workspace"
 id runner >/dev/null 2>&1 || useradd -d "$SSHDIR/home" -s /bin/bash runner
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
 mkdir -p /run/sshd && chmod 755 /run/sshd
-chmod 777 "$SSHDIR/sshd-dir"
+chmod 777 "$SSHDIR/join-tailnet"
 chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
-chown root:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || true
-chown runner:runner "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || true; chmod 600 "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || true
-runuser -u runner -- test -r "$SSHDIR/sshd-dir/ssh_host_ed25519_key" 2>/dev/null || { chown runner:runner "$SSHDIR/sshd-dir/ssh_host_ed25519_key"; chmod 600 "$SSHDIR/sshd-dir/ssh_host_ed25519_key"; }
-if [[ -f "$SSHDIR/sshd-dir/sshd.pid" ]] && kill -0 "$(cat "$SSHDIR/sshd-dir/sshd.pid")" 2>/dev/null; then
+chown root:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+chown runner:runner "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
+runuser -u runner -- test -r "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || { chown runner:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; }
+if [[ -f "$SSHDIR/join-tailnet/sshd.pid" ]] && kill -0 "$(cat "$SSHDIR/join-tailnet/sshd.pid")" 2>/dev/null; then
   echo "sshd already running"; exit 0
 fi
 runuser -u runner -- bash -c \
-  "setsid $SSHDIR/rootfs/usr/sbin/sshd -f $SSHDIR/sshd-dir/sshd_config -E $SSHDIR/sshd-dir/sshd.log </dev/null >/dev/null 2>&1 & disown"
+  "setsid $SSHDIR/rootfs/usr/sbin/sshd -f $SSHDIR/join-tailnet/sshd_config -E $SSHDIR/join-tailnet/sshd.log </dev/null >/dev/null 2>&1 & disown"
 for _ in $(seq 1 10); do
   timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null && break
   sleep 1
