@@ -82,6 +82,11 @@ PidFile $SSHDIR/sshd-dir/sshd.pid
 AuthorizedKeysFile $SSHDIR/sshd-dir/authorized_keys
 PasswordAuthentication no
 PubkeyAuthentication yes
+# StrictModes off is load-bearing on this platform: the idmapped home
+# mount forces group/world-writable modes on the persistent tree (the
+# proven live stack runs home at 777), and StrictModes would refuse
+# every authorized_keys for exactly that. Key-only auth stays on.
+StrictModes no
 ChallengeResponseAuthentication no
 PermitRootLogin no
 AllowUsers runner
