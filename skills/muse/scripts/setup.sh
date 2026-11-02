@@ -182,7 +182,12 @@ if [[ ! -x "$BINDIR/tailscaled" ]]; then
   TGZ="tailscale_${TSVER}_amd64.tgz"
   curl -fsSL -o "/tmp/$TGZ" "https://pkgs.tailscale.com/stable/$TGZ"
   curl -fsSL -o "/tmp/$TGZ.sha256" "https://pkgs.tailscale.com/stable/$TGZ.sha256"
-  (cd /tmp && sha256sum -c "$TGZ.sha256")
+  # Upstream's .sha256 is now a bare hash with no filename, which makes
+  # `sha256sum -c` fail ("no properly formatted checksum lines") — compare
+  # the first field manually; robust to both formats.
+  EXPECTED="$(awk '{print $1}' "/tmp/$TGZ.sha256")"
+  ACTUAL="$(sha256sum "/tmp/$TGZ" | awk '{print $1}')"
+  [[ "$EXPECTED" == "$ACTUAL" ]] || { echo "checksum mismatch for $TGZ: expected $EXPECTED got $ACTUAL" >&2; exit 1; }
   tar -xzf "/tmp/$TGZ" -C /tmp
   install -m755 "/tmp/tailscale_${TSVER}_amd64/tailscale" "/tmp/tailscale_${TSVER}_amd64/tailscaled" "$BINDIR/"
   rm -rf "/tmp/$TGZ" "/tmp/$TGZ.sha256" "/tmp/tailscale_${TSVER}_amd64"
