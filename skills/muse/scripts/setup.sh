@@ -73,6 +73,22 @@ say "sshd stack"
 [[ -f "$SSHDIR/sshd-dir/ssh_host_ed25519_key" ]] || \
   ssh-keygen -t ed25519 -f "$SSHDIR/sshd-dir/ssh_host_ed25519_key" -N '' >/dev/null
 touch "$SSHDIR/sshd-dir/authorized_keys"; chmod 600 "$SSHDIR/sshd-dir/authorized_keys"
+# Default trust: the fleet hop (mirrors the replit skill's hermes-join-hop).
+# Every box stood up with this setup authorizes the muse-join-hop key —
+# the operator's main Muse VM — from birth, so onboarding never needs a
+# per-machine key exchange; the hop reaches every fleet box directly and
+# any-to-any goes through it (star, not mesh: one distributed pubkey).
+# The hop's private key never leaves the hop machine. Override by setting
+# RS_AUTHORIZED_KEYS (one pubkey per line) in the .env before running.
+HOP_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOtOrYNU7XhUsf+6dygX5j9xdDlT7hId3NO7gwi8GhBq muse-join-hop"
+seed_key() { grep -q " $2 " "$SSHDIR/sshd-dir/authorized_keys" 2>/dev/null || echo "$1" >> "$SSHDIR/sshd-dir/authorized_keys"; }
+if [[ -n "${RS_AUTHORIZED_KEYS:-}" ]]; then
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && seed_key "$line" "$(echo "$line" | awk '{print $2}')"
+  done <<< "$RS_AUTHORIZED_KEYS"
+else
+  seed_key "$HOP_KEY" "$(echo "$HOP_KEY" | awk '{print $2}')"
+fi
 cat > "$SSHDIR/sshd-dir/sshd_config" <<EOF
 Port 6800
 ListenAddress 0.0.0.0
@@ -131,7 +147,7 @@ if [[ ! -f "$SSHDIR/.env" ]]; then
   cat > "$SSHDIR/.env" <<EOF
 TAILSCALE_AUTH_KEY=
 TAILSCALE_NODE_NAME=muse-join
-RS_AUTHORIZED_KEYS=$SSHDIR/sshd-dir/authorized_keys
+#RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-join-hop default)
 EOF
   chmod 600 "$SSHDIR/.env"
   echo "created $SSHDIR/.env — fill TAILSCALE_AUTH_KEY (600, never commit it), then re-run this script"
