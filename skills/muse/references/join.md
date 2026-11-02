@@ -121,6 +121,21 @@ This removes the two failure modes of the per-box design: pubkey
 ping-pong for every new box, and several boxes contending for one
 forward port on a shared peer.
 
+## Session environment: sshd injects it, rc only lands you
+
+Do not deliver env vars to ssh sessions through shell rc — login,
+non-login and `ssh host 'cmd'` sessions each source different files
+(or none), so `MUSE_HOME` and friends kept vanishing. The join sshd
+sets `PermitUserEnvironment yes` and setup writes
+`~/.ssh/environment` in the service home (`MUSE_HOME`, the `XDG_*`
+set, `PATH`, and `BASH_ENV` pointing at the shared `config/env.sh`),
+so sshd itself injects the vars into every session before any shell
+starts. The only thing left to rc is the landing directory:
+the service home's `.bashrc` cds interactive sessions that start in
+`$HOME` into `$MUSE_HOME`. Same pattern fits the repl side
+(`REPL_HOME`); one static file per fleet, rendered from the same
+values as `env.sh`.
+
 ## The pattern that works: reverse SSH
 
 The VM dials OUT to the peer and leaves `-R 127.0.0.1:<rport>:127.0.0.1:6800`

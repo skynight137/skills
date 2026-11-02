@@ -133,6 +133,11 @@ ChallengeResponseAuthentication no
 PermitRootLogin no
 AllowUsers runner
 UsePAM no
+# Session environment comes from sshd itself (~/.ssh/environment in the
+# service home), not from shell rc: login, non-login and `ssh host cmd`
+# sessions each source different rc files (or none), which is why the
+# shared-env vars kept vanishing in ssh sessions.
+PermitUserEnvironment yes
 PermitTunnel no
 AllowTcpForwarding yes
 GatewayPorts no
@@ -157,10 +162,11 @@ case ":$PATH:" in
   *":$HOME/workspace/.local/bin:"*) ;;
   *) export PATH="$HOME/workspace/.local/bin:$HOME/workspace/.ssh/bin:$PATH" ;;
 esac
-if [ -f "$HOME/workspace/.ssh/.env" ]; then
+if [ -r "$HOME/workspace/.ssh/.env" ]; then
   set -a; . "$HOME/workspace/.ssh/.env"; set +a
 fi
 EOF
+chmod 644 "$WS/config/env.sh"
 if ! grep -q "muse shared env" "$HOME/.bashrc" 2>/dev/null; then
   cat >> "$HOME/.bashrc" <<'EOF'
 
@@ -182,6 +188,35 @@ EOF
   echo "created $SSHDIR/.env — fill TAILSCALE_AUTH_KEY (600, never commit it), then re-run this script"
 fi
 
+say "session environment (sshd-injected, not rc)"
+mkdir -p "$SSHDIR/home/.ssh"
+cat > "$SSHDIR/home/.ssh/environment" <<EOF
+MUSE_HOME=$WS
+XDG_DATA_HOME=$WS/.local/share
+XDG_CONFIG_HOME=$WS/.config
+XDG_CACHE_HOME=$WS/.cache
+XDG_STATE_HOME=$WS/.local/state
+PATH=$WS/.local/bin:$WS/.ssh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+BASH_ENV=$WS/config/env.sh
+EOF
+chown -R runner:runner "$SSHDIR/home/.ssh" 2>/dev/null || true
+chmod 700 "$SSHDIR/home/.ssh"; chmod 600 "$SSHDIR/home/.ssh/environment"
+# Landing: interactive sessions start in the workspace. The working
+# directory is a shell concern (sshd cannot set it); the vars above no
+# longer depend on rc at all — this block only handles the landing.
+if ! grep -q "muse landing" "$SSHDIR/home/.bashrc" 2>/dev/null; then
+  cat >> "$SSHDIR/home/.bashrc" <<'RCEOF'
+
+# >>> muse landing >>>
+case $- in *i*) [[ "$PWD" == "$HOME" ]] && cd "${MUSE_HOME:-$HOME/workspace}" ;; esac
+# <<< muse landing <<<
+RCEOF
+fi
+cat > "$SSHDIR/home/.bash_profile" <<'EOF'
+[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+EOF
+chown runner:runner "$SSHDIR/home/.bashrc" "$SSHDIR/home/.bash_profile" 2>/dev/null || true
+
 say "launcher: start-sshd.sh"
 cat > "$SSHDIR/start-sshd.sh" <<'EOS'
 #!/usr/bin/env bash
@@ -198,6 +233,7 @@ chmod 777 "$SSHDIR/join-tailnet"
 chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
 chown root:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
 chown runner:runner "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
+chown runner:runner "$SSHDIR/home/.ssh/environment" 2>/dev/null || true; chmod 600 "$SSHDIR/home/.ssh/environment" 2>/dev/null || true
 runuser -u runner -- test -r "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || { chown runner:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; }
 if [[ -f "$SSHDIR/join-tailnet/sshd.pid" ]] && kill -0 "$(cat "$SSHDIR/join-tailnet/sshd.pid")" 2>/dev/null; then
   echo "sshd already running"; exit 0
