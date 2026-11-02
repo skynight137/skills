@@ -97,6 +97,30 @@ the landing peer for this box's legacy reverse forward (16801). Boxes
 that still reverse into a shared peer must take distinct forward ports
 per box — the port, not the peer, is the contended resource.
 
+## Topology: leaves are silent, the hop carries the tunnels
+
+A leaf Muse VM runs **no reverse loop** and registers its client key
+**nowhere by default**. The only reverse tunnel on the Muse side is the
+hop's: `muse-join-hop` → the repl hop (today `repl-test`, port 16801).
+Setup enforces this: the reverse scripts are generated on every box but
+launched only when `RS_REVERSE_PEER` is set in the box's `.env` (hop
+boxes), with `RS_REVERSE_PORT` choosing the forward port. Consequences:
+
+- **hop → leaf**: direct node-to-node ssh; the leaf trusts the hop key
+  from setup. No per-leaf anything.
+- **leaf → leaf**: never direct, never cross-registered. Two-stage via
+  the hop: ssh into the hop, then from the hop into the target leaf
+  (the second leg uses the hop's own key). If a leaf must *initiate* to
+  the hop, its client pubkey is registered at exactly one place: the
+  hop's `authorized_keys`.
+- **repl side → leaf**: repl hop → the hop's reverse forward (16801)
+  → muse-join-hop → direct to the leaf. Hermes reaches every Muse VM
+  through that single door; no leaf keys exist on the repl side.
+
+This removes the two failure modes of the per-box design: pubkey
+ping-pong for every new box, and several boxes contending for one
+forward port on a shared peer.
+
 ## The pattern that works: reverse SSH
 
 The VM dials OUT to the peer and leaves `-R 127.0.0.1:<rport>:127.0.0.1:6800`
