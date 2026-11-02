@@ -2,23 +2,21 @@
 
 Agent skills ([agentskills.io](https://agentskills.io) / [skills.sh](https://skills.sh) format) for headless browser automation and coding discipline. Each skill is a self-contained folder (`SKILL.md` + `scripts/` and `references/` where needed) so it installs cleanly with the skills CLI — no external file dependencies.
 
-## Shared installer (clone workflow)
+## Install & run
 
-One entry point for a full clone of this repo, with the target machine
-named explicitly:
+There is no shared dispatcher and no `--machine` flag: the skill folder
+names the target. Install one skill (or all of them) with the skills
+CLI, then call that skill's own `scripts/setup.sh` by its full path:
 
 ```bash
-./setup.sh --machine muse [--peer <ip>] [--verify]   # Muse VM
-./setup.sh --machine repl [--tailscale] [-j] ...     # Replit repl
-./setup.sh --machine muse --dry-run ...              # print, don't run
+npx -y skills add skynight137/skills -s muse     # just the muse skill
+npx -y skills add skynight137/skills -s replit   # just the replit skill
+bash <skill-dir>/scripts/setup.sh [args...]      # per-skill entry point
 ```
 
-`--machine` selects a row of the dispatcher's profile table — which
-skill's installer runs — and every remaining argument passes through
-verbatim. The per-skill `scripts/setup.sh` files remain the only
-implementations: an agentskills install (`npx skills add`) copies just
-the skill folder, so each skill stays self-contained and the root
-dispatcher is an addition for clone users, never a replacement.
+The per-skill `scripts/setup.sh` files are the only implementations —
+an agentskills install copies just the skill folder, so each skill is
+self-contained in both the npx and the git-clone workflows.
 
 ## Skills
 
