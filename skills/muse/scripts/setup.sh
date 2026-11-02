@@ -11,8 +11,18 @@
 #   <ws>/config/env.sh          shared env (XDG vars, MUSE_HOME, secrets)
 #   ~/.ssh, /root/.ssh          symlinks -> <ws>/.ssh
 #
-# Usage:
-#   bash setup.sh [--peer <tailnet-ip>] [--verify]
+# Usage (mirrors the replit setup's shape: phase flags + an interactive
+# menu, instead of one monolith that beelines to the join):
+#   bash setup.sh                     full setup; on a TTY, opens the menu
+#   bash setup.sh --menu              interactive phase picker (arrow keys)
+#   bash setup.sh --sshd              sshd stack only (users, openssh, keys,
+#                                     launchers, reverse scripts)
+#   bash setup.sh --tailscale         tailscale binaries + node launcher only
+#   bash setup.sh -j | --join         start the stack and join the tailnet
+#                                     (implies --sshd/--tailscale when their
+#                                     outputs are missing)
+#   bash setup.sh --verify            read-only status
+#   bash setup.sh [--peer <ip>] ...   peer = reverse-forward holder
 #
 # Secrets never live in this repo: the operator creates <ws>/.ssh/.env
 # (mode 600) with TAILSCALE_AUTH_KEY=<key for the tailnet> — setup writes
@@ -24,10 +34,15 @@
 set -euo pipefail
 
 PEER=100.106.114.30 VERIFY=0
+DO_SSHD=0 DO_TAILSCALE=0 DO_JOIN=0 DO_MENU=0 SELECTED=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --peer) PEER=$2; shift 2 ;;
     --verify) VERIFY=1; shift ;;
+    --sshd) DO_SSHD=1; SELECTED=1; shift ;;
+    --tailscale) DO_TAILSCALE=1; SELECTED=1; shift ;;
+    -j|--join) DO_JOIN=1; SELECTED=1; shift ;;
+    --menu) DO_MENU=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -51,6 +66,7 @@ if [[ $VERIFY -eq 1 ]]; then
   exit 0
 fi
 
+phase_sshd() {
 say "layout + users"
 chmod o+x "$HOME" "$WS"
 mkdir -p "$SSHDIR/sshd-dir" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$SSHDIR/home"
@@ -194,97 +210,6 @@ for _ in $(seq 1 10); do
 done
 EOS
 chmod +x "$SSHDIR/start-sshd.sh"
-
-say "tailscale binaries (pinned $TSVER, checksum verified)"
-if [[ ! -x "$BINDIR/tailscaled" ]]; then
-  TGZ="tailscale_${TSVER}_amd64.tgz"
-  curl -fsSL -o "/tmp/$TGZ" "https://pkgs.tailscale.com/stable/$TGZ"
-  curl -fsSL -o "/tmp/$TGZ.sha256" "https://pkgs.tailscale.com/stable/$TGZ.sha256"
-  # Upstream's .sha256 is now a bare hash with no filename, which makes
-  # `sha256sum -c` fail ("no properly formatted checksum lines") — compare
-  # the first field manually; robust to both formats.
-  EXPECTED="$(awk '{print $1}' "/tmp/$TGZ.sha256")"
-  ACTUAL="$(sha256sum "/tmp/$TGZ" | awk '{print $1}')"
-  [[ "$EXPECTED" == "$ACTUAL" ]] || { echo "checksum mismatch for $TGZ: expected $EXPECTED got $ACTUAL" >&2; exit 1; }
-  tar -xzf "/tmp/$TGZ" -C /tmp
-  install -m755 "/tmp/tailscale_${TSVER}_amd64/tailscale" "/tmp/tailscale_${TSVER}_amd64/tailscaled" "$BINDIR/"
-  rm -rf "/tmp/$TGZ" "/tmp/$TGZ.sha256" "/tmp/tailscale_${TSVER}_amd64"
-fi
-chown runner:runner "$TSDIR" 2>/dev/null || true
-
-say "launcher: start-tailscale.sh (userspace node — the proven recipe)"
-cat > "$SSHDIR/start-tailscale.sh" <<'EOS'
-#!/usr/bin/env bash
-# Userspace tailscale node for a Muse VM. Three sandbox fixes, all required:
-#  1. real control-plane IPs via an /etc/hosts override bind-mounted in a
-#     private mount namespace (stock resolver is fake-IP);
-#  2. daemon runs with the *_PROXY env scrubbed (proxied control fetches
-#     get reset by the gateway; direct dials to real IPs succeed);
-#  3. listeners on 127.0.0.1, never "localhost".
-# Run as root from a FOREGROUND agent turn (its first direct dials may need
-# an egress approval a background run cannot mint).
-set -uo pipefail
-STACK="$HOME/workspace/.ssh"
-BIN="$HOME/workspace/.local/bin"
-TS="$HOME/workspace/.local/share/tailscale"
-SOCK="$TS/tailscaled.sock"
-TSCTL="$BIN/tailscale --socket=$SOCK"
-CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy)
-chmod o+x "$HOME" "$HOME/workspace" "$HOME/workspace/.local" "$HOME/workspace/.local/share"
-id runner >/dev/null 2>&1 || useradd -d "$STACK/home" -s /bin/bash runner
-mkdir -p "$TS/state"
-[[ -f "$STACK/.env" ]] && { set -a; source "$STACK/.env"; set +a; }
-# dig's anycast answers rotate, and most endpoints are unreachable
-# through this gateway at any given time (observed: one of four probed
-# answered; a dead pick = "fetch control key: context deadline exceeded"
-# and a node stuck Logged out). Probe the candidates and pin the first
-# that actually answers; .102 is the known-good fallback.
-IP=""
-for cand in $(dig +short +time=4 +tries=1 @8.8.8.8 controlplane.tailscale.com A 2>/dev/null | grep -E '^[0-9.]+$'); do
-  if timeout 8 curl -s -o /dev/null --noproxy '*' --resolve "controlplane.tailscale.com:443:$cand" --max-time 6 "https://controlplane.tailscale.com/key?v=148"; then IP="$cand"; break; fi
-done
-[[ -n "$IP" ]] || IP="192.200.0.102"
-cp /etc/hosts "$TS/hosts"
-printf '%s controlplane.tailscale.com\n%s login.tailscale.com\n' "$IP" "$IP" >> "$TS/hosts"
-if ! runuser -u runner -- "${CLEANENV[@]}" $TSCTL status >/dev/null 2>&1 \
-   && ! runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | grep -q "Logged out"; then
-  for p in $(pgrep tailscaled 2>/dev/null); do
-    tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q ".local/share/tailscale" && kill "$p"
-  done
-  sleep 1; rm -f "$SOCK"
-  unshare -m bash -c '
-    mount --bind '"$TS"'/hosts /etc/hosts || exit 1
-    runuser -u runner -- env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy \
-      setsid '"$BIN"'/tailscaled --tun=userspace-networking \
-        --socks5-server=127.0.0.1:1056 --outbound-http-proxy-listen=127.0.0.1:1056 \
-        --state='"$TS"'/state/tailscaled.state --statedir='"$TS"'/state --socket='"$SOCK"' \
-        </dev/null >>'"$TS"'/tailscaled.log 2>&1 &
-  '
-  for _ in $(seq 1 12); do [[ -S "$SOCK" ]] && break; sleep 1; done
-fi
-[[ -S "$SOCK" ]] || { echo "tailscaled socket not ready — see $TS/tailscaled.log"; exit 1; }
-# Wait for a definitive status line: the "Tailscale is starting" health
-# block can hide a "Logged out." first line and skip the join below.
-STATE=""
-for _ in $(seq 1 15); do
-  STATE="$(runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | head -1)"
-  [[ "$STATE" != "# Health check:" ]] && break
-  sleep 1
-done
-echo "status: $STATE"
-if [[ "$STATE" == "Logged out." ]]; then
-  if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
-    runuser -u runner -- "${CLEANENV[@]}" $TSCTL up \
-      --authkey "$TAILSCALE_AUTH_KEY" --hostname "${TAILSCALE_NODE_NAME:-muse-join}" --accept-routes=false 2>&1 \
-      | sed -E 's/(tskey-)[A-Za-z0-9_-]+/\1***/g'
-  else
-    echo "logged out and no TAILSCALE_AUTH_KEY in $STACK/.env"; exit 1
-  fi
-fi
-runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | head -3
-runuser -u runner -- "${CLEANENV[@]}" $TSCTL ip -4 2>/dev/null
-EOS
-chmod +x "$SSHDIR/start-tailscale.sh"
 
 say "launchers: reverse loops + probe (peer $PEER)"
 cat > "$REVDIR/ts_proxy_connect.py" <<'EOF'
@@ -443,6 +368,101 @@ EOS
 sed -i "s/^probe 16801 node/probe $REVPORT node/" "$REVDIR/check-reverse.sh"
 chmod +x "$REVDIR/check-reverse.sh"
 
+}
+phase_tailscale() {
+say "tailscale binaries (pinned $TSVER, checksum verified)"
+if [[ ! -x "$BINDIR/tailscaled" ]]; then
+  TGZ="tailscale_${TSVER}_amd64.tgz"
+  curl -fsSL -o "/tmp/$TGZ" "https://pkgs.tailscale.com/stable/$TGZ"
+  curl -fsSL -o "/tmp/$TGZ.sha256" "https://pkgs.tailscale.com/stable/$TGZ.sha256"
+  # Upstream's .sha256 is now a bare hash with no filename, which makes
+  # `sha256sum -c` fail ("no properly formatted checksum lines") — compare
+  # the first field manually; robust to both formats.
+  EXPECTED="$(awk '{print $1}' "/tmp/$TGZ.sha256")"
+  ACTUAL="$(sha256sum "/tmp/$TGZ" | awk '{print $1}')"
+  [[ "$EXPECTED" == "$ACTUAL" ]] || { echo "checksum mismatch for $TGZ: expected $EXPECTED got $ACTUAL" >&2; exit 1; }
+  tar -xzf "/tmp/$TGZ" -C /tmp
+  install -m755 "/tmp/tailscale_${TSVER}_amd64/tailscale" "/tmp/tailscale_${TSVER}_amd64/tailscaled" "$BINDIR/"
+  rm -rf "/tmp/$TGZ" "/tmp/$TGZ.sha256" "/tmp/tailscale_${TSVER}_amd64"
+fi
+chown runner:runner "$TSDIR" 2>/dev/null || true
+
+say "launcher: start-tailscale.sh (userspace node — the proven recipe)"
+cat > "$SSHDIR/start-tailscale.sh" <<'EOS'
+#!/usr/bin/env bash
+# Userspace tailscale node for a Muse VM. Three sandbox fixes, all required:
+#  1. real control-plane IPs via an /etc/hosts override bind-mounted in a
+#     private mount namespace (stock resolver is fake-IP);
+#  2. daemon runs with the *_PROXY env scrubbed (proxied control fetches
+#     get reset by the gateway; direct dials to real IPs succeed);
+#  3. listeners on 127.0.0.1, never "localhost".
+# Run as root from a FOREGROUND agent turn (its first direct dials may need
+# an egress approval a background run cannot mint).
+set -uo pipefail
+STACK="$HOME/workspace/.ssh"
+BIN="$HOME/workspace/.local/bin"
+TS="$HOME/workspace/.local/share/tailscale"
+SOCK="$TS/tailscaled.sock"
+TSCTL="$BIN/tailscale --socket=$SOCK"
+CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy)
+chmod o+x "$HOME" "$HOME/workspace" "$HOME/workspace/.local" "$HOME/workspace/.local/share"
+id runner >/dev/null 2>&1 || useradd -d "$STACK/home" -s /bin/bash runner
+mkdir -p "$TS/state"
+[[ -f "$STACK/.env" ]] && { set -a; source "$STACK/.env"; set +a; }
+# dig's anycast answers rotate, and most endpoints are unreachable
+# through this gateway at any given time (observed: one of four probed
+# answered; a dead pick = "fetch control key: context deadline exceeded"
+# and a node stuck Logged out). Probe the candidates and pin the first
+# that actually answers; .102 is the known-good fallback.
+IP=""
+for cand in $(dig +short +time=4 +tries=1 @8.8.8.8 controlplane.tailscale.com A 2>/dev/null | grep -E '^[0-9.]+$'); do
+  if timeout 8 curl -s -o /dev/null --noproxy '*' --resolve "controlplane.tailscale.com:443:$cand" --max-time 6 "https://controlplane.tailscale.com/key?v=148"; then IP="$cand"; break; fi
+done
+[[ -n "$IP" ]] || IP="192.200.0.102"
+cp /etc/hosts "$TS/hosts"
+printf '%s controlplane.tailscale.com\n%s login.tailscale.com\n' "$IP" "$IP" >> "$TS/hosts"
+if ! runuser -u runner -- "${CLEANENV[@]}" $TSCTL status >/dev/null 2>&1 \
+   && ! runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | grep -q "Logged out"; then
+  for p in $(pgrep tailscaled 2>/dev/null); do
+    tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q ".local/share/tailscale" && kill "$p"
+  done
+  sleep 1; rm -f "$SOCK"
+  unshare -m bash -c '
+    mount --bind '"$TS"'/hosts /etc/hosts || exit 1
+    runuser -u runner -- env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy \
+      setsid '"$BIN"'/tailscaled --tun=userspace-networking \
+        --socks5-server=127.0.0.1:1056 --outbound-http-proxy-listen=127.0.0.1:1056 \
+        --state='"$TS"'/state/tailscaled.state --statedir='"$TS"'/state --socket='"$SOCK"' \
+        </dev/null >>'"$TS"'/tailscaled.log 2>&1 &
+  '
+  for _ in $(seq 1 12); do [[ -S "$SOCK" ]] && break; sleep 1; done
+fi
+[[ -S "$SOCK" ]] || { echo "tailscaled socket not ready — see $TS/tailscaled.log"; exit 1; }
+# Wait for a definitive status line: the "Tailscale is starting" health
+# block can hide a "Logged out." first line and skip the join below.
+STATE=""
+for _ in $(seq 1 15); do
+  STATE="$(runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | head -1)"
+  [[ "$STATE" != "# Health check:" ]] && break
+  sleep 1
+done
+echo "status: $STATE"
+if [[ "$STATE" == "Logged out." ]]; then
+  if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
+    runuser -u runner -- "${CLEANENV[@]}" $TSCTL up \
+      --authkey "$TAILSCALE_AUTH_KEY" --hostname "${TAILSCALE_NODE_NAME:-muse-join}" --accept-routes=false 2>&1 \
+      | sed -E 's/(tskey-)[A-Za-z0-9_-]+/\1***/g'
+  else
+    echo "logged out and no TAILSCALE_AUTH_KEY in $STACK/.env"; exit 1
+  fi
+fi
+runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | head -3
+runuser -u runner -- "${CLEANENV[@]}" $TSCTL ip -4 2>/dev/null
+EOS
+chmod +x "$SSHDIR/start-tailscale.sh"
+
+}
+phase_join() {
 say "start the stack"
 bash "$SSHDIR/start-sshd.sh" || true
 if grep -q "^TAILSCALE_AUTH_KEY=.\+" "$SSHDIR/.env"; then
@@ -463,3 +483,91 @@ echo "client pubkey (register it ONLY at the fleet hop, and only if this box mus
 cat "$SSHDIR/id_ed25519.pub"
 echo "authorized_keys already trusts the muse-hop key (seeded above) — nothing else belongs there by default"
 echo "redeploy restore order: start-sshd.sh -> start-tailscale.sh (foreground) -> reverse loop (hop boxes only)"
+
+}
+
+# ── Interactive phase menu (arrow keys; pattern after the replit
+#    setup's ui_menu.sh, scaled to this skill's three phases) ──────────
+_MENU_ITEMS=(
+  "sshd|sshd stack — users, openssh, keys, launchers, reverse scripts"
+  "tailscale|tailscale — pinned binaries + userspace node launcher"
+  "join|join — start the stack, join the tailnet, launch the hop's loop"
+)
+_MENU_CURSOR=0
+_MENU_TOGGLE=(0 0 0)
+
+_menu_status() {
+  local b n
+  b="$(timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null || true)"
+  [[ -n "$b" ]] && echo "sshd: $b" || echo "sshd: DOWN"
+  [[ -x "$BINDIR/tailscaled" ]] && echo "tailscale binaries: installed ($TSVER)" || echo "tailscale binaries: not installed"
+  n="$(runuser -u runner -- "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>/dev/null | head -1 || true)"
+  [[ -n "$n" ]] && echo "node: $n" || echo "node: DOWN"
+}
+
+_menu_draw() {
+  clear
+  echo "Muse VM — remote-access setup"
+  echo "↑/↓ move · space toggle · enter confirm · q quit"
+  echo ""
+  echo "Current status"
+  _menu_status
+  echo ""
+  local i desc mark prefix
+  for i in "${!_MENU_ITEMS[@]}"; do
+    IFS='|' read -r _ desc <<< "${_MENU_ITEMS[$i]}"
+    [[ "${_MENU_TOGGLE[$i]}" -eq 1 ]] && mark="[✓]" || mark="[ ]"
+    [[ "$i" -eq "$_MENU_CURSOR" ]] && prefix=">" || prefix=" "
+    echo " $prefix $mark $desc"
+  done
+}
+
+_menu_read_key() {
+  local key
+  if ! IFS= read -rsn1 key; then echo quit; return 0; fi
+  if [[ "$key" == $'\x1b' ]]; then
+    IFS= read -rsn2 key || true
+    case "$key" in '[A') echo up ;; '[B') echo down ;; esac
+  elif [[ "$key" == " " ]]; then echo space
+  elif [[ -z "$key" ]]; then echo enter
+  elif [[ "$key" == "q" || "$key" == "Q" ]]; then echo quit; fi
+}
+
+interactive_menu() {
+  printf '\033[?25l'; trap 'printf "\033[?25h\n"; exit 130' INT
+  set +e
+  while true; do
+    _menu_draw
+    case "$(_menu_read_key)" in
+      up)   _MENU_CURSOR=$(( (_MENU_CURSOR + ${#_MENU_ITEMS[@]} - 1) % ${#_MENU_ITEMS[@]} )) ;;
+      down) _MENU_CURSOR=$(( (_MENU_CURSOR + 1) % ${#_MENU_ITEMS[@]} )) ;;
+      space) _MENU_TOGGLE[$_MENU_CURSOR]=$(( 1 - _MENU_TOGGLE[$_MENU_CURSOR] )) ;;
+      enter) break ;;
+      quit)  printf '\033[?25h'; trap - INT; echo "Aborted."; exit 130 ;;
+    esac
+  done
+  printf '\033[?25h'; trap - INT
+  set -e
+  [[ "${_MENU_TOGGLE[0]}" -eq 1 ]] && { DO_SSHD=1; SELECTED=1; }
+  [[ "${_MENU_TOGGLE[1]}" -eq 1 ]] && { DO_TAILSCALE=1; SELECTED=1; }
+  [[ "${_MENU_TOGGLE[2]}" -eq 1 ]] && { DO_JOIN=1; SELECTED=1; }
+}
+
+
+# ── dispatch ──────────────────────────────────────────────────────────
+if [[ $DO_MENU -eq 1 ]] || { [[ $SELECTED -eq 0 ]] && [[ -t 0 ]]; }; then
+  interactive_menu
+fi
+if [[ $SELECTED -eq 0 ]]; then
+  # Bare run without a TTY (agent exec): the full setup, as before —
+  # the menu must never deadlock a non-interactive shell.
+  DO_SSHD=1 DO_TAILSCALE=1 DO_JOIN=1
+fi
+if [[ $DO_JOIN -eq 1 ]]; then
+  # -j implies the phases whose outputs it starts, when they are missing.
+  [[ -x "$SSHDIR/start-sshd.sh" ]] || DO_SSHD=1
+  [[ -x "$SSHDIR/start-tailscale.sh" ]] || DO_TAILSCALE=1
+fi
+[[ $DO_SSHD -eq 1 ]] && phase_sshd
+[[ $DO_TAILSCALE -eq 1 ]] && phase_tailscale
+[[ $DO_JOIN -eq 1 ]] && phase_join
