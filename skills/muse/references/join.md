@@ -83,8 +83,8 @@ Key exchange does not scale as a mesh. Both skills use a star instead:
 one **hop** identity per fleet side, whose pubkey is authorized by
 default on every box the setup touches — Replit side: `hermes-join-hop`
 (the `RS_AUTHORIZED_KEYS` default in the replit join setup); Muse side:
-**`muse-join-hop`** — the operator's main Muse VM (node
-`muse-join-hop`, 100.113.127.73; the node itself carries the hop name) — seeded by `scripts/setup.sh` into the new box's
+**`muse-hop`** — the operator's main Muse VM (node
+`muse-hop`, 100.113.127.73; the node itself carries the hop name) — seeded by `scripts/setup.sh` into the new box's
 `sshd-dir/authorized_keys` unless `RS_AUTHORIZED_KEYS` overrides it.
 Onboarding a Muse VM is then: run setup, fill the auth key, done — the
 hop can already log in; no per-machine pubkey ping-pong. A box's own
@@ -101,7 +101,7 @@ per box — the port, not the peer, is the contended resource.
 
 A leaf Muse VM runs **no reverse loop** and registers its client key
 **nowhere by default**. The only reverse tunnel on the Muse side is the
-hop's: `muse-join-hop` → the repl hop (today `repl-test`, port 16801).
+hop's: `muse-hop` → the repl hop (today `repl-test`, port 16801).
 Setup enforces this: the reverse scripts are generated on every box but
 launched only when `RS_REVERSE_PEER` is set in the box's `.env` (hop
 boxes), with `RS_REVERSE_PORT` choosing the forward port. Consequences:
@@ -114,7 +114,7 @@ boxes), with `RS_REVERSE_PORT` choosing the forward port. Consequences:
   the hop, its client pubkey is registered at exactly one place: the
   hop's `authorized_keys`.
 - **repl side → leaf**: repl hop → the hop's reverse forward (16801)
-  → muse-join-hop → direct to the leaf. Hermes reaches every Muse VM
+  → muse-hop → direct to the leaf. Hermes reaches every Muse VM
   through that single door; no leaf keys exist on the repl side.
 
 This removes the two failure modes of the per-box design: pubkey
