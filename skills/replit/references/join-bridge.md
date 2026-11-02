@@ -232,6 +232,19 @@ through that shim when it is readable (fallback: the platform `.bashrc`,
 a `/nix/store` symlink — never append to it) and cds a login shell that
 starts in `$HOME` into `$REPL_HOME`.
 
+None of this reaches **Replit Secrets**, and Secrets never reach the ssh
+session either: they are injected only at spawn into processes the
+platform starts *after* the secret was set, while a join session is a
+child of sshd — restarting sshd does not change that (verified with a
+test secret: no live process env carried it, `echo $VAR` over ssh stayed
+empty, and `replit secrets exec --keys VAR -- cmd` returned it at once).
+Do not "fix" this by copying secret values into `~/.ssh/environment`;
+from a shell, go through `secrets exec`, or lift the value from a
+platform process that already carries it (see the auth-key section
+above). Rc-registry vars (`TAILSCALE_DATA_DIR` and friends) are the
+opposite case: they DO arrive in ssh shells, because bash under sshd
+sources `~/.bashrc` → the platform bashrc → `$BASHRC`.
+
 Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
 proxy answered and the port is not published.
