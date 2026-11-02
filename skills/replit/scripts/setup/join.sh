@@ -228,18 +228,24 @@ XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$env_base/.config}
 XDG_CACHE_HOME=${XDG_CACHE_HOME:-$env_base/.cache}
 XDG_BIN_HOME=${XDG_BIN_HOME:-$env_base/.local/bin}
 PATH=${XDG_BIN_HOME:-$env_base/.local/bin}:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+REPLIT_BASHRC=${REPLIT_BASHRC_FILE:-${XDG_CONFIG_HOME:-$env_base/.config}/replit_bashrc}
 ENVEOF
   chmod 600 "$home/.ssh/environment" 2>/dev/null || true
+  # REPLIT_BASHRC di atas hanya mirror dari pin [userenv.shared]: file
+  # shim + pin itu milik write_replit_bashrc (rc.sh), join tidak membuat
+  # atau menulis ulangnya — sesi ssh cuma diberi pointer yang sama.
   # Landing: sesi interaktif mulai di workspace. cwd urusan shell
   # (sshd tidak bisa mengaturnya); var di atas tidak bergantung rc.
   # ~/.bashrc di platform ini symlink ke /nix/store (milik platform,
   # read-only) — jangan disentuh. Channel-nya ~/.bash_profile, yang
-  # dibaca login shell: rantai ke .bashrc platform, lalu landing.
+  # dibaca login shell: masuk lewat shim yang sama dengan workflow
+  # (ia membersihkan REPLIT_MODE sebelum .bashrc platform jalan),
+  # fallback ke .bashrc platform, lalu landing.
   if [ ! -L "$home/.bash_profile" ] && ! grep -q "repl landing" "$home/.bash_profile" 2>/dev/null; then
     cat >>"$home/.bash_profile" <<'RCEOF'
 
 # >>> repl landing >>>
-[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+if [ -r "${REPLIT_BASHRC:-}" ]; then . "$REPLIT_BASHRC"; elif [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi
 case $- in *i*) [[ "$PWD" == "$HOME" ]] && cd "${REPL_HOME:-$HOME/workspace}" ;; esac
 # <<< repl landing <<<
 RCEOF
