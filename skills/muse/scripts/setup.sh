@@ -195,7 +195,15 @@ chmod o+x "$HOME" "$HOME/workspace" "$HOME/workspace/.local" "$HOME/workspace/.l
 id runner >/dev/null 2>&1 || useradd -d "$STACK/home" -s /bin/bash runner
 mkdir -p "$TS/state"
 [[ -f "$STACK/.env" ]] && { set -a; source "$STACK/.env"; set +a; }
-IP="$(dig +short +time=4 +tries=1 @8.8.8.8 controlplane.tailscale.com A 2>/dev/null | grep -E '^[0-9.]+$' | head -1)"
+# dig's anycast answers rotate, and most endpoints are unreachable
+# through this gateway at any given time (observed: one of four probed
+# answered; a dead pick = "fetch control key: context deadline exceeded"
+# and a node stuck Logged out). Probe the candidates and pin the first
+# that actually answers; .102 is the known-good fallback.
+IP=""
+for cand in $(dig +short +time=4 +tries=1 @8.8.8.8 controlplane.tailscale.com A 2>/dev/null | grep -E '^[0-9.]+$'); do
+  if timeout 8 curl -s -o /dev/null --noproxy '*' --resolve "controlplane.tailscale.com:443:$cand" --max-time 6 "https://controlplane.tailscale.com/key?v=148"; then IP="$cand"; break; fi
+done
 [[ -n "$IP" ]] || IP="192.200.0.102"
 cp /etc/hosts "$TS/hosts"
 printf '%s controlplane.tailscale.com\n%s login.tailscale.com\n' "$IP" "$IP" >> "$TS/hosts"
