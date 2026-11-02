@@ -148,6 +148,9 @@ if [[ ! -f "$SSHDIR/.env" ]]; then
 TAILSCALE_AUTH_KEY=
 TAILSCALE_NODE_NAME=muse-join
 #RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-join-hop default)
+#RS_REVERSE_PEER= (HOP ONLY: peer IP that receives this box's reverse forward. Leaves leave
+#  this unset — a leaf runs NO reverse loop; only the fleet hop opens one, to the repl hop.)
+#RS_REVERSE_PORT=16801 (forward port on the peer when RS_REVERSE_PEER is set)
 EOF
   chmod 600 "$SSHDIR/.env"
   echo "created $SSHDIR/.env — fill TAILSCALE_AUTH_KEY (600, never commit it), then re-run this script"
@@ -394,7 +397,8 @@ EOS
 }
 gen_loop "$REVDIR/start-reverse.sh" "$REVDIR/reverse.log" 16800 \
   "-F $REVDIR/ssh_config_ts"
-gen_loop "$REVDIR/start-reverse-node.sh" "$REVDIR/reverse-node.log" 16801 \
+REVPORT="$(grep -E '^RS_REVERSE_PORT=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2)"; REVPORT="${REVPORT:-16801}"
+gen_loop "$REVDIR/start-reverse-node.sh" "$REVDIR/reverse-node.log" "$REVPORT" \
   "-o ProxyCommand=\"$BINDIR/tailscale --socket=$TSDIR/tailscaled.sock nc %h %p\""
 # The node-carried loop must run as root (runner cannot read the client key).
 cat > "$REVDIR/check-reverse.sh" <<'EOS'
@@ -416,21 +420,26 @@ probe 16800 connector
 probe 16801 node
 ' 2>&1 | grep -v "Warning: Permanently"
 EOS
+sed -i "s/^probe 16801 node/probe $REVPORT node/" "$REVDIR/check-reverse.sh"
 chmod +x "$REVDIR/check-reverse.sh"
 
 say "start the stack"
 bash "$SSHDIR/start-sshd.sh" || true
 if grep -q "^TAILSCALE_AUTH_KEY=.\+" "$SSHDIR/.env"; then
   bash "$SSHDIR/start-tailscale.sh" || true
-  (setsid bash "$REVDIR/start-reverse-node.sh" >>"$REVDIR/reverse-node.outer.log" 2>&1 &)
-  echo "node-carried loop launched; the connector-carried loop (start-reverse.sh) is generated but NOT launched — it needs the built-in connector, which the standing setup does not use"
-  echo "loops launched detached; verify shortly: bash $REVDIR/check-reverse.sh"
+  if grep -qE "^RS_REVERSE_PEER=.+" "$SSHDIR/.env"; then
+    (setsid bash "$REVDIR/start-reverse-node.sh" >>"$REVDIR/reverse-node.outer.log" 2>&1 &)
+    echo "hop mode (RS_REVERSE_PEER set): node-carried reverse loop launched on port $REVPORT; verify shortly: bash $REVDIR/check-reverse.sh"
+    echo "the connector-carried loop (start-reverse.sh) is generated but NOT launched — it needs the built-in connector, which the standing setup does not use"
+  else
+    echo "leaf mode (RS_REVERSE_PEER unset): reverse loops generated but NOT launched — only the fleet hop runs one. This box is reachable through the hop; it opens no tunnels and registers its key nowhere."
+  fi
 else
-  echo "TAILSCALE_AUTH_KEY still empty in $SSHDIR/.env — sshd is up; fill the key and re-run to join + launch the reverse loops"
+  echo "TAILSCALE_AUTH_KEY still empty in $SSHDIR/.env — sshd is up; fill the key and re-run to join (+ launch the reverse loop if this box is a hop)"
 fi
 
 say "handoff"
-echo "client pubkey (give it to the peer's authorized_keys):"
+echo "client pubkey (register it ONLY at the fleet hop, and only if this box must initiate ssh to the hop):"
 cat "$SSHDIR/id_ed25519.pub"
-echo "peer pubkey goes into: $SSHDIR/sshd-dir/authorized_keys"
-echo "redeploy restore order: start-sshd.sh -> start-tailscale.sh (foreground) -> both reverse loops"
+echo "authorized_keys already trusts the muse-join-hop key (seeded above) — nothing else belongs there by default"
+echo "redeploy restore order: start-sshd.sh -> start-tailscale.sh (foreground) -> reverse loop (hop boxes only)"
