@@ -388,9 +388,11 @@ cat > "$REVDIR/check-reverse.sh" <<'EOS'
 set -u
 SOCK="$HOME/workspace/.local/share/tailscale/tailscaled.sock"
 ssh -F "$HOME/workspace/.ssh/reverse/ssh_config_ts" -o "ProxyCommand=$HOME/workspace/.local/bin/tailscale --socket=$SOCK nc %h %p" repl-test '
+SSH=$(command -v ssh 2>/dev/null || ls /nix/store/*-replit-runtime-path/bin/ssh 2>/dev/null | head -1)
+KEYF=$HOME/.ssh/join-tailnet/host_ed25519; [ -f \"$KEYF\" ] || KEYF=$HOME/.ssh/id_muse_vm
 probe() {
   local port=$1 name=$2 out
-  out=$(timeout 20 ssh -p "$port" -i ~/.ssh/id_muse_vm -o IdentitiesOnly=yes \
+  out=$(timeout 20 \"$SSH\" -p \"$port\" -i \"$KEYF\" -o IdentitiesOnly=yes \
         -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
         runner@127.0.0.1 "hostname" 2>&1)
   if [[ "$out" == *"htch-runtime"* ]]; then echo "$name ($port): OK"
