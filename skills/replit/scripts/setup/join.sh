@@ -206,6 +206,8 @@ PrintMotd no
 X11Forwarding no
 AllowTcpForwarding yes
 AllowUsers $user
+ClientAliveInterval 30
+ClientAliveCountMax 3
 LogLevel VERBOSE
 EOF
   "$sshd" -t -f "$RS_DIR/sshd_config" || { warn "config sshd tidak valid"; return 1; }
