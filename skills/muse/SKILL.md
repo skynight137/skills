@@ -24,7 +24,7 @@ when they disagree — re-run the probes instead of trusting stale text.
 | reach the internet or another machine, understand a blocked/reset connection, pick a permission to ask for | `references/egress.md` |
 | join a tailnet, accept or originate SSH, build remote access into this box | `references/join.md` |
 | keep a daemon alive, schedule work, or react to a condition — systemd vs cron vs hooks | `references/automation.md` |
-| stand up a FRESH Muse VM as a join/e2e target (the muse-test pattern) | `scripts/setup.sh` (self-contained installer; secrets via a 600 `.env` it templates for you). In a full repo clone, the repo-root `./setup.sh --machine muse` is the same entry via the shared dispatcher |
+| stand up a FRESH Muse VM as a join/e2e target (the muse-test pattern) | `scripts/setup.sh` (self-contained installer; secrets via a 600 `.env` it templates for you). Call it by full path — the skill folder names the target; there is no dispatcher |
 
 ## Hard rules (the ones that cost a night when forgotten)
 

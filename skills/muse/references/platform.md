@@ -57,7 +57,7 @@ Consequences that bite:
 - Toolchain convention: the operator's own scripts export
   `MUSE_HOME=$HOME/workspace` from that `env.sh` — the persistent target path,
   playing the role `REPL_HOME` plays on Replit. Muse itself ignores the
-  variable; it exists so shared tooling (a `--machine muse|repl` setup)
+  variable; it exists so shared tooling (the per-skill setup scripts)
   can resolve anchor/bin/state dirs from one profile instead of literals.
 
 ## Users & the shell
