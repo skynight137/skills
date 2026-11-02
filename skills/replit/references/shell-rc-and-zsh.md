@@ -19,8 +19,11 @@
   `bash --rcfile <wrapper> -i -c 'alias | head'`.
 - **`REPL_HOME` is not provided by the platform env file.** `/run/replit/env/latest`
   (the wrapper's `SHELL_ENV`) carries `REPLIT_*` vars but not `REPL_HOME`, and a
-  non-interactive `ssh host 'cmd'` sources no rc at all, so `$REPL_HOME` is empty
-  there by design. Export it yourself when running `setup.sh` over ssh:
+  non-interactive `ssh host 'cmd'` sources no rc at all. Sessions through the
+  join-tailnet sshd are the exception: its `PermitUserEnvironment` +
+  `~/.ssh/environment` inject `REPL_HOME` (and the XDG dirs / PATH) before any
+  shell starts. Outside that sshd — or before `--join` has run — export it
+  yourself when running `setup.sh` over ssh:
   `export REPL_HOME=/home/runner/workspace`.
 - **Daemons do not belong in any rc.** `.bashrc`/`.profile`/`.config/bashrc` are
   re-sourced every time a terminal opens, so an autostart line there re-fires per

@@ -220,6 +220,14 @@ What `install_join` does, in order (all idempotent, re-run to repair):
    then `nc -X 5 -x`. `nc` is not portable: netcat-openbsd has `-X`, netcat-traditional
    and busybox `nc` answer `invalid option -- 'X'`, so never print that form alone.
 
+Session env for this sshd does **not** come from shell rc. `install_join` sets
+`PermitUserEnvironment yes` and renders `~/.ssh/environment` with static
+`REPL_HOME`, XDG dirs and `PATH`, so login, non-login and `ssh host 'cmd'`
+sessions all receive them; `[userenv.shared]` only reaches processes the
+platform starts itself. Interactive landing is separate: `~/.bash_profile`
+chains to the platform `.bashrc` (a `/nix/store` symlink — never append to it)
+and cds a login shell that starts in `$HOME` into `$REPL_HOME`.
+
 Verify from A with `-o BatchMode=yes -o ConnectTimeout=8`. `SSH-2.0-` banner on
 loopback but timeout from A = the tailnet leg, not sshd; `Connection closed` = a
 proxy answered and the port is not published.
