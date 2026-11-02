@@ -83,8 +83,8 @@ Key exchange does not scale as a mesh. Both skills use a star instead:
 one **hop** identity per fleet side, whose pubkey is authorized by
 default on every box the setup touches — Replit side: `hermes-join-hop`
 (the `RS_AUTHORIZED_KEYS` default in the replit join setup); Muse side:
-**`muse-join-hop`** — the operator's main Muse VM (this box,
-`muse-join`) — seeded by `scripts/setup.sh` into the new box's
+**`muse-join-hop`** — the operator's main Muse VM (node
+`muse-join-hop`, 100.113.127.73; the node itself carries the hop name) — seeded by `scripts/setup.sh` into the new box's
 `sshd-dir/authorized_keys` unless `RS_AUTHORIZED_KEYS` overrides it.
 Onboarding a Muse VM is then: run setup, fill the auth key, done — the
 hop can already log in; no per-machine pubkey ping-pong. A box's own
