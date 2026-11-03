@@ -23,6 +23,17 @@
 #                                     outputs are missing)
 #   bash setup.sh --verify            read-only status
 #   bash setup.sh [--peer <ip>] ...   peer = reverse-forward holder
+#   bash setup.sh [--user <name>] ... stack service user: the user the join
+#                                     sshd runs as and accepts logins for,
+#                                     and the tailscaled run-user. Env
+#                                     RS_SSH_USER sets it too; the flag
+#                                     wins. Default: root (setup prints a
+#                                     warning — root sessions can read the
+#                                     stack .env and client key). The
+#                                     fleet-proven isolated choice is
+#                                     --user runner. The choice is baked
+#                                     into the generated launchers, so
+#                                     restores keep it with no env vars.
 #
 # Secrets never live in this repo: the operator creates <ws>/.ssh/.env
 # (mode 600) with TAILSCALE_AUTH_KEY=<key for the tailnet> — setup writes
@@ -34,10 +45,12 @@
 set -euo pipefail
 
 PEER=100.106.114.30 VERIFY=0
+SSH_USER="${RS_SSH_USER:-root}"
 DO_SSHD=0 DO_TAILSCALE=0 DO_JOIN=0 DO_MENU=0 SELECTED=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --peer) PEER=$2; shift 2 ;;
+    --user) SSH_USER=$2; shift 2 ;;
     --verify) VERIFY=1; shift ;;
     --sshd) DO_SSHD=1; SELECTED=1; shift ;;
     --tailscale) DO_TAILSCALE=1; SELECTED=1; shift ;;
@@ -56,10 +69,45 @@ CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_p
 
 say() { printf '\n== %s ==\n' "$*"; }
 
+# ── Stack service user (--user / RS_SSH_USER; flag wins; default root) ──
+# Governs THIS box's stack identity only: the join sshd's run/login user,
+# the service home, the tailscaled run-user, and where the sshd-injected
+# session-environment file lives. Peer-side literals (runner@<peer>,
+# User runner in the peer configs) are the PEER's platform user and are
+# deliberately NOT parameterized.
+[[ "$SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]] || { echo "invalid --user value: $SSH_USER" >&2; exit 2; }
+if [[ "$SSH_USER" == root ]]; then
+  SVC_HOME=/root
+  SVC_PERMIT_ROOT_LOGIN=prohibit-password
+  # Root's passwd home is /root (ephemeral), but /root/.ssh is a symlink
+  # into $SSHDIR, so the environment file sshd reads for root physically
+  # persists at $SSHDIR/environment.
+  SVC_ENV_FILE="$SSHDIR/environment"
+else
+  SVC_HOME="$SSHDIR/home"
+  SVC_PERMIT_ROOT_LOGIN=no
+  SVC_ENV_FILE="$SVC_HOME/.ssh/environment"
+fi
+# Run a command as the service user (directly when it is root: setup and
+# the generated launchers already run as root).
+svc_run() {
+  if [[ "$SSH_USER" == root ]]; then "$@"; else runuser -u "$SSH_USER" -- "$@"; fi
+}
+
+say "stack service user: $SSH_USER (service home: $SVC_HOME)"
+if [[ "$SSH_USER" == root ]]; then
+  cat <<'WARN'
+WARNING: the stack service user is root. SSH sessions will land as root
+and can read the stack .env (the tailnet auth key) and the client
+private key in the ssh store. The fleet-proven isolated setup is
+--user runner; choose root only when you accept that exposure.
+WARN
+fi
+
 if [[ $VERIFY -eq 1 ]]; then
   say "verify"
   timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "sshd: $l"' 2>/dev/null || echo "sshd: DOWN"
-  NODE_STATUS="$(runuser -u runner -- "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>&1 | head -2)"
+  NODE_STATUS="$(svc_run "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>&1 | head -2)"
   [[ -n "$NODE_STATUS" ]] && printf '%s
 ' "$NODE_STATUS" || echo "node: DOWN"
   echo "reverse forwards (probe runs from the peer): bash $REVDIR/check-reverse.sh"
@@ -69,15 +117,19 @@ fi
 phase_sshd() {
 say "layout + users"
 chmod o+x "$HOME" "$WS"
-mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$SSHDIR/home"
+mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config"
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
-# sshd runs as runner and must write its log + pid inside join-tailnet, read
-# its host key and authorized_keys, and land in a home it owns. Pin the
-# end state here AND in start-sshd.sh (below): without this, both test
-# boxes needed manual permission surgery before sshd would start.
+# sshd runs as the service user and must write its log + pid inside
+# join-tailnet, read its host key and authorized_keys, and land in a
+# home it owns. Pin the end state here AND in start-sshd.sh (below):
+# without this, both test boxes needed manual permission surgery before
+# sshd would start.
 chmod 777 "$SSHDIR/join-tailnet"
-chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
-id runner >/dev/null 2>&1 || useradd -d "$SSHDIR/home" -s /bin/bash runner
+if [[ "$SSH_USER" != root ]]; then
+  mkdir -p "$SVC_HOME"
+  chown "$SSH_USER:$SSH_USER" "$SVC_HOME" 2>/dev/null || true; chmod 755 "$SVC_HOME"
+  id "$SSH_USER" >/dev/null 2>&1 || useradd -d "$SVC_HOME" -s /bin/bash "$SSH_USER"
+fi
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
 mkdir -p /run/sshd && chmod 755 /run/sshd
 
@@ -94,8 +146,14 @@ fi
 say "sshd stack"
 [[ -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" ]] || \
   ssh-keygen -t ed25519 -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" -N '' >/dev/null
-chown root:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
-chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
+if [[ "$SSH_USER" == root ]]; then
+  chown root:root "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+  chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
+else
+  # Group read lets the non-root sshd (running as the service user) open it.
+  chown "root:$SSH_USER" "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+  chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
+fi
 touch "$SSHDIR/join-tailnet/authorized_keys"; chmod 600 "$SSHDIR/join-tailnet/authorized_keys"
 # Default trust: the fleet hop (mirrors the replit skill's hermes-join-hop).
 # Every box stood up with this setup authorizes the muse-hop key —
@@ -113,7 +171,7 @@ if [[ -n "${RS_AUTHORIZED_KEYS:-}" ]]; then
 else
   seed_key "$HOP_KEY" "$(echo "$HOP_KEY" | awk '{print $2}')"
 fi
-chown runner:runner "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
+chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
 chmod 600 "$SSHDIR/join-tailnet/authorized_keys"
 cat > "$SSHDIR/join-tailnet/sshd_config" <<EOF
 Port 6800
@@ -130,8 +188,8 @@ PubkeyAuthentication yes
 # every authorized_keys for exactly that. Key-only auth stays on.
 StrictModes no
 ChallengeResponseAuthentication no
-PermitRootLogin no
-AllowUsers runner
+PermitRootLogin $SVC_PERMIT_ROOT_LOGIN
+AllowUsers $SSH_USER
 UsePAM no
 # Session environment comes from sshd itself (~/.ssh/environment in the
 # service home), not from shell rc: login, non-login and `ssh host cmd`
@@ -145,7 +203,7 @@ ClientAliveInterval 30
 ClientAliveCountMax 3
 Subsystem sftp $SSHDIR/rootfs/usr/lib/openssh/sftp-server
 EOF
-chown runner:runner "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
+chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
 [[ -f "$SSHDIR/id_ed25519" ]] || ssh-keygen -t ed25519 -f "$SSHDIR/id_ed25519" -N '' >/dev/null
 [[ -e "$HOME/.ssh" ]] || ln -s "$SSHDIR" "$HOME/.ssh"
 if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
@@ -180,6 +238,8 @@ if [[ ! -f "$SSHDIR/.env" ]]; then
   cat > "$SSHDIR/.env" <<EOF
 TAILSCALE_AUTH_KEY=
 TAILSCALE_NODE_NAME=muse-join
+RS_SSH_USER=$SSH_USER
+# (the stack service user chosen at install time; setup's --user flag overrides it)
 #RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-hop default)
 #RS_REVERSE_PEER= (HOP ONLY: peer IP that receives this box's reverse forward. Leaves leave
 #  this unset — a leaf runs NO reverse loop; only the fleet hop opens one, to the repl hop.)
@@ -191,8 +251,11 @@ EOF
 fi
 
 say "session environment (sshd-injected, not rc)"
-mkdir -p "$SSHDIR/home/.ssh"
-cat > "$SSHDIR/home/.ssh/environment" <<EOF
+# sshd reads ~/.ssh/environment under the service user's passwd home:
+# $SVC_HOME/.ssh/environment — which for root is the file $SVC_ENV_FILE
+# ($SSHDIR/environment, reached through the /root/.ssh symlink).
+if [[ "$SSH_USER" != root ]]; then mkdir -p "$SVC_HOME/.ssh"; fi
+cat > "$SVC_ENV_FILE" <<EOF
 MUSE_HOME=$WS
 XDG_DATA_HOME=$WS/.local/share
 XDG_CONFIG_HOME=$WS/.config
@@ -201,48 +264,93 @@ XDG_STATE_HOME=$WS/.local/state
 PATH=$WS/.local/bin:$WS/.ssh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BASH_ENV=$WS/config/env.sh
 EOF
-chown -R runner:runner "$SSHDIR/home/.ssh" 2>/dev/null || true
-chmod 700 "$SSHDIR/home/.ssh"; chmod 600 "$SSHDIR/home/.ssh/environment"
+if [[ "$SSH_USER" != root ]]; then
+  chown -R "$SSH_USER:$SSH_USER" "$SVC_HOME/.ssh" 2>/dev/null || true
+  chmod 700 "$SVC_HOME/.ssh"
+fi
+chmod 600 "$SVC_ENV_FILE"
 # Landing: interactive sessions start in the workspace. The working
 # directory is a shell concern (sshd cannot set it); the vars above no
 # longer depend on rc at all — this block only handles the landing.
-if ! grep -q "muse landing" "$SSHDIR/home/.bashrc" 2>/dev/null; then
-  cat >> "$SSHDIR/home/.bashrc" <<'RCEOF'
+if ! grep -q "muse landing" "$SVC_HOME/.bashrc" 2>/dev/null; then
+  cat >> "$SVC_HOME/.bashrc" <<'RCEOF'
 
 # >>> muse landing >>>
 case $- in *i*) [[ "$PWD" == "$HOME" ]] && cd "${MUSE_HOME:-$HOME/workspace}" ;; esac
 # <<< muse landing <<<
 RCEOF
 fi
-cat > "$SSHDIR/home/.bash_profile" <<'EOF'
+cat > "$SVC_HOME/.bash_profile" <<'EOF'
 [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
 EOF
-chown runner:runner "$SSHDIR/home/.bashrc" "$SSHDIR/home/.bash_profile" 2>/dev/null || true
+chown "$SSH_USER:$SSH_USER" "$SVC_HOME/.bashrc" "$SVC_HOME/.bash_profile" 2>/dev/null || true
 
-say "launcher: start-sshd.sh"
-cat > "$SSHDIR/start-sshd.sh" <<'EOS'
+say "launcher: start-sshd.sh (service user $SSH_USER baked in)"
+# Generated in chunks so the service user is baked in at generation
+# time: restores keep the install-time choice with no env vars, and
+# root mode gets a file with no runuser wrappers and no service-user
+# useradd at all. In runner mode the output is byte-identical to the
+# historical single-heredoc version.
+cat > "$SSHDIR/start-sshd.sh" <<EOS
 #!/usr/bin/env bash
-# (Re)start the join sshd as `runner` on 6800. Run as root after a redeploy:
+# (Re)start the join sshd as \`$SSH_USER\` on 6800. Run as root after a redeploy:
 # /etc/passwd + /run + /root/.ssh are ephemeral; everything else persists.
 set -euo pipefail
-SSHDIR="$HOME/workspace/.ssh"
-if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
-chmod o+x "$HOME" "$HOME/workspace"
-id runner >/dev/null 2>&1 || useradd -d "$SSHDIR/home" -s /bin/bash runner
+SSHDIR="\$HOME/workspace/.ssh"
+if [[ "\$(readlink /root/.ssh 2>/dev/null)" != "\$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "\$SSHDIR" /root/.ssh; fi
+chmod o+x "\$HOME" "\$HOME/workspace"
+EOS
+if [[ "$SSH_USER" != root ]]; then
+  cat >> "$SSHDIR/start-sshd.sh" <<EOS
+id $SSH_USER >/dev/null 2>&1 || useradd -d "\$SSHDIR/home" -s /bin/bash $SSH_USER
+EOS
+fi
+cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
 mkdir -p /run/sshd && chmod 755 /run/sshd
 chmod 777 "$SSHDIR/join-tailnet"
-chown runner:runner "$SSHDIR/home" 2>/dev/null || true; chmod 755 "$SSHDIR/home"
-chown root:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
-chown runner:runner "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
-chown runner:runner "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
-chown runner:runner "$SSHDIR/home/.ssh/environment" 2>/dev/null || true; chmod 600 "$SSHDIR/home/.ssh/environment" 2>/dev/null || true
-runuser -u runner -- test -r "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || { chown runner:runner "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"; }
+EOS
+if [[ "$SSH_USER" != root ]]; then
+  cat >> "$SSHDIR/start-sshd.sh" <<EOS
+chown $SSH_USER:$SSH_USER "\$SSHDIR/home" 2>/dev/null || true; chmod 755 "\$SSHDIR/home"
+chown root:$SSH_USER "\$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "\$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+EOS
+else
+  cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
+chown root:root "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+EOS
+fi
+cat >> "$SSHDIR/start-sshd.sh" <<EOS
+chown $SSH_USER:$SSH_USER "\$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true; chmod 600 "\$SSHDIR/join-tailnet/authorized_keys" 2>/dev/null || true
+chown $SSH_USER:$SSH_USER "\$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "\$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
+EOS
+if [[ "$SSH_USER" != root ]]; then
+  cat >> "$SSHDIR/start-sshd.sh" <<EOS
+chown $SSH_USER:$SSH_USER "\$SSHDIR/home/.ssh/environment" 2>/dev/null || true; chmod 600 "\$SSHDIR/home/.ssh/environment" 2>/dev/null || true
+runuser -u $SSH_USER -- test -r "\$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || { chown $SSH_USER:$SSH_USER "\$SSHDIR/join-tailnet/ssh_host_ed25519_key"; chmod 600 "\$SSHDIR/join-tailnet/ssh_host_ed25519_key"; }
+EOS
+else
+  cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
+chown root:root "$SSHDIR/environment" 2>/dev/null || true; chmod 600 "$SSHDIR/environment" 2>/dev/null || true
+EOS
+fi
+cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
 if [[ -f "$SSHDIR/join-tailnet/sshd.pid" ]] && kill -0 "$(cat "$SSHDIR/join-tailnet/sshd.pid")" 2>/dev/null; then
   echo "sshd already running"; exit 0
 fi
-runuser -u runner -- bash -c \
+EOS
+if [[ "$SSH_USER" != root ]]; then
+  cat >> "$SSHDIR/start-sshd.sh" <<EOS
+runuser -u $SSH_USER -- bash -c \\
+  "setsid \$SSHDIR/rootfs/usr/sbin/sshd -f \$SSHDIR/join-tailnet/sshd_config -E \$SSHDIR/join-tailnet/sshd.log </dev/null >/dev/null 2>&1 & disown"
+EOS
+else
+  cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
+bash -c \
   "setsid $SSHDIR/rootfs/usr/sbin/sshd -f $SSHDIR/join-tailnet/sshd_config -E $SSHDIR/join-tailnet/sshd.log </dev/null >/dev/null 2>&1 & disown"
+EOS
+fi
+cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
 for _ in $(seq 1 10); do
   timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null && break
   sleep 1
@@ -425,7 +533,7 @@ alloc_claim_port() {
 }
 EOS
 chmod +x "$REVDIR/reverse-alloc.sh"
-# The node-carried loop must run as root (runner cannot read the client key).
+# The node-carried loop must run as root (a non-root service user cannot read the client key).
 cat > "$REVDIR/check-reverse.sh" <<'EOS'
 #!/usr/bin/env bash
 # Probe both reverse forwards FROM the peer: OK / ZOMBIE / DOWN per port.
@@ -455,6 +563,11 @@ done < /proc/net/tcp
 ' 2>&1 | grep -v "Warning: Permanently"
 EOS
 case "$REVPORT" in *[!0-9]*|'') : ;; *) sed -i "s/^probe 16801 node/probe $REVPORT node/" "$REVDIR/check-reverse.sh";; esac
+# The probe logs into THIS box's sshd through the forward, so its login
+# user is the baked service user. (The User runner in ssh_config_ts is
+# the PEER's own user — a connection TO the peer — and stays as-is.)
+# This substitution is a no-op when the service user is runner.
+sed -i "s/runner@127.0.0.1/$SSH_USER@127.0.0.1/" "$REVDIR/check-reverse.sh"
 chmod +x "$REVDIR/check-reverse.sh"
 
 }
@@ -474,9 +587,9 @@ if [[ ! -x "$BINDIR/tailscaled" ]]; then
   install -m755 "/tmp/tailscale_${TSVER}_amd64/tailscale" "/tmp/tailscale_${TSVER}_amd64/tailscaled" "$BINDIR/"
   rm -rf "/tmp/$TGZ" "/tmp/$TGZ.sha256" "/tmp/tailscale_${TSVER}_amd64"
 fi
-chown runner:runner "$TSDIR" 2>/dev/null || true
+chown "$SSH_USER:$SSH_USER" "$TSDIR" 2>/dev/null || true
 
-say "launcher: start-tailscale.sh (userspace node — the proven recipe)"
+say "launcher: start-tailscale.sh (userspace node; service user $SSH_USER baked in)"
 cat > "$SSHDIR/start-tailscale.sh" <<'EOS'
 #!/usr/bin/env bash
 # Userspace tailscale node for a Muse VM. Three sandbox fixes, all required:
@@ -494,8 +607,30 @@ TS="$HOME/workspace/.local/share/tailscale"
 SOCK="$TS/tailscaled.sock"
 TSCTL="$BIN/tailscale --socket=$SOCK"
 CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy)
+EOS
+# Baked by setup.sh: how this launcher runs tailscale commands as the
+# stack service user — a runuser prefix for a non-root user, direct
+# execution when the service user is root.
+if [[ "$SSH_USER" != root ]]; then
+  cat >> "$SSHDIR/start-tailscale.sh" <<EOS
+RUNAS=(runuser -u $SSH_USER --)
+DAEMON_RUNAS="runuser -u $SSH_USER -- "
+EOS
+else
+  cat >> "$SSHDIR/start-tailscale.sh" <<'EOS'
+RUNAS=()
+DAEMON_RUNAS=""
+EOS
+fi
+cat >> "$SSHDIR/start-tailscale.sh" <<'EOS'
 chmod o+x "$HOME" "$HOME/workspace" "$HOME/workspace/.local" "$HOME/workspace/.local/share"
-id runner >/dev/null 2>&1 || useradd -d "$STACK/home" -s /bin/bash runner
+EOS
+if [[ "$SSH_USER" != root ]]; then
+  cat >> "$SSHDIR/start-tailscale.sh" <<EOS
+id $SSH_USER >/dev/null 2>&1 || useradd -d "\$STACK/home" -s /bin/bash $SSH_USER
+EOS
+fi
+cat >> "$SSHDIR/start-tailscale.sh" <<'EOS'
 mkdir -p "$TS/state"
 [[ -f "$STACK/.env" ]] && { set -a; source "$STACK/.env"; set +a; }
 # dig's anycast answers rotate, and most endpoints are unreachable
@@ -515,15 +650,15 @@ done
 [[ -n "$IP" ]] || IP="192.200.0.102"
 cp /etc/hosts "$TS/hosts"
 printf '%s controlplane.tailscale.com\n%s login.tailscale.com\n' "$IP" "$IP" >> "$TS/hosts"
-if ! runuser -u runner -- "${CLEANENV[@]}" $TSCTL status >/dev/null 2>&1 \
-   && ! runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | grep -q "Logged out"; then
+if ! "${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL status >/dev/null 2>&1 \
+   && ! "${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL status 2>&1 | grep -q "Logged out"; then
   for p in $(pgrep tailscaled 2>/dev/null); do
     tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q ".local/share/tailscale" && kill "$p"
   done
   sleep 1; rm -f "$SOCK"
   unshare -m bash -c '
     mount --bind '"$TS"'/hosts /etc/hosts || exit 1
-    runuser -u runner -- env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy \
+    '"$DAEMON_RUNAS"'env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy \
       setsid '"$BIN"'/tailscaled --tun=userspace-networking \
         --socks5-server=127.0.0.1:1056 --outbound-http-proxy-listen=127.0.0.1:1056 \
         --state='"$TS"'/state/tailscaled.state --statedir='"$TS"'/state --socket='"$SOCK"' \
@@ -536,22 +671,22 @@ fi
 # block can hide a "Logged out." first line and skip the join below.
 STATE=""
 for _ in $(seq 1 15); do
-  STATE="$(runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | head -1)"
+  STATE="$("${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL status 2>&1 | head -1)"
   [[ "$STATE" != "# Health check:" ]] && break
   sleep 1
 done
 echo "status: $STATE"
 if [[ "$STATE" == "Logged out." ]]; then
   if [[ -n "${TAILSCALE_AUTH_KEY:-}" ]]; then
-    runuser -u runner -- "${CLEANENV[@]}" $TSCTL up \
+    "${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL up \
       --authkey "$TAILSCALE_AUTH_KEY" --hostname "${TAILSCALE_NODE_NAME:-muse-join}" --accept-routes=false 2>&1 \
       | sed -E 's/(tskey-)[A-Za-z0-9_-]+/\1***/g'
   else
     echo "logged out and no TAILSCALE_AUTH_KEY in $STACK/.env"; exit 1
   fi
 fi
-runuser -u runner -- "${CLEANENV[@]}" $TSCTL status 2>&1 | head -3
-runuser -u runner -- "${CLEANENV[@]}" $TSCTL ip -4 2>/dev/null
+"${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL status 2>&1 | head -3
+"${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL ip -4 2>/dev/null
 EOS
 chmod +x "$SSHDIR/start-tailscale.sh"
 
@@ -595,7 +730,7 @@ _menu_status() {
   b="$(timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null || true)"
   [[ -n "$b" ]] && echo "sshd: $b" || echo "sshd: DOWN"
   [[ -x "$BINDIR/tailscaled" ]] && echo "tailscale binaries: installed ($TSVER)" || echo "tailscale binaries: not installed"
-  n="$(runuser -u runner -- "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>/dev/null | head -1 || true)"
+  n="$(svc_run "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>/dev/null | head -1 || true)"
   [[ -n "$n" ]] && echo "node: $n" || echo "node: DOWN"
 }
 

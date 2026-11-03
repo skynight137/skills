@@ -224,3 +224,26 @@ Restore order after a redeploy:
 
 Verify from the peer: `ssh muse-vm` (16800) and the 16801 alias both land
 in the VM as the service user on the VM's hostname.
+
+## Stack service user (`--user` / `RS_SSH_USER`)
+
+`setup.sh` takes a service-user knob for the LOCAL stack: the user the
+join sshd runs as and accepts logins for (`AllowUsers`; `PermitRootLogin`
+is `prohibit-password` for root, `no` otherwise), the service home
+(root → `/root`; a custom user → `<ws>/.ssh/home`), useradd and the
+ownership fixups (non-root only), the tailscaled run-user and its
+state-dir ownership, and the session-environment file (root's copy
+persists at `<ws>/.ssh/environment`, reached through the `/root/.ssh`
+symlink). Set it with `--user <name>` or the `RS_SSH_USER` env var (the
+flag wins); the install-time choice is recorded in the `.env` and baked
+into the generated `start-sshd.sh` / `start-tailscale.sh`, so restores
+keep it with no env vars. Default: **root** — setup prints a prominent
+warning, because root sessions land as root and can read the stack
+`.env` (tailnet auth key) and the client private key. `--user runner`
+is the fleet-proven isolated mode and its generated files are
+byte-identical to the pre-knob templates. Peer-side literals
+(`runner@<peer>`, `User runner` in the peer configs) are the peer's own
+platform user and are NOT parameterized; the one exception is
+`check-reverse.sh`'s probe login (`<user>@127.0.0.1`), which targets
+this box's own sshd through the forward and is baked to the service
+user.
