@@ -146,9 +146,9 @@ arbiter: a probe whose forward registers wins, `forwarding failed`
 advances to the next candidate, and any other failure retries the
 same candidate (peer or network not ready). The won port is pinned
 into `.env` as a numeric `RS_REVERSE_PORT`, so every later start —
-and the next setup run, which regenerates the loop from `.env` —
+and every later start, which reads the port back from `.env` —
 is steady on the same port; scanning happens once, not per start.
-`check-reverse.sh` prints the peer's live 16800–16899 listener map
+`--check-reverse` prints the peer's live 16800–16899 listener map
 under its verdicts, so who holds what is always one probe away.
 Verified live 2026-11-02: a scratch loop on muse-hop with `auto`
 skipped the held 16801, claimed 16802, pinned it, and a hop through
@@ -204,26 +204,28 @@ redial loop happily logs thousands of attempts. Defenses, all applied:
 ## Layout & restore order (post-redeploy)
 
 Canonical project root: `~/workspace/.ssh/` (see platform.md for the
-symlink pattern). Scripts: `start-sshd.sh` (recreates users, `/run/sshd`,
-the `/root/.ssh` symlink; starts sshd as the service user on 6800),
-`start-tailscale.sh` (daemon + join), `reverse/start-reverse.sh` /
-`reverse/start-reverse-node.sh` (the two reverse loops) and
-`reverse/check-reverse.sh` (OK/ZOMBIE/DOWN probe run from the peer).
+symlink pattern) — it holds only configs, keys and state. No launcher
+scripts are installed anywhere: the stack is started by this skill's
+own runtime verbs in `scripts/setup.sh` — `--start-sshd` (recreates
+users, `/run/sshd`, the `/root/.ssh` symlink; starts sshd as the
+service user on 6800), `--start-ts` (daemon + join), `--loop` (the
+node-carried reverse loop, hop boxes) and `--check-reverse`
+(OK/ZOMBIE/DOWN probe run from the peer).
 The tailscale binaries follow XDG like the Replit layout:
 `~/workspace/.local/bin/`, daemon state/socket/log in
 `~/workspace/.local/share/tailscale/`. A fresh VM gets all of this from
 `scripts/setup.sh` in this skill.
 
-Restore order after a redeploy:
+Restore after a redeploy is one command — the same hourly self-heal
+runs it when its probes fail:
 
-1. `bash ~/workspace/.ssh/start-sshd.sh`
-2. `bash ~/workspace/.ssh/start-tailscale.sh` — **from a foreground agent
-   turn**; its direct dials may need a fresh egress approval that
-   background runs cannot get.
-3. Launch both reverse scripts detached (each under its own `flock`).
+1. `bash <skill>/scripts/setup.sh --user <user> --join` — starts sshd,
+   then the node, then the hop's reverse loop (detached, under `flock`).
+   The node start wants **a foreground agent turn**; its direct dials
+   may need a fresh egress approval that background runs cannot get.
 
-Verify from the peer: `ssh muse-vm` (16800) and the 16801 alias both land
-in the VM as the service user on the VM's hostname.
+Verify from the peer: `--check-reverse` reports the forward OK, and
+connecting through it lands in the VM as the service user.
 
 ## Stack service user (`--user` / `RS_SSH_USER`)
 
@@ -235,15 +237,15 @@ ownership fixups (non-root only), the tailscaled run-user and its
 state-dir ownership, and the session-environment file (root's copy
 persists at `<ws>/.ssh/environment`, reached through the `/root/.ssh`
 symlink). Set it with `--user <name>` or the `RS_SSH_USER` env var (the
-flag wins); the install-time choice is recorded in the `.env` and baked
-into the generated `start-sshd.sh` / `start-tailscale.sh`, so restores
-keep it with no env vars. Default: **root** — setup prints a prominent
+flag wins); the install-time choice is recorded in the `.env` as
+`RS_SSH_USER`, and the runtime verbs read the same flag/env — pass
+`--user <name>` on joins and starts (the fleet self-heal cron does).
+Default: **root** — setup prints a prominent
 warning, because root sessions land as root and can read the stack
 `.env` (tailnet auth key) and the client private key. `--user runner`
-is the fleet-proven isolated mode and its generated files are
-byte-identical to the pre-knob templates. Peer-side literals
+is the fleet-proven isolated mode. Peer-side literals
 (`runner@<peer>`, `User runner` in the peer configs) are the peer's own
 platform user and are NOT parameterized; the one exception is
-`check-reverse.sh`'s probe login (`<user>@127.0.0.1`), which targets
-this box's own sshd through the forward and is baked to the service
+the `--check-reverse` probe login (`<user>@127.0.0.1`), which targets
+this box's own sshd through the forward and follows the service
 user.

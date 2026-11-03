@@ -44,8 +44,7 @@ What you should see, in order:
 - `== stack service user: runner (service home: …/.ssh/home) ==`
   (root instead prints a WARNING that sessions can read `.env` —
   expected only when root was chosen on purpose.)
-- tailscale phase: binaries are skipped if already installed; the
-  launcher is (re)generated with the service user baked in.
+- tailscale phase: binaries are skipped if already installed.
 - join phase: `sshd already running` on re-runs, or a fresh start;
   then the node status table with this box's 100.x IP.
 - A leaf prints: `leaf mode (RS_REVERSE_PEER unset): reverse loops
@@ -60,7 +59,7 @@ What you should see, in order:
 Re-running the same command is the restore path: phases are implied
 only when their outputs are missing, key seeding is append-if-absent
 (existing `authorized_keys` entries are never removed), and each
-launcher starts its component only if down.
+component is started only if down.
 
 ## 3. Verify (don't trust the join output alone)
 
@@ -79,6 +78,6 @@ Logs for everything live in `~/workspace/logs/`
 Processes and `/etc` users are wiped; files survive. Either re-run
 step 2 by hand, or let the hourly self-heal do it (it probes first,
 joins only on failure). Expect ~0 approval prompts: the tailnet
-`derpMap` keeps 5 DERP regions and the launcher pins an
+`derpMap` keeps 2 DERP regions (blr + lax) and the node start pins an
 already-approved control-plane IP (see `derp-map.md` in the muse-hop
 workspace repo).

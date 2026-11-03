@@ -51,7 +51,7 @@ Consequences that bite:
   process spawn and it cannot be extended.
 - Working pattern for shared env + secrets: one non-secret `env.sh` in a
   persistent dir that also sources a single mode-600 `.env` holding the
-  secrets; every launcher sources it explicitly. The Secure Vault cannot
+  secrets; every runtime verb sources it explicitly. The Secure Vault cannot
   inject values into env vars (browser logins only) — a 600 `.env` in the
   persistent tree is the Replit-Secrets equivalent here.
 - Toolchain convention: the operator's own scripts export
