@@ -64,6 +64,7 @@ SSHDIR="$WS/.ssh"
 BINDIR="$WS/.local/bin"
 TSDIR="$WS/.local/share/tailscale"
 REVDIR="$SSHDIR/reverse"
+LOGDIR="$WS/logs"
 TSVER=1.104.4
 CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy)
 
@@ -117,10 +118,12 @@ fi
 phase_sshd() {
 say "layout + users"
 chmod o+x "$HOME" "$WS"
-mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config"
+mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$LOGDIR"
+chown "$SSH_USER:$SSH_USER" "$LOGDIR" 2>/dev/null || true
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
-# sshd runs as the service user and must write its log + pid inside
-# join-tailnet, read its host key and authorized_keys, and land in a
+# sshd runs as the service user and must write its pid inside
+# join-tailnet (its log goes to $WS/logs, also service-user-owned),
+# read its host key and authorized_keys, and land in a
 # home it owns. Pin the end state here AND in start-sshd.sh (below):
 # without this, both test boxes needed manual permission surgery before
 # sshd would start.
@@ -308,6 +311,7 @@ fi
 cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
 getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
 mkdir -p /run/sshd && chmod 755 /run/sshd
+mkdir -p "$SSHDIR/../logs"
 chmod 777 "$SSHDIR/join-tailnet"
 EOS
 if [[ "$SSH_USER" != root ]]; then
@@ -342,12 +346,12 @@ EOS
 if [[ "$SSH_USER" != root ]]; then
   cat >> "$SSHDIR/start-sshd.sh" <<EOS
 runuser -u $SSH_USER -- bash -c \\
-  "setsid \$SSHDIR/rootfs/usr/sbin/sshd -f \$SSHDIR/join-tailnet/sshd_config -E \$SSHDIR/join-tailnet/sshd.log </dev/null >/dev/null 2>&1 & disown"
+  "setsid \$SSHDIR/rootfs/usr/sbin/sshd -f \$SSHDIR/join-tailnet/sshd_config -E \$SSHDIR/../logs/sshd.log </dev/null >/dev/null 2>&1 & disown"
 EOS
 else
   cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
 bash -c \
-  "setsid $SSHDIR/rootfs/usr/sbin/sshd -f $SSHDIR/join-tailnet/sshd_config -E $SSHDIR/join-tailnet/sshd.log </dev/null >/dev/null 2>&1 & disown"
+  "setsid $SSHDIR/rootfs/usr/sbin/sshd -f $SSHDIR/join-tailnet/sshd_config -E $LOGDIR/sshd.log </dev/null >/dev/null 2>&1 & disown"
 EOS
 fi
 cat >> "$SSHDIR/start-sshd.sh" <<'EOS'
@@ -495,7 +499,7 @@ EOS
   chmod +x "$file"
 }
 REVPORT="$(grep -E '^RS_REVERSE_PORT=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"; REVPORT="${REVPORT:-16801}"
-gen_loop "$REVDIR/start-reverse-node.sh" "$REVDIR/reverse-node.log" "$REVPORT" \
+gen_loop "$REVDIR/start-reverse-node.sh" "$LOGDIR/reverse-node.log" "$REVPORT" \
   "-o ProxyCommand=\"$BINDIR/tailscale --socket=$TSDIR/tailscaled.sock nc %h %p\""
 cat > "$REVDIR/reverse-alloc.sh" <<'EOS'
 #!/usr/bin/env bash
@@ -603,6 +607,7 @@ BIN="$HOME/workspace/.local/bin"
 TS="$HOME/workspace/.local/share/tailscale"
 SOCK="$TS/tailscaled.sock"
 TSCTL="$BIN/tailscale --socket=$SOCK"
+LOGDIR="$HOME/workspace/logs"
 CLEANENV=(env -u HTTP_PROXY -u HTTPS_PROXY -u ALL_PROXY -u http_proxy -u https_proxy -u all_proxy -u NO_PROXY -u no_proxy)
 EOS
 # Baked by setup.sh: how this launcher runs tailscale commands as the
@@ -628,7 +633,7 @@ id $SSH_USER >/dev/null 2>&1 || useradd -d "\$STACK/home" -s /bin/bash $SSH_USER
 EOS
 fi
 cat >> "$SSHDIR/start-tailscale.sh" <<'EOS'
-mkdir -p "$TS/state"
+mkdir -p "$TS/state" "$LOGDIR"
 [[ -f "$STACK/.env" ]] && { set -a; source "$STACK/.env"; set +a; }
 # dig's anycast answers rotate, and most endpoints are unreachable
 # through this gateway at any given time (observed: one of four probed
@@ -659,11 +664,11 @@ if ! "${RUNAS[@]}" "${CLEANENV[@]}" $TSCTL status >/dev/null 2>&1 \
       setsid '"$BIN"'/tailscaled --tun=userspace-networking \
         --socks5-server=127.0.0.1:1056 --outbound-http-proxy-listen=127.0.0.1:1056 \
         --state='"$TS"'/state/tailscaled.state --statedir='"$TS"'/state --socket='"$SOCK"' \
-        </dev/null >>'"$TS"'/tailscaled.log 2>&1 &
+        </dev/null >>'"$LOGDIR"'/tailscaled.log 2>&1 &
   '
   for _ in $(seq 1 12); do [[ -S "$SOCK" ]] && break; sleep 1; done
 fi
-[[ -S "$SOCK" ]] || { echo "tailscaled socket not ready — see $TS/tailscaled.log"; exit 1; }
+[[ -S "$SOCK" ]] || { echo "tailscaled socket not ready — see $LOGDIR/tailscaled.log"; exit 1; }
 # Wait for a definitive status line: the "Tailscale is starting" health
 # block can hide a "Logged out." first line and skip the join below.
 STATE=""
@@ -690,6 +695,7 @@ chmod +x "$SSHDIR/start-tailscale.sh"
 }
 phase_join() {
 say "start the stack"
+mkdir -p "$LOGDIR"
 # REVPORT is set by phase_sshd's render — but -j skips that phase when
 # the launchers already exist (the normal re-run), leaving it unbound:
 # the hop-mode echo below then dies under set -u BEFORE the reverse
@@ -701,7 +707,7 @@ bash "$SSHDIR/start-sshd.sh" || true
 if grep -q "^TAILSCALE_AUTH_KEY=.\+" "$SSHDIR/.env"; then
   bash "$SSHDIR/start-tailscale.sh" || true
   if grep -qE "^RS_REVERSE_PEER=.+" "$SSHDIR/.env"; then
-    (setsid bash "$REVDIR/start-reverse-node.sh" >>"$REVDIR/reverse-node.outer.log" 2>&1 &)
+    (setsid bash "$REVDIR/start-reverse-node.sh" >>"$LOGDIR/reverse-node.outer.log" 2>&1 &)
     echo "hop mode (RS_REVERSE_PEER set): node-carried reverse loop launched on port $REVPORT; verify shortly: bash $REVDIR/check-reverse.sh"
   else
     echo "leaf mode (RS_REVERSE_PEER unset): reverse loops generated but NOT launched — only the fleet hop runs one. This box is reachable through the hop; it opens no tunnels and registers its key nowhere."
