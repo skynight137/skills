@@ -1,0 +1,84 @@
+# Worked example: a fresh Muse VM joins the fleet
+
+The exact sequence that built `muse-test` (2026-11-02) and re-joins
+`muse-hop` after every redeploy. Follow it literally; every step's
+expected output is shown. Two roles exist: a **leaf** (most boxes —
+no reverse tunnel) and the **hop** (one per fleet side — holds the
+reverse forward). This example is a leaf joining via muse-hop; the
+hop differences are marked.
+
+## 0. Get the skill
+
+```sh
+cd ~/workspace && timeout 10 npx -y skills add skynight137/skills --all --json
+# or work from a clone: ~/skynight137/skills/skills/muse
+SETUP=~/workspace/custom-skills/muse/scripts/setup.sh   # path varies by install route
+```
+
+## 1. Fill the vars (the only hands-on part)
+
+`setup.sh` writes a template to `~/workspace/.ssh/.env` (mode 600) on
+first run and stops. Fill it:
+
+```ini
+TAILSCALE_AUTH_KEY=tskey-auth-…        # reusable, tag:muse, ephemeral is fine
+TAILSCALE_NODE_NAME=muse-test          # the node's tailnet name
+RS_SSH_USER=runner                     # service user (default is root — pin runner)
+RS_AUTHORIZED_KEYS=ssh-ed25519 AAAA… muse-hop   # the HOP's pubkey (leaves trust only the hop)
+# hop boxes only:
+# RS_REVERSE_PEER=100.106.114.30       # the peer hop's tailnet IP
+# RS_REVERSE_PORT=16801                # or "auto" to claim the first free 168xx
+```
+
+Secrets never live anywhere else. Never paste a key into chat or a
+commit; the file is the single source.
+
+## 2. Join
+
+```sh
+bash $SETUP --user runner --tailscale --join
+```
+
+What you should see, in order:
+
+- `== stack service user: runner (service home: …/.ssh/home) ==`
+  (root instead prints a WARNING that sessions can read `.env` —
+  expected only when root was chosen on purpose.)
+- tailscale phase: binaries are skipped if already installed; the
+  launcher is (re)generated with the service user baked in.
+- join phase: `sshd already running` on re-runs, or a fresh start;
+  then the node status table with this box's 100.x IP.
+- A leaf prints: `leaf mode (RS_REVERSE_PEER unset): reverse loops
+  generated but NOT launched …` — a hop prints `hop mode
+  (RS_REVERSE_PEER set): node-carried reverse loop launched on port
+  16801; …`.
+- The handoff block prints the box's **client pubkey**. Send it to the
+  hop's operator; it gets registered ONLY in the hop's
+  `join-tailnet/authorized_keys`, and only if this box must initiate
+  ssh to the hop.
+
+Re-running the same command is the restore path: phases are implied
+only when their outputs are missing, key seeding is append-if-absent
+(existing `authorized_keys` entries are never removed), and each
+launcher starts its component only if down.
+
+## 3. Verify (don't trust the join output alone)
+
+```sh
+bash $SETUP --verify
+# from the hop, the real end-to-end test:
+ssh <new-box> 'echo $MUSE_HOME; pwd'        # expect /home/hatch/workspace + the service home
+ssh -tt <new-box> 'pwd'                     # interactive: expect ~/workspace (landing)
+```
+
+Logs for everything live in `~/workspace/logs/`
+(`sshd.log`, `tailscaled.log`, `reverse-node.log`).
+
+## 4. After a redeploy
+
+Processes and `/etc` users are wiped; files survive. Either re-run
+step 2 by hand, or let the hourly self-heal do it (it probes first,
+joins only on failure). Expect ~0 approval prompts: the tailnet
+`derpMap` keeps 5 DERP regions and the launcher pins an
+already-approved control-plane IP (see `derp-map.md` in the muse-hop
+workspace repo).

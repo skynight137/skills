@@ -23,6 +23,7 @@ when they disagree — re-run the probes instead of trusting stale text.
 | know what survives a redeploy, where to store things, how env/users/ssh config really resolve | `references/platform.md` |
 | reach the internet or another machine, understand a blocked/reset connection, pick a permission to ask for | `references/egress.md` |
 | join a tailnet, accept or originate SSH, build remote access into this box | `references/join.md` |
+| follow a complete, worked join (fresh box -> verified fleet member) step by step | `references/example-fresh-box.md` |
 | keep a daemon alive, schedule work, or react to a condition — systemd vs cron vs hooks | `references/automation.md` |
 | stand up a FRESH Muse VM as a join/e2e target (the muse-test pattern) | `scripts/setup.sh` (self-contained installer; secrets via a 600 `.env` it templates for you). Call it by full path — the skill folder names the target; there is no dispatcher. Phased like the replit setup: `--sshd`, `--tailscale`, `-j`/`--join`, `--verify`, `--user <name>` (stack service user; env `RS_SSH_USER`, flag wins, default `root` — setup prints a warning for root; `--user runner` is the fleet-proven isolated mode), and an interactive arrow-key menu (bare run on a TTY, or `--menu`); a bare run without a TTY does the full setup |
 
