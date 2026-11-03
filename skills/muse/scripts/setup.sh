@@ -693,6 +693,13 @@ chmod +x "$SSHDIR/start-tailscale.sh"
 }
 phase_join() {
 say "start the stack"
+# REVPORT is set by phase_sshd's render — but -j skips that phase when
+# the launchers already exist (the normal re-run), leaving it unbound:
+# the hop-mode echo below then dies under set -u BEFORE the reverse
+# loop launches. Derive it here when unset, same source as line ~499.
+if [[ -z "${REVPORT:-}" ]]; then
+  REVPORT="$(grep -E '^RS_REVERSE_PORT=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2 || true)"; REVPORT="${REVPORT:-16801}"
+fi
 bash "$SSHDIR/start-sshd.sh" || true
 if grep -q "^TAILSCALE_AUTH_KEY=.\+" "$SSHDIR/.env"; then
   bash "$SSHDIR/start-tailscale.sh" || true
