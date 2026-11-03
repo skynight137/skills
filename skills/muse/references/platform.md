@@ -38,6 +38,26 @@ Consequences that bite:
   Scaffold recreation after deletion is **inferred, not tested**; user
   content inside would not come back either way. Never delete it as cleanup.
 
+## Memory accounting (do not trust `free`)
+
+Verified 2026-11-03 (process census + allocation balloon test).
+
+- `/proc/meminfo` is **host-scoped**: MemTotal (~8 GB) is the shared
+  nspawn host's RAM, and "used" includes other tenants whose processes
+  are invisible in this PID namespace. Summing RSS over every visible
+  process gives the box's real userspace footprint (~0.5 GB typical).
+- `free`'s used/available therefore say nothing about this container:
+  `MemAvailable` read ~430 MB while a test process allocated and
+  page-touched 4 GB without OOM (its own VmRSS confirmed the pages
+  resident). Do not gate builds, and do not report "low memory", from
+  `free` output here.
+- No swap (`SwapTotal: 0`). The container's cgroup sits at the root of
+  the visible v2 hierarchy with no readable `memory.max` /
+  `memory.current`, so the real cap cannot be read from inside; measure
+  headroom empirically if it matters.
+- One real non-process consumer: platform tmpfs state under
+  `/run/hatch/` (the resume dir, ~0.9 GB observed).
+
 ## Environment model
 
 - `HOME=/home/hatch`; `$MUSE_HOME` and all `XDG_*` are **unset** in the
