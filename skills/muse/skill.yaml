@@ -1,0 +1,5 @@
+name: muse
+title: "Muse Toolkit"
+description: "The Muse sandbox toolkit: platform facts, egress and permission rules, the Tailscale join routes and the automation trio for anything running on a Muse VM."
+category: "Learning and customization"
+include_in_prompt: true
