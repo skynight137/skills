@@ -248,6 +248,16 @@ start_sshd() {
   # manual permission surgery before sshd would start).
   if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
   chmod o+x "$HOME" "$WS"
+  # The store root itself needs the same guarantee, and opening its
+  # ancestors is not enough: on a fresh box the store IS ~/.ssh, and
+  # the service user must traverse INTO it to reach rootfs/ (the sshd
+  # binary) and join-tailnet/ (config + host key). Nothing pins the
+  # root's creation mode — mkdir inherits the caller's umask (770
+  # under the agent shells' 007, 700 under 077; both shut for a
+  # non-root service user when the dir is root-owned) — so re-assert
+  # traverse on every start, like the other end states below. o+x
+  # only: traverse, never readability.
+  [[ -d "$SSHDIR" ]] && chmod o+x "$SSHDIR"
   if [[ "$SSH_USER" != root ]]; then
     id "$SSH_USER" >/dev/null 2>&1 || useradd -d "$SVC_HOME" -s /bin/bash "$SSH_USER"
   fi
@@ -285,10 +295,18 @@ start_sshd() {
     bash -c \
       "setsid $SSHDIR/rootfs/usr/sbin/sshd -f $SSHDIR/join-tailnet/sshd_config -E $LOGDIR/sshd.log </dev/null >/dev/null 2>&1 & disown"
   fi
+  local _up=0
   for _ in $(seq 1 10); do
-    timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null && break
+    if timeout 2 bash -c 'exec 3<>/dev/tcp/127.0.0.1/6800; IFS= read -r -t 1 l <&3; echo "$l"' 2>/dev/null; then _up=1; break; fi
     sleep 1
   done
+  if [[ "$_up" -eq 0 ]]; then
+    # The launch above discards ALL of sshd's output, so a failed
+    # start is otherwise invisible — the join would "succeed" with
+    # no sshd listening. Name the log and the usual cause instead of
+    # returning silently. (Warning only: exit behavior unchanged.)
+    echo "WARNING: sshd is not answering on port 6800 — the launch failed. Common cause: $SSH_USER cannot traverse into $SSHDIR or read the host key in join-tailnet/. See $LOGDIR/sshd.log"
+  fi
 }
 
 start_tailscale() {
@@ -477,7 +495,11 @@ chmod o+x "$BINDIR"
 # read its host key and authorized_keys, and land in a
 # home it owns. Pin the end state here AND in start_sshd():
 # without this, both test boxes needed manual permission surgery before
-# sshd would start.
+# sshd would start. The store root is re-pinned too (the layout block's
+# o+x is the only earlier assertion): creation mode is whatever the
+# caller's umask made it, and the service user must traverse the root
+# to reach join-tailnet/ and rootfs/ below it.
+chmod o+x "$SSHDIR"
 chmod 777 "$SSHDIR/join-tailnet"
 if [[ "$SSH_USER" != root ]]; then
   mkdir -p "$SVC_HOME"
