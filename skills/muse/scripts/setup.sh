@@ -3,14 +3,15 @@
 # (the muse-test pattern: a second Muse instance you can redeploy freely
 # and use as an end-to-end join target, the way repl-test serves Replit).
 #
-# What it installs (all inside the persistent tree, this platform's
-# own layout — tools and configs under the workspace, away from the
+# What it installs (all inside the persistent tree, the fleet's own
+# layout — tools and configs under the workspace, away from the
 # platform's own dirs):
 #   <ws>/.ssh/                  canonical ssh store + sshd stack + configs
 #   <ws>/.ssh/reverse/          reverse-tunnel client config + loop state
-#   <ws>/tools/bin/             tailscale / tailscaled + tool binaries
-#                               (fresh installs; a box already running
-#                               from <ws>/.local/bin keeps that path —
+#   <ws>/tools/                 tailscale / tailscaled + tool binaries
+#                               (fresh installs, FLAT — no bin/ subdir;
+#                               a box already running from
+#                               <ws>/.local/bin keeps that path —
 #                               see the BINDIR resolution below)
 #   <ws>/.local/share/tailscale daemon state/socket/log (stack state
 #                               dir, pinned — not XDG-derived)
@@ -77,15 +78,16 @@ while [[ $# -gt 0 ]]; do
 done
 WS="$HOME/workspace"
 SSHDIR="$WS/.ssh"
-# Tool binaries live in the workspace tools dir — this platform's own
-# layout (~/workspace/tools/bin for binaries, ~/workspace/config for
-# tool configs), away from the platform's own directories.
+# Tool binaries live in the workspace tools dir — the fleet's chosen
+# layout (~/workspace/tools for binaries — FLAT, no bin/ subdir —
+# ~/workspace/config for tool configs), away from the platform's own
+# directories.
 # Install-location stickiness: egress approvals are keyed by binary
 # path, so a box already running tailscale from the legacy bin dir
 # (~/workspace/.local/bin) keeps using it — silently relocating a live
 # stack would re-mint approval cards and strand its state for no gain.
 # Only a fresh install (no tailscaled in the legacy dir) lands in
-# tools/bin. RS_TS_BIN_DIR (process env, or the stack .env) overrides
+# tools/ (flat). RS_TS_BIN_DIR (process env, or the stack .env) overrides
 # both — it is also the deliberate-migration path: set it, let
 # phase_tailscale install there, then retire the legacy copy.
 LEGACY_BINDIR="$WS/.local/bin"
@@ -97,7 +99,7 @@ elif [[ -n "$_ts_bin_dir_env" ]]; then
 elif [[ -x "$LEGACY_BINDIR/tailscaled" ]]; then
   BINDIR="$LEGACY_BINDIR"
 else
-  BINDIR="$WS/tools/bin"
+  BINDIR="$WS/tools"
 fi
 unset _ts_bin_dir_env
 TSDIR="$WS/.local/share/tailscale"
@@ -503,8 +505,8 @@ export XDG_STATE_HOME="$HOME/.local/state"
 # Toolchain anchor: the persistent target path for fleet tooling.
 export MUSE_HOME="$HOME/workspace"
 case ":$PATH:" in
-  *":$HOME/workspace/tools/bin:"*) ;;
-  *) export PATH="$HOME/workspace/tools/bin:$HOME/workspace/.local/bin:$HOME/workspace/.ssh/bin:$PATH" ;;
+  *":$HOME/workspace/tools:"*) ;;
+  *) export PATH="$HOME/workspace/tools:$HOME/workspace/.local/bin:$HOME/workspace/.ssh/bin:$PATH" ;;
 esac
 if [ -r "$HOME/workspace/.ssh/.env" ]; then
   set -a; . "$HOME/workspace/.ssh/.env"; set +a
@@ -526,7 +528,7 @@ TAILSCALE_NODE_NAME=muse-join
 RS_SSH_USER=$SSH_USER
 # (the stack service user chosen at install time; setup's --user flag overrides it)
 #RS_TS_BIN_DIR= (optional override: where the tailscale binaries live. Defaults:
-# a fresh install uses ~/workspace/tools/bin, but a box already running tailscale
+# a fresh install uses ~/workspace/tools (flat), but a box already running tailscale
 # from ~/workspace/.local/bin keeps that path — egress approvals are keyed by
 # binary path, so the stack never relocates itself. Set this to migrate deliberately.)
 #RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-hop default)
