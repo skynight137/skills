@@ -3,11 +3,13 @@
 # (the muse-test pattern: a second Muse instance you can redeploy freely
 # and use as an end-to-end join target, the way repl-test serves Replit).
 #
-# What it installs (all inside the persistent tree, the fleet's own
-# layout — tools and configs under the workspace, away from the
-# platform's own dirs):
-#   <ws>/.ssh/                  canonical ssh store + sshd stack + configs
-#   <ws>/.ssh/reverse/          reverse-tunnel client config + loop state
+# What it installs (all inside the persistent tree):
+#   ~/.ssh/                     canonical ssh store + sshd stack + configs
+#                               (fresh installs — the OFFICIAL location,
+#                               a real directory; a box whose stack tree
+#                               already lives at <ws>/.ssh keeps that
+#                               path — see the SSHDIR resolution below)
+#   $SSHDIR/reverse/            reverse-tunnel client config + loop state
 #   <ws>/tools/                 tailscale / tailscaled + tool binaries
 #                               (fresh installs, FLAT — no bin/ subdir;
 #                               a box already running from
@@ -16,7 +18,11 @@
 #   <ws>/.local/share/tailscale daemon state/socket/log (stack state
 #                               dir, pinned — not XDG-derived)
 #   <ws>/config/                shared env + tool configs (env.sh, ...)
-#   ~/.ssh, /root/.ssh          symlinks -> <ws>/.ssh
+#   /root/.ssh                  symlink -> $SSHDIR (root's passwd home is
+#                               /root, so tooling that resolves ~ via
+#                               passwd needs the pointer). Legacy boxes
+#                               also get ~/.ssh as a symlink -> <ws>/.ssh;
+#                               a fresh box's ~/.ssh IS the store.
 #
 # Usage (mirrors the replit setup's shape: phase flags + an interactive
 # menu, instead of one monolith that beelines to the join):
@@ -47,13 +53,13 @@
 #                                     RS_SSH_USER; the runtime verbs read
 #                                     the same flag/env, flag wins.
 #
-# Secrets never live in this repo: the operator creates <ws>/.ssh/.env
+# Secrets never live in this repo: the operator creates $SSHDIR/.env
 # (mode 600) with TAILSCALE_AUTH_KEY=<key for the tailnet> — setup writes
 # a template and stops short of the join while the key is empty.
 # The peer (default 100.106.114.30 = repl-test) is the machine that will
 # hold the reverse forwards; its public key must be added to
-# <ws>/.ssh/join-tailnet/authorized_keys and this VM's client pubkey
-# (<ws>/.ssh/id_ed25519.pub, printed at the end) to the peer's sshd.
+# $SSHDIR/join-tailnet/authorized_keys and this VM's client pubkey
+# ($SSHDIR/id_ed25519.pub, printed at the end) to the peer's sshd.
 set -euo pipefail
 
 PEER=100.106.114.30 VERIFY=0
@@ -77,7 +83,35 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 WS="$HOME/workspace"
-SSHDIR="$WS/.ssh"
+# The stack tree's home: fresh installs use the OFFICIAL location,
+# ~/.ssh, as a REAL directory — the path standard tooling (ssh, git
+# signing) resolves via passwd/$HOME with no shim in between.
+# Install-location stickiness, same shape as BINDIR below: a box
+# whose tree already lives at the legacy workspace path
+# (~/workspace/.ssh — the Replit-layout carry-over) KEEPS it —
+# silently relocating a working stack would churn every generated
+# config's absolute paths and the paths approvals are keyed by.
+# RS_SSH_DIR (process env, or recorded in a stack .env) overrides
+# both — it is also the deliberate-migration path: set it, re-run
+# the phases to render into the new tree, then retire the old one.
+LEGACY_SSHDIR="$WS/.ssh"
+_ssh_dir_env=""
+for _cand in "$LEGACY_SSHDIR/.env" "$HOME/.ssh/.env"; do
+  if [[ -z "$_ssh_dir_env" ]]; then
+    _v="$(grep -E '^RS_SSH_DIR=' "$_cand" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+    [[ -n "$_v" ]] && _ssh_dir_env="$_v"
+  fi
+done
+if [[ -n "${RS_SSH_DIR:-}" ]]; then
+  SSHDIR="$RS_SSH_DIR"
+elif [[ -n "$_ssh_dir_env" ]]; then
+  SSHDIR="$_ssh_dir_env"
+elif [[ -f "$LEGACY_SSHDIR/join-tailnet/sshd_config" || -f "$LEGACY_SSHDIR/.env" ]]; then
+  SSHDIR="$LEGACY_SSHDIR"
+else
+  SSHDIR="$HOME/.ssh"
+fi
+unset _ssh_dir_env _cand _v
 # Tool binaries live in the workspace tools dir — the fleet's chosen
 # layout (~/workspace/tools for binaries — FLAT, no bin/ subdir —
 # ~/workspace/config for tool configs), away from the platform's own
@@ -489,27 +523,35 @@ Subsystem sftp $SSHDIR/rootfs/usr/lib/openssh/sftp-server
 EOF
 chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/sshd_config" 2>/dev/null || true
 [[ -f "$SSHDIR/id_ed25519" ]] || ssh-keygen -t ed25519 -f "$SSHDIR/id_ed25519" -N '' >/dev/null
-[[ -e "$HOME/.ssh" ]] || ln -s "$SSHDIR" "$HOME/.ssh"
+# ~/.ssh shim: only when the tree does NOT live at ~/.ssh (legacy or
+# RS_SSH_DIR placements) — tooling that resolves ~/.ssh via $HOME
+# would otherwise never see the store. When SSHDIR IS ~/.ssh the real
+# directory is already in place (mkdir'd at the top of this phase).
+if [[ "$SSHDIR" != "$HOME/.ssh" ]]; then
+  [[ -e "$HOME/.ssh" ]] || ln -s "$SSHDIR" "$HOME/.ssh"
+fi
+# /root/.ssh always points at the store: root's passwd home is /root
+# (ephemeral), so tooling that resolves ~ via passwd needs the link.
 if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.ssh; ln -s "$SSHDIR" /root/.ssh; fi
 
 say "shared env (config/env.sh) + .env template"
-cat > "$WS/config/env.sh" <<'EOF'
+cat > "$WS/config/env.sh" <<EOF
 # Shared environment for this VM — non-secret config only.
 # XDG values mirror the platform's own guest.env (runtime-cell):
 # HOME-based, all on the persistent home volume. (The stack's own
 # state dir is pinned separately and does not follow XDG_DATA_HOME.)
-export XDG_DATA_HOME="$HOME/.local/share"
-export XDG_CONFIG_HOME="$HOME/.config"
-export XDG_CACHE_HOME="$HOME/.cache"
-export XDG_STATE_HOME="$HOME/.local/state"
+export XDG_DATA_HOME="\$HOME/.local/share"
+export XDG_CONFIG_HOME="\$HOME/.config"
+export XDG_CACHE_HOME="\$HOME/.cache"
+export XDG_STATE_HOME="\$HOME/.local/state"
 # Toolchain anchor: the persistent target path for fleet tooling.
-export MUSE_HOME="$HOME/workspace"
-case ":$PATH:" in
-  *":$HOME/workspace/tools:"*) ;;
-  *) export PATH="$HOME/workspace/tools:$HOME/workspace/.local/bin:$HOME/workspace/.ssh/bin:$PATH" ;;
+export MUSE_HOME="\$HOME/workspace"
+case ":\$PATH:" in
+  *":\$HOME/workspace/tools:"*) ;;
+  *) export PATH="\$HOME/workspace/tools:\$HOME/workspace/.local/bin:$SSHDIR/bin:\$PATH" ;;
 esac
-if [ -r "$HOME/workspace/.ssh/.env" ]; then
-  set -a; . "$HOME/workspace/.ssh/.env"; set +a
+if [ -r "$SSHDIR/.env" ]; then
+  set -a; . "$SSHDIR/.env"; set +a
 fi
 EOF
 chmod 644 "$WS/config/env.sh"
@@ -527,6 +569,11 @@ TAILSCALE_AUTH_KEY=
 TAILSCALE_NODE_NAME=muse-join
 RS_SSH_USER=$SSH_USER
 # (the stack service user chosen at install time; setup's --user flag overrides it)
+RS_SSH_DIR=$SSHDIR
+# (the stack tree's home, recorded at install time; the RS_SSH_DIR env var overrides it.
+#  Fresh installs use ~/.ssh — the official location, a real directory. A box whose tree
+#  already lives in ~/workspace/.ssh keeps that path: the stack never relocates itself.
+#  Change this to migrate deliberately, the same way RS_TS_BIN_DIR migrates the binaries.)
 #RS_TS_BIN_DIR= (optional override: where the tailscale binaries live. Defaults:
 # a fresh install uses ~/workspace/tools (flat), but a box already running tailscale
 # from ~/workspace/.local/bin keeps that path — egress approvals are keyed by
@@ -554,7 +601,7 @@ XDG_DATA_HOME=$HOME/.local/share
 XDG_CONFIG_HOME=$HOME/.config
 XDG_CACHE_HOME=$HOME/.cache
 XDG_STATE_HOME=$HOME/.local/state
-PATH=$BINDIR:$WS/.ssh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PATH=$BINDIR:$SSHDIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BASH_ENV=$WS/config/env.sh
 EOF
 if [[ "$SSH_USER" != root ]]; then

@@ -205,8 +205,9 @@ redial loop happily logs thousands of attempts. Defenses, all applied:
 
 ## Layout & restore order (post-redeploy)
 
-Canonical project root: `~/workspace/.ssh/` (see platform.md for the
-symlink pattern) — it holds only configs, keys and state. No launcher
+Canonical project root: the stack tree — `~/.ssh/` on a fresh
+install, the official location (see platform.md for the resolution
+pattern) — it holds only configs, keys and state. No launcher
 scripts are installed anywhere: the stack is started by this skill's
 own runtime verbs in `scripts/setup.sh` — `--start-sshd` (recreates
 users, `/run/sshd`, the `/root/.ssh` symlink; starts sshd as the
@@ -222,7 +223,10 @@ tailscale from the legacy `~/workspace/.local/bin/` keeps that path
 and is never silently relocated; `RS_TS_BIN_DIR` (env or the stack
 `.env`) overrides the choice and is the deliberate-migration path.
 Daemon state/socket/log stay pinned in
-`~/workspace/.local/share/tailscale/` regardless. A fresh VM gets all
+`~/workspace/.local/share/tailscale/` regardless. The stack tree's
+own home follows the same rule: `RS_SSH_DIR` (env, or recorded in
+the stack `.env`) wins, an existing `~/workspace/.ssh/` tree is
+kept (sticky), and fresh installs land in `~/.ssh/`. A fresh VM gets all
 of this from `scripts/setup.sh` in this skill.
 
 Restore after a redeploy is one command — the same hourly self-heal
@@ -241,10 +245,10 @@ connecting through it lands in the VM as the service user.
 `setup.sh` takes a service-user knob for the LOCAL stack: the user the
 join sshd runs as and accepts logins for (`AllowUsers`; `PermitRootLogin`
 is `prohibit-password` for root, `no` otherwise), the service home
-(root → `/root`; a custom user → `<ws>/.ssh/home`), useradd and the
+(root → `/root`; a custom user → the stack tree's `home/`), useradd and the
 ownership fixups (non-root only), the tailscaled run-user and its
 state-dir ownership, and the session-environment file (root's copy
-persists at `<ws>/.ssh/environment`, reached through the `/root/.ssh`
+persists at `$SSHDIR/environment`, reached through the `/root/.ssh`
 symlink). Set it with `--user <name>` or the `RS_SSH_USER` env var (the
 flag wins); the install-time choice is recorded in the `.env` as
 `RS_SSH_USER`, and the runtime verbs read the same flag/env — pass
