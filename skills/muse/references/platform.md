@@ -100,16 +100,31 @@ Verified 2026-11-03 (process census + allocation balloon test).
   traversal on the home path: `chmod o+x /home/hatch ~/workspace` (the
   home mount is idmapped; `chown` inside it is denied).
 
-## The ssh store pattern (borrowed from the Replit layout)
+## The ssh store pattern
 
-- Canonical store in the persistent tree: `~/workspace/.ssh/` holds the
-  client config, keypair, and the whole remote-access project (sshd rootfs,
-  daemon state, start scripts).
-- `~/.ssh` is a symlink → `~/workspace/.ssh` (persists by itself, home is
-  btrfs). `/root/.ssh` is a symlink → `~/workspace/.ssh` too, but `/root`
-  is ephemeral, so the post-redeploy bootstrap recreates just that link.
-- Result: every lookup path (`$HOME/.ssh`, passwd-home `.ssh`, explicit
-  workspace path) converges on one store that never moves.
+- Canonical store: `~/.ssh/` — the **official** location, a real
+  directory — holds the client config, keypair, and the whole
+  remote-access project (sshd rootfs, daemon state, join-tailnet
+  configs). Home is btrfs and persists, so the official path needs
+  no workspace detour. (The tree originally lived at
+  `~/workspace/.ssh/` — a Replit-layout carry-over from when home
+  persistence could not be assumed.)
+- Resolution is sticky, the same shape as the tailscale bin dir:
+  `RS_SSH_DIR` (process env, or recorded in the stack `.env`) wins;
+  a box whose tree already lives at the legacy `~/workspace/.ssh/`
+  keeps it — a working stack is never silently relocated — and
+  only fresh installs land in `~/.ssh`. The knob doubles as the
+  deliberate-migration path.
+- `/root/.ssh` is a symlink → the store, whichever home it resolved
+  to (root's passwd home is `/root`, ephemeral, so the
+  post-redeploy bootstrap recreates just that link). On a legacy
+  workspace box, `~/.ssh` is a symlink → `~/workspace/.ssh` as
+  well; on a fresh box `~/.ssh` IS the store and needs no shim.
+- Result: every lookup path (`$HOME/.ssh`, passwd-home `.ssh`, the
+  resolved store path) converges on one store.
+- Backup scope follows the resolution: a backup/archive of the
+  stack covers the store at its resolved home — `~/.ssh` on a
+  fresh install, `~/workspace/.ssh` on a sticky legacy box.
 
 ## Workspace layout (fleet layout over the system layout)
 

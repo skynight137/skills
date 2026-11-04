@@ -17,13 +17,15 @@ SETUP=~/workspace/custom-skills/muse/scripts/setup.sh   # path varies by install
 
 ## 1. Fill the vars (the only hands-on part)
 
-`setup.sh` writes a template to `~/workspace/.ssh/.env` (mode 600) on
+`setup.sh` writes a template to `~/.ssh/.env` (mode 600) on
 first run and stops. Fill it:
 
 ```ini
 TAILSCALE_AUTH_KEY=tskey-auth-…        # reusable, tag:muse, ephemeral is fine
 TAILSCALE_NODE_NAME=muse-test          # the node's tailnet name
 RS_SSH_USER=runner                     # service user (default is root — pin runner)
+# RS_SSH_DIR is recorded by setup — the stack tree's home (~/.ssh on a
+# fresh box; a box with an existing ~/workspace/.ssh tree keeps that path)
 RS_AUTHORIZED_KEYS=ssh-ed25519 AAAA… muse-hop   # the HOP's pubkey (leaves trust only the hop)
 # hop boxes only:
 # RS_REVERSE_PEER=100.106.114.30       # the peer hop's tailnet IP
