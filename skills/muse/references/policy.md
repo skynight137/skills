@@ -173,6 +173,44 @@ them:
   permission prompts are stored platform-side, visible read-only
   via the web app's Settings → Permissions. Stale grants for
   long-deleted binary paths prove nothing on this disk holds them
-  (see egress.md for how the tuples behave).
+  (see egress.md for how the tuples behave). Two refinements
+  verified 2026-11-04 (evening): **(1) Cards are minted only
+  through the agent tool channel** — the egress-approval path the
+  agent's own tool calls use (the JARVIS_* approval socket pair in
+  `/etc/hatch/env`). An unapproved direct dial from an arbitrary
+  process that no tool call owns is NOT offered a card: the
+  gateway silently kills the connection (observed: `curl
+  --resolve` to a real IP from a throwaway local web shell →
+  HTTP 000, curl exit 52, the pending-approvals list stayed empty
+  and the approval history gained no entry). **(2) The input
+  channel does not change the executing process's network
+  surface** — the same dial submitted through a browser-driven
+  web page died identically, and the platform browser service
+  refused to open a `127.0.0.1` page at all. The browser's
+  allow-all permission covers only the browser service's own
+  fetches; a web terminal's commands still run as guest
+  processes under the same tuples. Do not propose browser/UI
+  indirection as an approval bypass.
+- **The documented "Advanced network settings" card** — product
+  documentation found by the user (2026-11-04) describes a
+  settings card, collapsed by default, holding three switches:
+  **Transparent proxy** (on: the agent can resolve DNS and
+  connect directly; off: all traffic must flow through the
+  explicit HTTP proxy), **TLS interception** (on: all TLS
+  connections are always intercepted for inspection; off: only
+  when required by policy), and **SNI mismatch rejection** (on:
+  connections are rejected when the TLS server name does not
+  match the destination). The quoted text occurs NOWHERE in the
+  guest — zero hits across the filesystem and the hatch binary
+  strings — and the card does not appear in the user's settings
+  menu: documented, but not exposed on this account/surface.
+  The switches map onto this file's surfaces: Transparent proxy
+  governs the direct-dial surface that generates the per-tuple
+  cards (turning it off would force everything through the
+  explicit proxy — and would break clients like the userspace
+  tailscaled that cannot use a CONNECT proxy), TLS interception
+  is the policy behind the Sentinel CA shipped in the guest
+  trust store, and SNI mismatch rejection would govern the
+  resolve-then-dial / fake-IP intercept surface.
 - **The MASE source FST** (`mase_all_urls_normalized.fst`, 302 MB) —
   referenced by the manifest, deliberately not shipped (above).
