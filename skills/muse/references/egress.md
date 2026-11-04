@@ -27,6 +27,44 @@ not the VM — decides what a name means and which flows exist.**
    resolver: `dig @8.8.8.8`. (1.1.1.1 and 9.9.9.9 time out; only 8.8.8.8
    answers.) Direct dials are slow to establish (~5–9s) but genuine.
 
+## Apps that resolve and dial by themselves
+
+Some programs do neither of the two ways out cleanly: they resolve names
+through the system resolver and then dial the result directly — typical
+of statically linked (musl) binaries and tools with their own network
+stack. They hit two independent walls:
+
+1. **Resolution.** Strict stub resolvers (musl's is the observed case)
+   can fail the gateway lookup entirely (`EAI_AGAIN` / "failed to lookup
+   address information"), and even when a placeholder answer comes back
+   it is useless for a direct dial. Neither `/etc/resolv.conf` nor
+   `/etc/hosts` can be edited — both are read-only bind mounts, root
+   included.
+2. **Dialing.** A direct TCP dial to the real IP is reset
+   (`connection reset by peer`, os error 104) or black-holed unless the
+   (binary path + IP + port) tuple is approved.
+
+Workaround pattern — per-process, needs root, persists nothing:
+
+- Get the real IP from the carve-out: `dig @8.8.8.8 <name>`.
+- If the program must resolve a name to an address you choose, run it
+  in a **mount namespace** with a bind-mounted `/etc/hosts`:
+  `unshare --mount bash -c 'mount --bind <doctored-hosts> /etc/hosts && exec <app>'`.
+- If it must reach a public TLS service, have it dial a **local
+  listener** instead (hosts override pointing the service's real name
+  at `127.0.0.1`, so SNI and certificate validation still use the real
+  name) and tunnel that listener out through CONNECT: a ~30-line stdlib
+  TCP shim that issues `CONNECT host:port` to `198.19.0.1:3128` and
+  then pipes raw bytes keeps TLS end-to-end.
+- Expect an egress approval prompt for the program's binary path the
+  first time it dials; approval keys include the path, so keep binary
+  paths stable.
+
+Verified 2026-11-04: a musl-static binary that failed first on DNS
+(EAI_AGAIN), then on the direct dial (reset), worked end-to-end with
+the namespace + CONNECT-shim combination. Tailnet destinations do not
+need any of this — use tailscaled's SOCKS5 (127.0.0.1:1056) instead.
+
 ## Permission categories (web app → Settings → Permissions)
 
 These are platform egress toggles, set per category (Deny/Ask). They are
