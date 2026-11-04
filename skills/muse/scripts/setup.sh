@@ -15,8 +15,13 @@
 #                               a box already running from
 #                               <ws>/.local/bin keeps that path —
 #                               see the BINDIR resolution below)
-#   <ws>/.local/share/tailscale daemon state/socket/log (stack state
-#                               dir, pinned — not XDG-derived)
+#   ${XDG_STATE_HOME:-~/.local/state}/tailscale
+#                               daemon state/socket + hosts override
+#                               (fresh installs — state follows
+#                               XDG_STATE_HOME; a box whose node state
+#                               already lives at
+#                               <ws>/.local/share/tailscale keeps that
+#                               path — see the TSDIR resolution below)
 #   <ws>/config/                shared env + tool configs (env.sh, ...)
 #   /root/.ssh                  symlink -> $SSHDIR (root's passwd home is
 #                               /root, so tooling that resolves ~ via
@@ -136,7 +141,30 @@ else
   BINDIR="$WS/tools"
 fi
 unset _ts_bin_dir_env
-TSDIR="$WS/.local/share/tailscale"
+# The daemon's state dir is runtime state, so it follows the XDG
+# state home — NOT the workspace: a fresh install lands in
+# ${XDG_STATE_HOME:-~/.local/state}/tailscale (the platform's
+# guest.env already sets XDG_STATE_HOME=~/.local/state, persistent).
+# Install-location stickiness, same shape as BINDIR/SSHDIR above:
+# the state file IS the node's identity, so a box whose node state
+# already lives at the legacy workspace path
+# (~/workspace/.local/share/tailscale — where pre-XDG installs
+# pinned it) KEEPS it — silently moving state would re-register
+# the node as a new machine. RS_TS_STATE_DIR (process env, or the
+# stack .env) overrides both — it is also the deliberate-migration
+# path: stop the daemon, move the state dir, set it, restart.
+LEGACY_TSDIR="$WS/.local/share/tailscale"
+_ts_state_dir_env="$(grep -E '^RS_TS_STATE_DIR=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+if [[ -n "${RS_TS_STATE_DIR:-}" ]]; then
+  TSDIR="$RS_TS_STATE_DIR"
+elif [[ -n "$_ts_state_dir_env" ]]; then
+  TSDIR="$_ts_state_dir_env"
+elif [[ -f "$LEGACY_TSDIR/state/tailscaled.state" ]]; then
+  TSDIR="$LEGACY_TSDIR"
+else
+  TSDIR="${XDG_STATE_HOME:-$HOME/.local/state}/tailscale"
+fi
+unset _ts_state_dir_env
 REVDIR="$SSHDIR/reverse"
 LOGDIR="$WS/logs"
 TSVER=1.104.4
@@ -281,6 +309,11 @@ start_tailscale() {
     daemon_runas="runuser -u $SSH_USER -- "
   fi
   chmod o+x "$HOME" "$WS" "$WS/.local" "$WS/.local/share"
+  # The daemon (service user) must traverse every ancestor of the
+  # resolved state dir to reach its socket — wherever TSDIR landed
+  # (XDG state home or legacy workspace share).
+  local _anc="$TSDIR"
+  while [[ "$_anc" == "$HOME"/* ]]; do [ -d "$_anc" ] && chmod o+x "$_anc" || true; _anc="$(dirname "$_anc")"; done
   [[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
   [[ -d "$BINDIR" ]] && chmod o+x "$BINDIR"
   if [[ "$SSH_USER" != root ]]; then
@@ -307,7 +340,7 @@ start_tailscale() {
      && ! "${runas[@]}" "${TSENV[@]}" $tsctl status 2>&1 | grep -q "Logged out"; then
     local p
     for p in $(pgrep tailscaled 2>/dev/null); do
-      tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -q ".local/share/tailscale" && kill "$p" || true
+      tr '\0' ' ' < /proc/$p/cmdline 2>/dev/null | grep -qF "$TSDIR/" && kill "$p" || true
     done
     sleep 1; rm -f "$sock"
     unshare -m bash -c "
@@ -434,6 +467,9 @@ chmod o+x "$HOME" "$WS"
 mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$LOGDIR"
 chown "$SSH_USER:$SSH_USER" "$LOGDIR" 2>/dev/null || true
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
+# Same traverse walk as start_tailscale: the daemon's ancestors of
+# the resolved state dir must be walkable by the service user.
+_anc="$TSDIR"; while [[ "$_anc" == "$HOME"/* ]]; do [ -d "$_anc" ] && chmod o+x "$_anc" || true; _anc="$(dirname "$_anc")"; done; unset _anc
 [[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
 chmod o+x "$BINDIR"
 # sshd runs as the service user and must write its pid inside
@@ -538,8 +574,9 @@ say "shared env (config/env.sh) + .env template"
 cat > "$WS/config/env.sh" <<EOF
 # Shared environment for this VM — non-secret config only.
 # XDG values mirror the platform's own guest.env (runtime-cell):
-# HOME-based, all on the persistent home volume. (The stack's own
-# state dir is pinned separately and does not follow XDG_DATA_HOME.)
+# HOME-based, all on the persistent home volume. (The tailscale
+# daemon's state dir is runtime state: it follows XDG_STATE_HOME,
+# resolved by setup.sh — see RS_TS_STATE_DIR in the stack .env.)
 export XDG_DATA_HOME="\$HOME/.local/share"
 export XDG_CONFIG_HOME="\$HOME/.config"
 export XDG_CACHE_HOME="\$HOME/.cache"
@@ -574,6 +611,13 @@ RS_SSH_DIR=$SSHDIR
 #  Fresh installs use ~/.ssh — the official location, a real directory. A box whose tree
 #  already lives in ~/workspace/.ssh keeps that path: the stack never relocates itself.
 #  Change this to migrate deliberately, the same way RS_TS_BIN_DIR migrates the binaries.)
+RS_TS_STATE_DIR=$TSDIR
+# (the tailscale daemon's state dir, recorded at install time; the RS_TS_STATE_DIR env
+#  var overrides it. Fresh installs use \$XDG_STATE_HOME/tailscale — daemon state is
+#  runtime state and follows the XDG state home. A box whose node state already lives
+#  in ~/workspace/.local/share/tailscale keeps that path: the state file is the node's
+#  identity and the stack never relocates it. Change this to migrate deliberately —
+#  stop the daemon first and move the whole state dir, socket path included.)
 #RS_TS_BIN_DIR= (optional override: where the tailscale binaries live. Defaults:
 # a fresh install uses ~/workspace/tools (flat), but a box already running tailscale
 # from ~/workspace/.local/bin keeps that path — egress approvals are keyed by

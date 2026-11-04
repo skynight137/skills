@@ -222,8 +222,16 @@ egress approvals are keyed by binary path, so a box already running
 tailscale from the legacy `~/workspace/.local/bin/` keeps that path
 and is never silently relocated; `RS_TS_BIN_DIR` (env or the stack
 `.env`) overrides the choice and is the deliberate-migration path.
-Daemon state/socket/log stay pinned in
-`~/workspace/.local/share/tailscale/` regardless. The stack tree's
+Daemon state follows the same shape: it is runtime state, so a
+fresh install puts it in `${XDG_STATE_HOME:-~/.local/state}/tailscale`;
+a box whose node state already lives in the legacy
+`~/workspace/.local/share/tailscale/` keeps that path (sticky —
+the state file is the node's identity, never silently moved);
+`RS_TS_STATE_DIR` (env or the stack `.env`) overrides the choice
+and is the deliberate-migration path (stop the daemon, move the
+dir, set it, restart). The daemon socket lives inside the state
+dir, so probes and SOCKS consumers must read its path from the
+resolved location, not a hardcoded one. The stack tree's
 own home follows the same rule: `RS_SSH_DIR` (env, or recorded in
 the stack `.env`) wins, an existing `~/workspace/.ssh/` tree is
 kept (sticky), and fresh installs land in `~/.ssh/`. A fresh VM gets all
