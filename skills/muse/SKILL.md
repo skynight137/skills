@@ -1,7 +1,7 @@
 ---
 name: muse
 description: "Muse sandbox toolkit: platform facts for the Muse personal-agent VM (systemd-nspawn container, btrfs home vs ephemeral overlay root, fake-IP DNS + CONNECT-proxy egress and its permission categories, no SHELL_ENV injection, the runtime cell's spawnd renders and which platform policy is shipped in the guest vs host-side-only), the two Tailscale join routes (built-in connector vs userspace auth-key node) and why inbound only works as reverse SSH, and the automation trio (systemd units vs runtime cron vs hooks). Use for anything running ON a Muse VM."
-version: 1.2.1
+version: 1.2.2
 license: MIT
 platforms: [linux]
 compatibility: "Muse VM (hostname htch-runtime, HOME=/home/hatch, shell runs as root). Facts verified live 2026-11-01/02; re-verify with the commands in references/platform.md before quoting numbers."
