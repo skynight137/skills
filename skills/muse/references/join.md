@@ -213,9 +213,10 @@ users, `/run/sshd`, the `/root/.ssh` symlink; starts sshd as the
 service user on 6800), `--start-ts` (daemon + join), `--loop` (the
 node-carried reverse loop, hop boxes) and `--check-reverse`
 (OK/ZOMBIE/DOWN probe run from the peer).
-Tool binaries follow this platform's own layout: a fresh install puts
-the tailscale binaries in `~/workspace/tools/bin/` (tool configs live
-in `~/workspace/config/`). Install location is sticky, though —
+Tool binaries follow the fleet layout (see platform.md): a fresh
+install puts the tailscale binaries in `~/workspace/tools/` — FLAT,
+no `bin/` subdir (tool configs live in `~/workspace/config/`).
+Install location is sticky, though —
 egress approvals are keyed by binary path, so a box already running
 tailscale from the legacy `~/workspace/.local/bin/` keeps that path
 and is never silently relocated; `RS_TS_BIN_DIR` (env or the stack

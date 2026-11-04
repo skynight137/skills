@@ -111,17 +111,33 @@ Verified 2026-11-03 (process census + allocation balloon test).
 - Result: every lookup path (`$HOME/.ssh`, passwd-home `.ssh`, explicit
   workspace path) converges on one store that never moves.
 
-## Workspace layout (this platform's own)
+## Workspace layout (fleet layout over the system layout)
 
-- Tool binaries the agent installs go in `~/workspace/tools/bin/`;
-  tool configs go in `~/workspace/config/` (rclone.conf-style files
-  live there, beside the shared `env.sh`). The same instinct as
-  Hermes keeping its tools under HERMES_HOME: our tooling lives in
-  our tree, away from the platform's own directories.
-- The join stack is the deliberate exception: its tailscale state
-  dir stays pinned at `~/workspace/.local/share/tailscale/`, and its
-  binary dir follows the stickiness rule (see join.md) because
-  egress approvals are keyed by binary path.
+- Tool binaries the agent installs **by hand** go in
+  `~/workspace/tools/` — **FLAT, no `bin/` subdir**; tool configs go
+  in `~/workspace/config/` (rclone.conf-style files live there,
+  beside the shared `env.sh`). The same instinct as Hermes keeping
+  its tools under HERMES_HOME: our tooling lives in our tree, away
+  from the platform's own directories.
+- Which layout governs what (probed 2026-11-04): the system's own
+  answers point at the **XDG home layout** — `systemd-path` reports
+  user-binaries `~/.local/bin`, user-shared `~/.local/share`,
+  user-configuration `~/.config`, and installer user schemes agree;
+  system python is PEP 668 externally-managed (`pip --user` refused
+  without `--break-system-packages`). No platform skill prescribes
+  an install dir. So: what installers manage follows the system
+  layout; what we install by hand follows the fleet layout above —
+  the pattern from the user's other Muse VM's TOOLS.md. The fleet
+  dirs are a chosen home (persistent, approval-path-stable), **not**
+  a system mandate, and `tools/` is flat because that is where the
+  fleet actually puts binaries.
+- The join stack's layout follows from that split, it is not legacy
+  debt: its tailscale state dir stays pinned at
+  `~/workspace/.local/share/tailscale/` — `.local/share` is the
+  system-standard user-shared location (the `systemd-path` answer),
+  kept as an explicit path rather than derived from XDG_DATA_HOME —
+  and its binary dir follows the stickiness rule (see join.md)
+  because egress approvals are keyed by binary path.
 - XDG follows the platform's `guest.env` values (see Environment
   model above), not a workspace tree.
 
