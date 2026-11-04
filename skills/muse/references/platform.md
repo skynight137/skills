@@ -124,7 +124,10 @@ Verified 2026-11-03 (process census + allocation balloon test).
   resolved store path) converges on one store.
 - Backup scope follows the resolution: a backup/archive of the
   stack covers the store at its resolved home — `~/.ssh` on a
-  fresh install, `~/workspace/.ssh` on a sticky legacy box.
+  fresh install, `~/workspace/.ssh` on a sticky legacy box — and
+  the daemon state dir at its resolved home (`$XDG_STATE_HOME/tailscale`
+  fresh, `~/workspace/.local/share/tailscale` sticky), since the
+  state file is the node's identity.
 
 ## Workspace layout (fleet layout over the system layout)
 
@@ -147,12 +150,21 @@ Verified 2026-11-03 (process census + allocation balloon test).
   a system mandate, and `tools/` is flat because that is where the
   fleet actually puts binaries.
 - The join stack's layout follows from that split, it is not legacy
-  debt: its tailscale state dir stays pinned at
-  `~/workspace/.local/share/tailscale/` — `.local/share` is the
-  system-standard user-shared location (the `systemd-path` answer),
-  kept as an explicit path rather than derived from XDG_DATA_HOME —
-  and its binary dir follows the stickiness rule (see join.md)
-  because egress approvals are keyed by binary path.
+  debt. Its binary dir follows the stickiness rule (see join.md)
+  because egress approvals are keyed by binary path. Its tailscale
+  state dir is neither installer-managed nor hand-installed — it is
+  runtime state, so it follows the XDG state home directly: a
+  fresh install resolves to `${XDG_STATE_HOME:-~/.local/state}/tailscale`.
+  A box whose node state already lives at the pre-XDG pin
+  (`~/workspace/.local/share/tailscale/`) keeps that path — the
+  state file is the node's identity, so it is sticky like the
+  other locations; `RS_TS_STATE_DIR` (env, or recorded in the
+  stack `.env`) overrides both and is the deliberate-migration
+  path. The daemon socket lives inside the state dir, so its path
+  moves with this resolution — consumers (health probes, SOCKS
+  clients) must take the socket path from the resolved location
+  (the stack `.env` record, or `setup.sh --verify`), never a
+  hardcoded path.
 - XDG follows the platform's `guest.env` values (see Environment
   model above), not a workspace tree.
 
