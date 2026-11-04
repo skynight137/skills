@@ -1,7 +1,7 @@
 ---
 name: muse
-description: "Muse sandbox toolkit: platform facts for the Muse personal-agent VM (systemd-nspawn container, btrfs home vs ephemeral overlay root, fake-IP DNS + CONNECT-proxy egress and its permission categories, no SHELL_ENV injection), the two Tailscale join routes (built-in connector vs userspace auth-key node) and why inbound only works as reverse SSH, and the automation trio (systemd units vs runtime cron vs hooks). Use for anything running ON a Muse VM."
-version: 1.1.0
+description: "Muse sandbox toolkit: platform facts for the Muse personal-agent VM (systemd-nspawn container, btrfs home vs ephemeral overlay root, fake-IP DNS + CONNECT-proxy egress and its permission categories, no SHELL_ENV injection, the runtime cell's spawnd renders and which platform policy is shipped in the guest vs host-side-only), the two Tailscale join routes (built-in connector vs userspace auth-key node) and why inbound only works as reverse SSH, and the automation trio (systemd units vs runtime cron vs hooks). Use for anything running ON a Muse VM."
+version: 1.2.0
 license: MIT
 platforms: [linux]
 compatibility: "Muse VM (hostname htch-runtime, HOME=/home/hatch, shell runs as root). Facts verified live 2026-11-01/02; re-verify with the commands in references/platform.md before quoting numbers."
@@ -25,6 +25,7 @@ when they disagree — re-run the probes instead of trusting stale text.
 | join a tailnet, accept or originate SSH, build remote access into this box | `references/join.md` |
 | follow a complete, worked join (fresh box -> verified fleet member) step by step | `references/example-fresh-box.md` |
 | keep a daemon alive, schedule work, or react to a condition — systemd vs cron vs hooks | `references/automation.md` |
+| know where platform policy actually lives — what the runtime cell renders into the guest (guest.env, scope maps, /etc renders), which lists are shipped as guest files (MASE, connector gatekeeper flags, Chromium managed policy), and which policy is host-side-only with no file to hunt for | `references/policy.md` |
 | stand up a FRESH Muse VM as a join/e2e target (the muse-test pattern) | `scripts/setup.sh` (self-contained installer; secrets via a 600 `.env` it templates for you). Call it by full path — the skill folder names the target; there is no dispatcher. Phased like the replit setup: `--sshd`, `--tailscale`, `-j`/`--join`, `--verify`, `--user <name>` (stack service user; env `RS_SSH_USER`, flag wins, default `root` — setup prints a warning for root; `--user runner` is the fleet-proven isolated mode), and an interactive arrow-key menu (bare run on a TTY, or `--menu`); a bare run without a TTY does the full setup |
 
 ## Hard rules (the ones that cost a night when forgotten)
