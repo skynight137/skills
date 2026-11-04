@@ -68,8 +68,8 @@ component is started only if down.
 ```sh
 bash $SETUP --verify
 # from the hop, the real end-to-end test:
-ssh <new-box> 'echo $MUSE_HOME; pwd'        # expect /home/hatch/workspace + the service home
-ssh -tt <new-box> 'pwd'                     # interactive: expect ~/workspace (landing)
+ssh <new-box> 'echo $MUSE_HOME; pwd'        # expect /home/hatch/workspace + /home/hatch/.ssh/home
+ssh -tt <new-box> 'pwd'                     # interactive: same service home — no landing cd
 ```
 
 Logs for everything live in `~/workspace/logs/`

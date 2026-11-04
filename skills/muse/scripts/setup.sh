@@ -675,17 +675,16 @@ if [[ "$SSH_USER" != root ]]; then
   chmod 700 "$SVC_HOME/.ssh"
 fi
 chmod 600 "$SVC_ENV_FILE"
-# Landing: interactive sessions start in the workspace. The working
-# directory is a shell concern (sshd cannot set it); the vars above no
-# longer depend on rc at all — this block only handles the landing.
-if ! grep -q "muse landing" "$SVC_HOME/.bashrc" 2>/dev/null; then
-  cat >> "$SVC_HOME/.bashrc" <<'RCEOF'
-
-# >>> muse landing >>>
-case $- in *i*) [[ "$PWD" == "$HOME" ]] && cd "${MUSE_HOME:-$HOME/workspace}" ;; esac
-# <<< muse landing <<<
-RCEOF
-fi
+# No landing cd: interactive sessions land in the service home itself
+# (the passwd home — ~/.ssh/home on a fresh box), decided 2026-11-04.
+# An earlier template appended a "muse landing" block to the service
+# .bashrc that cd'd interactive shells into $MUSE_HOME (the workspace —
+# a Replit-landing carry-over from when the service home lived inside
+# the workspace tree). Remove that block wherever a previous run left
+# it; MUSE_HOME stays as an environment anchor for tooling, not a
+# working directory.
+touch "$SVC_HOME/.bashrc"
+sed -i '/# >>> muse landing >>>/,/# <<< muse landing <<</d' "$SVC_HOME/.bashrc" 2>/dev/null || true
 cat > "$SVC_HOME/.bash_profile" <<'EOF'
 [ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"
 EOF

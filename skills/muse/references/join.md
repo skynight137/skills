@@ -163,7 +163,7 @@ same peer AND its key accepted by that peer's sshd. The star
 topology denies both to leaves, so this table grows by one row per
 new hop, not per box.
 
-## Session environment: sshd injects it, rc only lands you
+## Session environment: sshd injects it, rc does nothing
 
 Do not deliver env vars to ssh sessions through shell rc — login,
 non-login and `ssh host 'cmd'` sessions each source different files
@@ -174,11 +174,15 @@ set, `PATH`, and `BASH_ENV` pointing at the shared `config/env.sh`),
 so sshd itself injects the vars into every session before any shell
 starts. The `XDG_*` values mirror the platform's own `guest.env`
 (HOME-based: `~/.config`, `~/.cache`, `~/.local/state`), so a session
-sees the same environment the platform's own processes get. The only thing left to rc is the landing directory:
-the service home's `.bashrc` cds interactive sessions that start in
-`$HOME` into `$MUSE_HOME`. Same pattern fits the repl side
-(`REPL_HOME`); one static file per fleet, rendered from the same
-values as `env.sh`.
+sees the same environment the platform's own processes get. Nothing is left to rc: interactive
+sessions land in the service home itself (the passwd home). An
+earlier template cd'd interactive shells from the service home into
+`$MUSE_HOME` (a Replit-landing carry-over from when the service home
+lived inside the workspace tree); that block was removed 2026-11-04,
+and setup now strips it wherever a previous run left it.
+`MUSE_HOME` is an environment anchor for tooling, not a working
+directory. One static file per fleet, rendered from the same values
+as `env.sh`.
 
 ## The pattern that works: reverse SSH
 
