@@ -60,11 +60,19 @@ Verified 2026-11-03 (process census + allocation balloon test).
 
 ## Environment model
 
-- `HOME=/home/hatch`; `$MUSE_HOME` and all `XDG_*` are **unset** in the
-  stock environment. Muse uses explicit HOME-based paths; setting XDG
-  variables does nothing for Muse itself (third-party tools may honor
-  them — the operator's `~/workspace/config/env.sh` points XDG at
-  `~/workspace/.xdg/*` for those).
+- `HOME=/home/hatch`; `$MUSE_HOME` and all `XDG_*` are **unset** in
+  the agent shell's stock environment. The platform DOES define XDG
+  for its own processes, in `/opt/hatch/runtime-cell/guest.env`:
+  `XDG_CONFIG_HOME=~/.config`, `XDG_CACHE_HOME=~/.cache`,
+  `XDG_STATE_HOME=~/.local/state` — all under the persistent HOME.
+  Platform daemons and tool subprocesses composed from that file get
+  them; agent/SSH shells don't unless something sets them. Fleet
+  rule: generated env files (the stack's `config/env.sh`, the sshd
+  session environment) mirror the guest.env values instead of
+  inventing a workspace XDG tree; pointing XDG into the workspace
+  instead is only a contingency if the guest values ever cause
+  problems. Muse itself uses explicit HOME-based paths and ignores
+  XDG either way.
 - Agent shell commands run as `bash --norc --noprofile`: rc files are never
   auto-sourced. There is **no Replit-style `SHELL_ENV` injection point** —
   the runtime injects its env (proxy vars, CA bundles, `JARVIS_*`) at
@@ -102,6 +110,20 @@ Verified 2026-11-03 (process census + allocation balloon test).
   is ephemeral, so the post-redeploy bootstrap recreates just that link.
 - Result: every lookup path (`$HOME/.ssh`, passwd-home `.ssh`, explicit
   workspace path) converges on one store that never moves.
+
+## Workspace layout (this platform's own)
+
+- Tool binaries the agent installs go in `~/workspace/tools/bin/`;
+  tool configs go in `~/workspace/config/` (rclone.conf-style files
+  live there, beside the shared `env.sh`). The same instinct as
+  Hermes keeping its tools under HERMES_HOME: our tooling lives in
+  our tree, away from the platform's own directories.
+- The join stack is the deliberate exception: its tailscale state
+  dir stays pinned at `~/workspace/.local/share/tailscale/`, and its
+  binary dir follows the stickiness rule (see join.md) because
+  egress approvals are keyed by binary path.
+- XDG follows the platform's `guest.env` values (see Environment
+  model above), not a workspace tree.
 
 ## Skill registration (Muse-specific)
 

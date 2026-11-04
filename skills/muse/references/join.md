@@ -172,7 +172,9 @@ sets `PermitUserEnvironment yes` and setup writes
 `~/.ssh/environment` in the service home (`MUSE_HOME`, the `XDG_*`
 set, `PATH`, and `BASH_ENV` pointing at the shared `config/env.sh`),
 so sshd itself injects the vars into every session before any shell
-starts. The only thing left to rc is the landing directory:
+starts. The `XDG_*` values mirror the platform's own `guest.env`
+(HOME-based: `~/.config`, `~/.cache`, `~/.local/state`), so a session
+sees the same environment the platform's own processes get. The only thing left to rc is the landing directory:
 the service home's `.bashrc` cds interactive sessions that start in
 `$HOME` into `$MUSE_HOME`. Same pattern fits the repl side
 (`REPL_HOME`); one static file per fleet, rendered from the same
@@ -211,10 +213,16 @@ users, `/run/sshd`, the `/root/.ssh` symlink; starts sshd as the
 service user on 6800), `--start-ts` (daemon + join), `--loop` (the
 node-carried reverse loop, hop boxes) and `--check-reverse`
 (OK/ZOMBIE/DOWN probe run from the peer).
-The tailscale binaries follow XDG like the Replit layout:
-`~/workspace/.local/bin/`, daemon state/socket/log in
-`~/workspace/.local/share/tailscale/`. A fresh VM gets all of this from
-`scripts/setup.sh` in this skill.
+Tool binaries follow this platform's own layout: a fresh install puts
+the tailscale binaries in `~/workspace/tools/bin/` (tool configs live
+in `~/workspace/config/`). Install location is sticky, though —
+egress approvals are keyed by binary path, so a box already running
+tailscale from the legacy `~/workspace/.local/bin/` keeps that path
+and is never silently relocated; `RS_TS_BIN_DIR` (env or the stack
+`.env`) overrides the choice and is the deliberate-migration path.
+Daemon state/socket/log stay pinned in
+`~/workspace/.local/share/tailscale/` regardless. A fresh VM gets all
+of this from `scripts/setup.sh` in this skill.
 
 Restore after a redeploy is one command — the same hourly self-heal
 runs it when its probes fail:

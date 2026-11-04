@@ -3,12 +3,18 @@
 # (the muse-test pattern: a second Muse instance you can redeploy freely
 # and use as an end-to-end join target, the way repl-test serves Replit).
 #
-# What it installs (all inside the persistent tree, Replit-shaped layout):
+# What it installs (all inside the persistent tree, this platform's
+# own layout — tools and configs under the workspace, away from the
+# platform's own dirs):
 #   <ws>/.ssh/                  canonical ssh store + sshd stack + configs
 #   <ws>/.ssh/reverse/          reverse-tunnel client config + loop state
-#   <ws>/.local/bin/            tailscale / tailscaled (XDG bin)
-#   <ws>/.local/share/tailscale daemon state/socket/log (XDG data)
-#   <ws>/config/env.sh          shared env (XDG vars, MUSE_HOME, secrets)
+#   <ws>/tools/bin/             tailscale / tailscaled + tool binaries
+#                               (fresh installs; a box already running
+#                               from <ws>/.local/bin keeps that path —
+#                               see the BINDIR resolution below)
+#   <ws>/.local/share/tailscale daemon state/socket/log (stack state
+#                               dir, pinned — not XDG-derived)
+#   <ws>/config/                shared env + tool configs (env.sh, ...)
 #   ~/.ssh, /root/.ssh          symlinks -> <ws>/.ssh
 #
 # Usage (mirrors the replit setup's shape: phase flags + an interactive
@@ -71,7 +77,29 @@ while [[ $# -gt 0 ]]; do
 done
 WS="$HOME/workspace"
 SSHDIR="$WS/.ssh"
-BINDIR="$WS/.local/bin"
+# Tool binaries live in the workspace tools dir — this platform's own
+# layout (~/workspace/tools/bin for binaries, ~/workspace/config for
+# tool configs), away from the platform's own directories.
+# Install-location stickiness: egress approvals are keyed by binary
+# path, so a box already running tailscale from the legacy bin dir
+# (~/workspace/.local/bin) keeps using it — silently relocating a live
+# stack would re-mint approval cards and strand its state for no gain.
+# Only a fresh install (no tailscaled in the legacy dir) lands in
+# tools/bin. RS_TS_BIN_DIR (process env, or the stack .env) overrides
+# both — it is also the deliberate-migration path: set it, let
+# phase_tailscale install there, then retire the legacy copy.
+LEGACY_BINDIR="$WS/.local/bin"
+_ts_bin_dir_env="$(grep -E '^RS_TS_BIN_DIR=' "$SSHDIR/.env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+if [[ -n "${RS_TS_BIN_DIR:-}" ]]; then
+  BINDIR="$RS_TS_BIN_DIR"
+elif [[ -n "$_ts_bin_dir_env" ]]; then
+  BINDIR="$_ts_bin_dir_env"
+elif [[ -x "$LEGACY_BINDIR/tailscaled" ]]; then
+  BINDIR="$LEGACY_BINDIR"
+else
+  BINDIR="$WS/tools/bin"
+fi
+unset _ts_bin_dir_env
 TSDIR="$WS/.local/share/tailscale"
 REVDIR="$SSHDIR/reverse"
 LOGDIR="$WS/logs"
@@ -217,6 +245,8 @@ start_tailscale() {
     daemon_runas="runuser -u $SSH_USER -- "
   fi
   chmod o+x "$HOME" "$WS" "$WS/.local" "$WS/.local/share"
+  [[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
+  [[ -d "$BINDIR" ]] && chmod o+x "$BINDIR"
   if [[ "$SSH_USER" != root ]]; then
     id "$SSH_USER" >/dev/null 2>&1 || useradd -d "$SVC_HOME" -s /bin/bash "$SSH_USER"
   fi
@@ -368,6 +398,8 @@ chmod o+x "$HOME" "$WS"
 mkdir -p "$SSHDIR/join-tailnet" "$SSHDIR/bin" "$REVDIR" "$BINDIR" "$TSDIR/state" "$WS/config" "$LOGDIR"
 chown "$SSH_USER:$SSH_USER" "$LOGDIR" 2>/dev/null || true
 chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
+[[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
+chmod o+x "$BINDIR"
 # sshd runs as the service user and must write its pid inside
 # join-tailnet (its log goes to $WS/logs, also service-user-owned),
 # read its host key and authorized_keys, and land in a
@@ -461,15 +493,18 @@ if [[ "$(readlink /root/.ssh 2>/dev/null)" != "$SSHDIR" ]]; then rm -rf /root/.s
 say "shared env (config/env.sh) + .env template"
 cat > "$WS/config/env.sh" <<'EOF'
 # Shared environment for this VM — non-secret config only.
-export XDG_DATA_HOME="$HOME/workspace/.local/share"
-export XDG_CONFIG_HOME="$HOME/workspace/.config"
-export XDG_CACHE_HOME="$HOME/workspace/.cache"
-export XDG_STATE_HOME="$HOME/workspace/.local/state"
-# Toolchain anchor: the persistent target path (parity with REPL_HOME).
+# XDG values mirror the platform's own guest.env (runtime-cell):
+# HOME-based, all on the persistent home volume. (The stack's own
+# state dir is pinned separately and does not follow XDG_DATA_HOME.)
+export XDG_DATA_HOME="$HOME/.local/share"
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_STATE_HOME="$HOME/.local/state"
+# Toolchain anchor: the persistent target path for fleet tooling.
 export MUSE_HOME="$HOME/workspace"
 case ":$PATH:" in
-  *":$HOME/workspace/.local/bin:"*) ;;
-  *) export PATH="$HOME/workspace/.local/bin:$HOME/workspace/.ssh/bin:$PATH" ;;
+  *":$HOME/workspace/tools/bin:"*) ;;
+  *) export PATH="$HOME/workspace/tools/bin:$HOME/workspace/.local/bin:$HOME/workspace/.ssh/bin:$PATH" ;;
 esac
 if [ -r "$HOME/workspace/.ssh/.env" ]; then
   set -a; . "$HOME/workspace/.ssh/.env"; set +a
@@ -490,6 +525,10 @@ TAILSCALE_AUTH_KEY=
 TAILSCALE_NODE_NAME=muse-join
 RS_SSH_USER=$SSH_USER
 # (the stack service user chosen at install time; setup's --user flag overrides it)
+#RS_TS_BIN_DIR= (optional override: where the tailscale binaries live. Defaults:
+# a fresh install uses ~/workspace/tools/bin, but a box already running tailscale
+# from ~/workspace/.local/bin keeps that path — egress approvals are keyed by
+# binary path, so the stack never relocates itself. Set this to migrate deliberately.)
 #RS_AUTHORIZED_KEYS= (optional override: pubkeys to authorize instead of the muse-hop default)
 #RS_REVERSE_PEER= (HOP ONLY: peer IP that receives this box's reverse forward. Leaves leave
 #  this unset — a leaf runs NO reverse loop; only the fleet hop opens one, to the repl hop.)
@@ -505,13 +544,15 @@ say "session environment (sshd-injected, not rc)"
 # $SVC_HOME/.ssh/environment — which for root is the file $SVC_ENV_FILE
 # ($SSHDIR/environment, reached through the /root/.ssh symlink).
 if [[ "$SSH_USER" != root ]]; then mkdir -p "$SVC_HOME/.ssh"; fi
+# XDG below mirrors the platform's guest.env values (HOME-based) so an
+# ssh session sees the same environment the platform's own processes get.
 cat > "$SVC_ENV_FILE" <<EOF
 MUSE_HOME=$WS
-XDG_DATA_HOME=$WS/.local/share
-XDG_CONFIG_HOME=$WS/.config
-XDG_CACHE_HOME=$WS/.cache
-XDG_STATE_HOME=$WS/.local/state
-PATH=$WS/.local/bin:$WS/.ssh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+XDG_DATA_HOME=$HOME/.local/share
+XDG_CONFIG_HOME=$HOME/.config
+XDG_CACHE_HOME=$HOME/.cache
+XDG_STATE_HOME=$HOME/.local/state
+PATH=$BINDIR:$WS/.ssh/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 BASH_ENV=$WS/config/env.sh
 EOF
 if [[ "$SSH_USER" != root ]]; then
@@ -572,6 +613,7 @@ EOF
 phase_tailscale() {
 say "tailscale binaries (pinned $TSVER, checksum verified)"
 if [[ ! -x "$BINDIR/tailscaled" ]]; then
+  mkdir -p "$BINDIR"
   TGZ="tailscale_${TSVER}_amd64.tgz"
   curl -fsSL -o "/tmp/$TGZ" "https://pkgs.tailscale.com/stable/$TGZ"
   curl -fsSL -o "/tmp/$TGZ.sha256" "https://pkgs.tailscale.com/stable/$TGZ.sha256"
