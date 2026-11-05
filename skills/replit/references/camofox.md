@@ -491,22 +491,30 @@ The generator fails loud at step 2 — before the slow steps. Gate (never glob
 R="$(nix eval --raw nixpkgs#gtk3 2>/dev/null)"; [ -e "$R/lib/libgtk-3.so.0" ] && echo warm
 ```
 
-If that misses, pick ONE:
+**`setup.sh --camofox` now handles a cold store itself — no manual package
+editing.** Verified on a fresh repl-test (2026-11-05: no `replit.nix`, every
+eval root missing from the store):
 
-```bash
-# Option A (recommended — persists across container recreates):
-# add the packages to .replit [nix] packages, then wait for the Replit rebuild:
-#   [nix]
-#   packages = ["gtk3", "alsa-lib", "xorg.libXdamage", "xorg.xvfb", "cacert"]
-# (a root replit.nix with deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]
-#  is the older alternate form and works identically)
+1. **Persistence lane** — it writes/merges the workspace-root `replit.nix`
+   (`$REPL_HOME/replit.nix`) with `pkgs.cacert pkgs.gtk3 pkgs.alsa-lib
+   pkgs.xorg.libXdamage pkgs.xorg.xvfb`. Writing the file by command works,
+   but the platform does **not** rebuild on the write (store still cold
+   minutes later, no restart) — the declaration applies only at the next
+   platform rebuild/restart, so this lane alone cannot finish an install.
+2. **Immediate lane** — it runs
+   `nix-env -iA nixpkgs.cacert nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage nixpkgs.xorg.xorgserver`,
+   which warms this container in seconds and feeds the closure generator
+   through its `~/.nix-profile` lane. Attr spelling differs per lane:
+   `nix-env -iA nixpkgs.xorg.xvfb` fails ("attribute 'xvfb' ... not found");
+   `xorg.xorgserver` is the legacy attr that ships a working `Xvfb`.
+   `nix --store /nix/store build nixpkgs#xorg.xvfb` is not a substitute —
+   its output lands in the chroot store (`/nix/store/nix/store/<hash>`) and
+   is invisible to the checking shell (`references/nix.md` §3b).
 
-# Option B (works in the live container only; lost on recreate):
-nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage
-```
-
-Then re-run `setup.sh --camofox`. The `references/nix.md` reference explains why each
-option behaves as it does (T0–T3 matrix).
+Manual fallback (only if the automatic warm-up failed): add the five
+packages above to the workspace-root `replit.nix`, restart/rebuild the repl,
+then re-run `setup.sh --camofox`. The `references/nix.md` reference explains
+why each option behaves as it does (T0–T3 matrix).
 
 ## Troubleshooting
 
@@ -539,6 +547,7 @@ Useful greps:
 | a failed run's log just **stops** at `listening on :9377`, error missing | client `print()`s are block-buffered when stdout is a pipe (no TTY); and `session:created` (`plugins/persistence/index.js:120`) awaits the state restore, so a wedged browser never reaches the route's `req` log line | run the CLI as `python3 -u` (or `PYTHONUNBUFFERED=1`) |
 | first `POST /tabs` on a Cloudflare site returns `httpStatus:403` (e.g. g2.com, glassdoor.com) | CF frontdoor challenges the cold profile; the URL may even be rewritten to a `__cf_chl_rt_tk` token | **retry the same sessionKey** — the second attempt usually returns `navigationOk:true` with full content (verified: g2.com 403 → 200 on retry, real reviews loaded) |
 | `libgtk-3.so.0: cannot open shared object file` | store is COLD | *Cold store* section |
+| server starts, `/health` ok, but every browser launch dies with `GLIBC_2.44 not found (required by .../sqlite-3.53.3/lib/libsqlite3.so.0)` | the closure was generated while `node` was the **platform nix build**: generate-closure prepends that node's linked store dirs, whose sqlite needs a newer glibc than the system one (2.39) that Firefox loads with | install the managed node first (`setup.sh --node --camofox` in one run), delete `.config/camofox/closure.txt`, re-run `setup.sh --camofox` so the closure regenerates with no nix-node prepend. Verified on fresh repl-test, 2026-11-05 (platform node 24.22.1 → broken; managed node 26.13.0 → `xvfb virtual display started`, launches clean) |
 | **`POST /sessions/<u>/cookies` → 500** `browserType.launch: Failed to launch the browser process` + `libmozgtk.so: libgtk-3.so.0: cannot open shared object file`, in a **workflow / Run-button / cron** shell | that shell never sourced `env.sh`, so a bare `camofox-browser` started Firefox with no GTK closure. The `LD_LIBRARY_PATH` here is whatever `[userenv.shared]` pinned (the pool) and it does NOT carry GTK | launch via the snippet or the shim, **not** a bare `camofox-browser`: `. "${XDG_CONFIG_HOME:-$REPL_HOME/.config}/camofox/env.sh"; exec camofox-browser`, or `launch-camofox-browser`. `--doctor` now gates on both; `--fix` regenerates them |
 | **`POST /sessions/<u>/cookies` → 500** `Error setting storage state: … Protocol error (Network.setRequestInterception) … "bypassServiceWorker" … not described in this scheme`, **only for real accounts** (a fresh userId imports fine) | playwright-core ≥ 1.64 sends a param the Camoufox engine's juggler schema does not declare, on the storage-state page that restoring a localStorage-bearing profile builds | `bash setup.sh --camofox` (pins playwright-core), then restart the server — see *Cookie import 500s for a logged-in account* below |
 | `libX11-xcb.so.1: cannot open shared object file` | running with only `$REPLIT_LD_LIBRARY_PATH` (24 dirs on this box) | let the script load `LD_LIBRARY_PATH.txt` (don't hand-export the top-level dirs) |
@@ -633,7 +642,7 @@ disk — never print cookie contents to the chat/terminal.
 **One CLI does everything** — `scripts/camofox.py`:
 
 ```bash
-cd ~/workspace/skynight137-skills/skills/replit
+cd <skill-dir>   # the installed replit skill, e.g. $REPL_HOME/.agents/skills/replit after `npx skills add`
 
 python3 scripts/camofox.py --user list        # list accounts (cookie jars)
 python3 scripts/camofox.py --session list      # list live sessions (open tabs)

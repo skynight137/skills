@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.21.0
+version: 4.22.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -213,6 +213,14 @@ without ripgrep.
   in those shells dies on `libgtk-3.so.0: cannot open shared object file` and
   surfaces as an opaque 500 on cookie import**; use the snippet or the shim.
   See `references/camofox.md` §"npm-global lane".
+  **Cold store (fresh workspace, no `replit.nix`): `--camofox` handles it by
+  command — no hand-editing.** It writes/merges the workspace-root
+  `replit.nix` with the five Camofox deps (persistence lane; the platform
+  does not rebuild on the write, so it applies at the next rebuild/restart)
+  AND warms this container immediately with `nix-env -iA` (immediate lane;
+  Xvfb comes via the legacy `nixpkgs.xorg.xorgserver` attr — `nixpkgs.xorg.xvfb`
+  is not a valid `nix-env -iA` path). The generated launcher's fix-it command
+  is derived from `$SCRIPT_DIR` — never a hardcoded clone path.
 - `dot_replit.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
   - Verify the pin after every `--fix`: `write_replit_bashrc` needs tomlkit (from `.venv`, `python3`, or `uv`). On a fresh box none of them has tomlkit, so the function prints `python tomlkit not found, write REPLIT_BASHRC manually` and still returns 0. That is a failure: workflow shells then lack the line and break silently. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`. Install tomlkit into `.venv` before running `setup.sh --fix` on a fresh machine, or add the line by hand under `[userenv.shared]`.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
