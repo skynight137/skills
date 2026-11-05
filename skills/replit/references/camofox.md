@@ -907,6 +907,15 @@ Low-memory rules for keep-alive work:
   loops sharing a `--session` and `--screenshot` dir overwrite each
   other. Give parallel loops distinct sessions (and accept their tabs),
   or run sequentially.
+- **Dismiss upsell/limit modals before the screenshot** with
+  `--dismiss TEXT` (repeatable): after each load, `refresh-page` finds a
+  visible dialog whose text contains TEXT and clicks its close control —
+  e.g. `--dismiss 'Keep using Replit?'` closes Replit's Starter-limit
+  upsell ("You've reached your Starter limit"), which otherwise sits in
+  every tour screenshot. The mechanism in `camofox.py` is generic (dialog
+  + close control only, never a CTA); the site-specific TEXT stays with
+  the caller (workflow args / tour script), and each attempt's outcome
+  (`dismissed` / `not-found` / `found-no-close`) lands in the detail log.
 
 ## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
 
