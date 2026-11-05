@@ -929,6 +929,19 @@ Low-memory rules for keep-alive work:
   + close control only, never a CTA); the site-specific TEXT stays with
   the caller (workflow args / tour script), and each attempt's outcome
   (`dismissed` / `not-found` / `found-no-close`) lands in the detail log.
+- **Assert the page is worth keeping alive** with `--fail-text TEXT`
+  (repeatable): after the tab opens and before every refresh,
+  `refresh-page` exits non-zero if the page's visible text contains
+  **all** of the given TEXTs (a conjunction — one common word in a
+  project's own code must not trip it), confirmed by a second probe 5s
+  later. This is the checker for the failure screenshots cannot flag:
+  the page loads and refreshes fine, but the session is useless — e.g.
+  the cookies went stale and every stop is a logged-out wall, which a
+  tour will happily screenshot for hours. Replit wiring (tour scripts):
+  `--fail-text "Log in" --fail-text "Sign up"` on replit.com stops; the
+  tour script turns the early exit into a `*** stop FAILED early`
+  banner in its own log. Like `--dismiss`, the mechanism is generic and
+  the needles are caller data.
 
 ## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
 
