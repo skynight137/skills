@@ -160,7 +160,9 @@ workflow runs failed exactly this way.
 consumers that cannot inline the snippet:
 
 ```bash
-launch-camofox-browser         # sources env.sh, then execs camofox-browser
+launch-camofox-browser         # sources env.sh, starts camofox-browser with its
+                               # log going to $REPL_HOME/logs/camofox-browser.log,
+                               # prints a short summary, then waits on the server
 ```
 
 It lives in `$XDG_BIN_HOME` (= `.local/bin`, on the platform PATH) and is
@@ -497,10 +499,15 @@ eval root missing from the store):
 
 1. **Persistence lane** — it writes/merges the workspace-root `replit.nix`
    (`$REPL_HOME/replit.nix`) with `pkgs.cacert pkgs.gtk3 pkgs.alsa-lib
-   pkgs.xorg.libXdamage pkgs.xorg.xvfb`. Writing the file by command works,
-   but the platform does **not** rebuild on the write (store still cold
-   minutes later, no restart) — the declaration applies only at the next
-   platform rebuild/restart, so this lane alone cannot finish an install.
+   pkgs.xorg.libXdamage pkgs.xorg.xvfb`, and ensures `.replit` declares
+   `[nix] channel = "stable-25_05"` (an existing channel is left alone).
+   The channel is load-bearing: with no `[nix]` table the platform drops
+   the repl into recovery mode and never rebuilds (operator-verified on
+   repl-test, 2026-11-05; `references/nix.md` §2). Writing the file by
+   command works, but the platform does **not** rebuild on the write
+   (store still cold minutes later, no restart) — the declaration applies
+   only at the next platform rebuild/restart, so this lane alone cannot
+   finish an install.
 2. **Immediate lane** — it runs
    `nix-env -iA nixpkgs.cacert nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage nixpkgs.xorg.xorgserver`,
    which warms this container in seconds and feeds the closure generator
@@ -655,6 +662,13 @@ python3 scripts/camofox.py --cookies /path/cookies.json --user rl
 python3 scripts/camofox.py --tools refresh-page \
   --url 'https://replit.com/@me/MyProject' --user rl \
   --session live-session --interval 180
+
+# same loop as a .replit workflow: --log-file keeps the workflow terminal
+# to the startup summary (per-cycle detail goes to the workspace log file;
+# an unbounded console hangs the Replit UI — references/exposing-ports.md)
+python3 scripts/camofox.py --tools refresh-page \
+  --url 'https://replit.com/@me/MyProject' --user rl \
+  --session live-session --interval 180 --log-file logs/refresh-page.log
 
 # screenshot currently-open tab(s) to PNGs and exit (one-shot, no loop)
 python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session

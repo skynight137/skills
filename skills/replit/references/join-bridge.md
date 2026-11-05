@@ -372,11 +372,13 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   missing, both then verified by grep. Note GNU sed rejects `|` as the delimiter on these
   patterns — use `s#…#…#`.
 - **A workflow whose command exits is DEAD.** Replit reaps the job the moment the task
-  command returns, taking the daemons with it, and a run whose output is redirected to a
-  file shows nothing. `--workflow` (implies `--join`) prints the steps to the terminal
-  and ends with `tail -F` on the tailscaled log, so one foreground process (and visible
-  output) holds the job open. Every other flag is a one-shot install: use `--join` by hand,
-  `--join --workflow` in `.replit [workflows]`.
+  command returns, taking the daemons with it. `--workflow` (implies `--join`) prints a
+  short summary to the terminal, then holds the job open by watching the tailscaled
+  socket (the workflow ends when the daemon dies). It used to end with `tail -F` on the
+  daemon log; streaming a daemon log into the workflow terminal hangs the Replit UI, so
+  the full log stays in its file (`tailscaled.log`) and the console stays quiet — the
+  skill-wide workflow-console rule in `references/exposing-ports.md`. Every other flag
+  is a one-shot install: use `--join` by hand, `--join --workflow` in `.replit [workflows]`.
 - **The SOCKS relay fails intermittently** (`General SOCKS server failure` while the same
   probe answered a minute earlier). Retry the probe 2–3× before declaring the port dead, and
   judge reachability by the SSH banner (`SSH-2.0-…`) instead of `nc -z`, which returns success

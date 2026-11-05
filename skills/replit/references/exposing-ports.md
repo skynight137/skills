@@ -425,6 +425,21 @@ for p in $(pgrep -f "^[^ ]*[t]ailscaled --tun"); do kill "$p"; done
   always-on service needs a Reserved VM.
 - Give the new workflow its own port. Two workflows on the same `waitForPort`
   cannot both bind; whichever starts second never satisfies its wait.
+- **Workflow console hygiene (operator rule, 2026-11-05):** a workflow task
+  must stay in the foreground to keep its job alive, but its runtime's full
+  log must NOT stream into the workflow terminal — an unbounded console
+  makes the Replit UI hang. The pattern for every toolchain here: the full
+  log goes to a file under `$REPL_HOME/logs/<name>.log` (the workspace is
+  persistent, so the log survives for diagnosis), the console prints only a
+  short summary (what started, which port/URL, pid, and the log path), and
+  the task holds itself open by waiting on the runtime process or its
+  socket — never by `tail -F`-ing the log. Implemented in: the
+  `launch-camofox-browser` shim (server log → `logs/camofox-browser.log`),
+  `setup.sh --tailscale --join --workflow` (summary + socket watch;
+  tailscaled's own log was already a file), the llm-wiki supervisors
+  (non-TTY runs self-redirect to `logs/llm-wiki-{public,ui}.log`), and
+  `camofox.py --tools refresh-page --log-file logs/<name>.log` (per-cycle
+  detail to the file, failures still surface as one console line).
 - A workflow launcher runs in a bare shell: unset `NODE_ENV` inside the script
   (`NODE_ENV=production` is exported here and npm then omits devDependencies →
   `tsc: command not found`) and export app vars there, not in your interactive

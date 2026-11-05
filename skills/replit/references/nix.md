@@ -51,6 +51,15 @@ Verify before relying on it: `nix-instantiate --parse replit.nix` (syntax) and
 `nix eval` each `pkgs.<attr>` name against the pinned channel. Keep `replit.nix`
 tracked in git; a staged deletion of it is a regression, not a cleanup.
 
+**A root `replit.nix` also needs a `[nix]` channel in `.replit`** —
+`channel = "stable-25_05"`. With no `[nix]` table at all the platform drops
+the repl into **recovery mode** and never rebuilds, however correct the
+file is (operator-verified on repl-test, 2026-11-05: `replit.nix` present
+with the camofox deps, terminal in recovery mode, store still cold). An
+existing channel value is the operator's choice — the requirement is that
+one is declared. `setup.sh --camofox` ensures both the deps file and the
+channel; other toolchains writing a `replit.nix` must do the same.
+
 `.replit [nix] packages` is the **alternate** lane. Use it only if the
 `replit.nix` form is unavailable on the platform, and re-check `cacert` after
 every rebuild.
