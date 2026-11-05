@@ -426,8 +426,64 @@ def dismiss_dialogs(key, user, tab, needles):
             detail(f"dismiss '{needle}': error {e}")
 
 
+# Generic page-content assertion for the keep-alive tools — the counterpart
+# of --dismiss. The MECHANISM is site-agnostic (does the page's visible text
+# contain ALL of the caller-given needles?) while the needles are caller
+# data, so no site-specific strings live in this client. Built for the
+# silent failure a keep-alive loop cannot otherwise see: the page LOADS and
+# refreshes fine, but its content says the session is useless — e.g. the
+# cookies went stale and every stop is a logged-out wall (needles like
+# "Log in" + "Sign up") that screenshots happily for hours. The needles are
+# a CONJUNCTION on purpose: a single common word ("Log in" inside a
+# project's own code) must not be able to trip it alone. A match is an
+# assertion about state, not a transient error, so it is confirmed once
+# after a short pause (a mid-render page can flash the markers) and then
+# exits non-zero; a failed evaluate is ignored — liveness is the
+# refresh/reopen path's job, not the checker's.
+_FAIL_TEXT_JS = """(() => {
+  const needles = %s;
+  const text = (document.body && document.body.innerText || '').toLowerCase();
+  return needles.every((n) => text.includes(n)) ? 'matched' : 'clear';
+})()"""
+
+
+def _fail_text_probe(key, user, tab, needles):
+    try:
+        r = req(key, "POST", f"/tabs/{tab}/evaluate",
+                {"userId": user,
+                 "expression": _FAIL_TEXT_JS
+                 % json.dumps([n.lower() for n in needles])},
+                timeout=30)
+    except Exception as e:  # noqa: BLE001 — checker must not kill the loop
+        detail(f"fail-text probe error: {e}")
+        return None
+    if isinstance(r, dict) and ("_http_error" in r or "_error" in r):
+        detail(f"fail-text probe failed: {r}")
+        return None
+    return r.get("result") if isinstance(r, dict) else None
+
+
+def check_fail_text(key, user, tab, needles):
+    """Exit(1) when the page's visible text contains ALL of `needles`
+    (confirmed by a second probe 5s later). Otherwise returns quietly."""
+    if _fail_text_probe(key, user, tab, needles) != "matched":
+        return
+    detail(f"fail-text: all of {list(needles)} present — confirming")
+    time.sleep(5)
+    if _fail_text_probe(key, user, tab, needles) != "matched":
+        detail("fail-text: clear on re-probe — continuing")
+        return
+    msg = (f"refresh-page: CONTENT CHECK FAILED — page contains all of "
+           f"{list(needles)} (session state is not what this loop exists "
+           f"to keep alive — e.g. logged out / stale cookies). Exiting.")
+    detail(msg)
+    print(msg, file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
 def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
-                      log_file=None, dismiss=(), max_failures=3):
+                      log_file=None, dismiss=(), max_failures=3,
+                      fail_text=()):
     global _LOGF
     if log_file:
         os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
@@ -446,6 +502,8 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
           + (f" log={log_file}" if log_file else ""))
     if dismiss:
         dismiss_dialogs(key, user, tab, dismiss)
+    if fail_text:
+        check_fail_text(key, user, tab, fail_text)
     if shot_dir:
         tool_screenshot(key, user, session, shot_dir, full_page=True)
     # Bounded failure: a keep-alive loop must not spin forever when EVERY
@@ -461,6 +519,8 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
         time.sleep(interval)
         if dismiss:
             dismiss_dialogs(key, user, tab, dismiss)
+        if fail_text:
+            check_fail_text(key, user, tab, fail_text)
         if shot_dir:
             # capture the currently fully-loaded page BEFORE refreshing it
             tool_screenshot(key, user, session, shot_dir, full_page=True)
@@ -555,6 +615,15 @@ def main():
                          "the TEXT is the caller's site-specific data, e.g. "
                          "--dismiss 'Keep using Replit?' for the Replit "
                          "Starter-limit upsell modal")
+    ap.add_argument("--fail-text", action="append", default=[], metavar="TEXT",
+                    help="refresh-page: content assertion — after the tab "
+                         "opens and before every refresh, exit non-zero if "
+                         "the page's visible text contains ALL of the given "
+                         "TEXTs (repeatable; conjunction, confirmed by a "
+                         "second probe 5s later). Catches a session that "
+                         "loads fine but is useless — e.g. stale cookies "
+                         "leaving a logged-out wall: --fail-text 'Log in' "
+                         "--fail-text 'Sign up'")
     a = ap.parse_args()
 
     # Config provenance (see the import block): one short line per resolved
@@ -628,7 +697,8 @@ def main():
         if a.tools == "refresh-page":
             tool_refresh_page(key, a.user, a.session, a.url, a.interval,
                               shot_dir=a.screenshot, log_file=a.log_file,
-                              dismiss=a.dismiss, max_failures=a.max_failures)
+                              dismiss=a.dismiss, max_failures=a.max_failures,
+                              fail_text=a.fail_text)
         else:
             TOOLS[a.tools](key, a.user, a.session, a.url, a.interval)
     elif a.cookies is None and not a.tools:
