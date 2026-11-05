@@ -91,8 +91,12 @@ hermes mcp add camofox --command <that-wrapper> \
         CAMOFOX_SESSION_KEY=default CAMOFOX_COOKIES_DIR=/home/runner/workspace/.config/camofox/cookies
 ```
 
-The shipped template is `scripts/camofox-mcp-local.sh` (copy it, then register it
-with `hermes mcp add camofox --command <copy> --env CAMOFOX_BASE_URL=... ...`).
+This wrapper is a **Hermes-side helper and lives in the Hermes home**
+(e.g. under `.hermes/profiles/<p>/`), NOT in this skill — the skill does
+not ship it (operator decision 2026-11-05: it is Hermes's own launcher,
+parameterised by `REPL_HOME`/`HERMES_PROFILE`, keys read from the profile
+`.env`). Write it there once from the shape above, then register it with
+`hermes mcp add camofox --command <that-wrapper> --env CAMOFOX_BASE_URL=... ...`.
 
 The adapter is stdio-only and a thin proxy to `CAMOFOX_BASE_URL`. When the
 server is remote (workflow on the repl's :80), register it as an ssh-spawned
