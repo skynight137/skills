@@ -427,7 +427,7 @@ def dismiss_dialogs(key, user, tab, needles):
 
 
 def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
-                      log_file=None, dismiss=()):
+                      log_file=None, dismiss=(), max_failures=3):
     global _LOGF
     if log_file:
         os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
@@ -448,6 +448,15 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
         dismiss_dialogs(key, user, tab, dismiss)
     if shot_dir:
         tool_screenshot(key, user, session, shot_dir, full_page=True)
+    # Bounded failure: a keep-alive loop must not spin forever when EVERY
+    # cycle fails (dead server, browser that can no longer launch, ...).
+    # Count CONSECUTIVE cycles where refresh failed AND the reopen failed
+    # too; a successful refresh — or a successful reopen, e.g. after a
+    # browser restart — resets the count, so transients never accumulate.
+    # At max_failures the loop exits non-zero and says so on the console:
+    # a workflow that looks "running" while accomplishing nothing is worse
+    # than a dead one, because nobody comes to fix it.
+    fails = 0
     while True:
         time.sleep(interval)
         if dismiss:
@@ -467,7 +476,20 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
             if "_http_error" not in r and "_error" not in r:
                 tab = r.get("tabId", "")
                 detail("reopened tab", tab[:8])
+                fails = 0
+            else:
+                fails += 1
+                detail(f"reopen failed ({fails}/{max_failures} "
+                       f"consecutive):", r)
+                if 0 < max_failures <= fails:
+                    msg = (f"refresh-page: {fails} consecutive failed "
+                           f"cycles (refresh + reopen) — exiting. "
+                           f"Last error: {r}")
+                    detail(msg)
+                    print(msg, file=sys.stderr, flush=True)
+                    sys.exit(1)
         else:
+            fails = 0
             detail(f"refresh ok @ {time.strftime('%H:%M:%S')}")
 
 
@@ -520,6 +542,12 @@ def main():
                          "the console to the startup summary + failures — "
                          "for .replit workflow runs, whose terminals hang "
                          "under unbounded log output")
+    ap.add_argument("--max-failures", type=int, default=3, metavar="N",
+                    help="refresh-page: exit non-zero after N consecutive "
+                         "cycles where both the refresh AND the reopen "
+                         "failed (default 3; 0 = loop forever). A success "
+                         "resets the count, so transient browser restarts "
+                         "never accumulate")
     ap.add_argument("--dismiss", action="append", default=[], metavar="TEXT",
                     help="refresh-page: after each load, close any visible "
                          "dialog whose text contains TEXT by clicking its "
@@ -600,7 +628,7 @@ def main():
         if a.tools == "refresh-page":
             tool_refresh_page(key, a.user, a.session, a.url, a.interval,
                               shot_dir=a.screenshot, log_file=a.log_file,
-                              dismiss=a.dismiss)
+                              dismiss=a.dismiss, max_failures=a.max_failures)
         else:
             TOOLS[a.tools](key, a.user, a.session, a.url, a.interval)
     elif a.cookies is None and not a.tools:

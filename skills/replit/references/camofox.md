@@ -838,6 +838,15 @@ t=180    screenshot (settled page) → refresh
 t=360    screenshot → refresh ...
 ```
 
+The loop's failures are **bounded**: when a cycle's refresh fails, the
+client tries to reopen the tab; a cycle counts as failed only when the
+reopen fails too, and after `--max-failures N` **consecutive** failed
+cycles (default 3) the loop prints the last error and **exits non-zero**
+instead of spinning forever against a dead server or a browser that can
+no longer launch. Any success (refresh or reopen — e.g. after a browser
+restart) resets the counter, so transients never accumulate. Set
+`--max-failures 0` only if you truly want the old unbounded behaviour.
+
 Screenshot runs **before** the refresh in each cycle, so it captures the
 fully-loaded page from the previous reload, not a half-loaded one. `--screenshot`
 alone (no `--tools`) stays one-shot + exit.
