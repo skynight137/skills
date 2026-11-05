@@ -245,6 +245,45 @@ camofox_write_env_snippet() {
   ok "camofox env snippet: $f"
 }
 
+camofox_write_env_example() {
+  # A fill-in TEMPLATE for the CLIENT config, dropped by setup — never by
+  # hand — next to the real .env in the canonical config home
+  # ($XDG_CONFIG_HOME/camofox, the same dir as server-keys.env), so an
+  # operator learns what to configure from the box itself instead of from
+  # docs. Refreshed on every --camofox run: it is a template, not user
+  # config, and the real .env next to it is never touched by setup.
+  local f="$CAMOFOX_STATE_DIR/.env.example"
+  mkdir -p "$(dirname "$f")" || return 0
+  cat > "$f" <<'EOF'
+# camofox CLIENT config — copy this file to ".env" in this same directory
+# and fill in the values. Only the vars you set are used.
+#
+# Precedence ("big env" rule): a var already set in the system environment
+# WINS; this file only fills gaps. camofox.py logs at startup which source
+# each var came from ("from system env (.env file skipped)" /
+# "from .env file"), so a run's config is auditable, never silent.
+#
+# Template written by setup.sh --camofox; safe to regenerate, never read
+# by the client itself.
+
+# Server endpoint the client dials: the public dev domain (as here) or a
+# loopback URL such as http://127.0.0.1. PORT is the server's bind port.
+CAMOFOX_BASE_URL=https://<your-repl-dev-domain>
+CAMOFOX_PORT=80
+
+# Auth keys — copy the values from server-keys.env in this directory.
+# The ACCESS key is preferred; the API key is the fallback.
+CAMOFOX_ACCESS_KEY=
+CAMOFOX_API_KEY=
+
+# Optional overrides (defaults shown; leave unset unless you mean it):
+# CAMOFOX_ROOT=$HOME/camofox            legacy client state root
+# CAMOFOX_STATE_DIR=$XDG_CONFIG_HOME/camofox
+# CAMOFOX_ENV_FILE=/path/to/other.env   point discovery at another file
+EOF
+  ok "camofox client config template: $f (copy to .env and fill in)"
+}
+
 # Shell shim for consumers that cannot source env.sh.
 #
 # WHY THIS EXISTS (measured 2026-10-06): the `.replit` "camofox browser"
@@ -585,6 +624,7 @@ install_camofox() {
   # 5) closure env snippet + launcher shim (the latter for non-interactive
   #    consumers: .replit workflows, Run button — they never source env.sh)
   camofox_write_env_snippet
+  camofox_write_env_example
   camofox_write_launcher
 
   # 6) state dir: re-anchor off the volatile $HOME/.camofox + persist the vars

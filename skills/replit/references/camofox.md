@@ -487,7 +487,19 @@ before launch (`CAMOFOX_PORT=9000 camofox`) — no env file needed.
 
 `$XDG_CONFIG_HOME/camofox/.env` is the canonical env file (see above);
 `$CAMOFOX_ROOT/.env` and `$CAMOFOX_ENV_FILE` are still honored by the Camofox
-tools if you already keep one, but nothing in this skill ships a template.
+tools if you already keep one. `setup.sh --camofox` writes a fill-in
+template, `.env.example`, into that same directory (refreshed every run —
+a template, never read by the client, and the real `.env` is never
+touched): copy it to `.env` and fill in the values.
+
+For `camofox.py` the precedence is the "big env" rule, per var: **the
+system environment wins; the .env file only fills gaps** — and the choice
+is logged at startup, one line per resolved var, e.g.
+`config: CAMOFOX_API_KEY: from system env (.env file skipped)` or
+`config: CAMOFOX_BASE_URL: from .env file (/…/camofox/.env)`. Name +
+source only; a key's value is never printed. (The launcher shim resolves
+the other way — it sources its file over its own defaults; see the config
+block below.)
 
 ## Cold store (brand-new container, GTK never installed there)
 
