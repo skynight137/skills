@@ -38,6 +38,28 @@ Consequences that bite:
   Scaffold recreation after deletion is **inferred, not tested**; user
   content inside would not come back either way. Never delete it as cleanup.
 
+### What a redeploy actually takes — field inventory
+
+Verified across the 2026-11-04/05 redeploys on muse-hop, per service.
+The pattern: a redeploy takes only the *registration into the system*
+plus every process; all substance (config, keys, state, data) lives
+under `/home/hatch` and survives.
+
+| Item | Lives at | Fate on redeploy |
+|---|---|---|
+| Service-user account (e.g. `runner`) | `/etc/passwd`, `/etc/shadow`, `/etc/group` (overlay) | **Gone** — recreate idempotently in the bootstrap; its absence is the first probe failure |
+| systemd unit files | `/etc/systemd/system/*.service` (overlay) | **Gone** — re-copy from persistent templates + `daemon-reload` |
+| `/root/.ssh` symlink → the stack tree | `/root` (overlay) | **Gone** — bootstrap re-asserts it every run (root's *passwd* home is `/root`, so tooling that resolves `~` via getpwuid, not `$HOME`, looks there) |
+| All processes | — | **Gone** — nothing process-level carries over |
+| Join sshd config, host key, `authorized_keys`, `.env` | `~/.ssh` tree | Persist |
+| tailscale binaries + node state | `~/workspace/tools/`, `~/.local/state/tailscale/` | Persist — **no local tailscale file is lost**; what expires is only the server-side registration of an ephemeral node, so a rejoin re-registers (name pinned via `TAILSCALE_NODE_NAME`, address not guaranteed) |
+| App payloads (e.g. Termix `src/`, `data/`, unit templates) | `~/workspace/<app>/` | Persist |
+
+Corollary: a post-redeploy restore is re-registration + process
+start, never re-creation — no config or key material is regenerated,
+which is why a well-laid-out stack restores in minutes with zero
+egress-approval prompts.
+
 ## Memory accounting (do not trust `free`)
 
 Verified 2026-11-03 (process census + allocation balloon test).
