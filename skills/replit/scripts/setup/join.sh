@@ -293,15 +293,25 @@ RCEOF
     cp -p "$state_bak" "$state/tailscaled.state"
     ok "identity tailnet dipulihkan dari backup ($state_bak) — tidak ada node baru"
   fi
+  # Pre-relocation daemons (statedir $TAILSCALE_DATA_DIR/state, log beside
+  # it) hold the SAME state file: never run two daemons on one identity.
+  # Stop the legacy one before starting on the new XDG state dir.
+  local legacy_state="$TAILSCALE_DATA_DIR/state"
+  if [[ "$legacy_state" != "$state" && -S "$legacy_state/tailscaled.sock" ]]; then
+    echo "  migrasi: menghentikan tailscaled lama (statedir $legacy_state)"
+    pkill -f "tailscaled.*--statedir=$legacy_state" 2>/dev/null || true
+    sleep 2
+  fi
   if ! "$tsc" --socket="$sock" status >/dev/null 2>&1; then
+    mkdir -p "$(dirname "$TAILSCALE_LOG")"
     setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
       --outbound-http-proxy-listen=localhost:1055 \
       --state="$state/tailscaled.state" --statedir="$state" --socket="$sock" \
-      </dev/null >>"$TAILSCALE_DATA_DIR/tailscaled.log" 2>&1 &
+      </dev/null >>"$TAILSCALE_LOG" 2>&1 &
     local w=0
     for w in $(seq 1 10); do [ -S "$sock" ] && break; sleep 1; done
   fi
-  [ -S "$sock" ] || { warn "tailscaled tidak siap (log: $TAILSCALE_DATA_DIR/tailscaled.log)"; return 1; }
+  [ -S "$sock" ] || { warn "tailscaled tidak siap (log: $TAILSCALE_LOG)"; return 1; }
   if [[ -s "$state/tailscaled.state" ]] && ! cmp -s "$state/tailscaled.state" "$state_bak"; then
     cp -p "$state/tailscaled.state" "$state_bak" 2>/dev/null || true
   fi
@@ -336,14 +346,14 @@ RCEOF
   # daemon log for that, but streaming a daemon log into the workflow
   # terminal grows the console without bound and hangs the Replit UI
   # (operator rule, 2026-11-05). The daemon already writes its full log to
-  # $TAILSCALE_DATA_DIR/tailscaled.log; the console gets a short summary
+  # $TAILSCALE_LOG; the console gets a short summary
   # only, and the task holds itself open by watching the daemon's socket —
   # when the daemon dies the socket vanishes and the workflow ends, which
   # is the truthful lifetime for both.
   if $WF; then
     echo
     ok "mode workflow: tailscaled jalan (socket $sock)"
-    ok "  log penuh: $TAILSCALE_DATA_DIR/tailscaled.log"
+    ok "  log penuh: $TAILSCALE_LOG"
     ok "  terminal workflow sengaja sepi (summary saja) agar UI tidak hang; task menahan diri selama daemon hidup"
     while [ -S "$sock" ]; do sleep 30; done
     warn "tailscaled berhenti (socket $sock hilang) — workflow selesai"

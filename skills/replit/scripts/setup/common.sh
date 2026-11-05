@@ -108,13 +108,35 @@ RS_PORT="${RS_PORT:-6800}"
 TAILSCALE_DATA_DIR="${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/share/tailscale}"
 # Derived once here and exported by the tools registry (below, and in
 # install_tailscale), so no script has to re-spell the socket path and get it wrong.
-TAILSCALE_STATE_DIR="${TAILSCALE_STATE_DIR:-$TAILSCALE_DATA_DIR/state}"
+# Layout follows the fleet XDG pattern (same as the Muse side): daemon STATE
+# (the node identity) lives at $XDG_STATE_HOME/tailscale — flat, no /state
+# suffix — and the daemon LOG lives with the other workspace logs at
+# $REPL_HOME/logs/tailscaled.log. $TAILSCALE_DATA_DIR remains as the legacy
+# home: it still holds the identity backup (tailscaled.state.bak) and is the
+# first place the migration below looks for a pre-relocation state file.
+TAILSCALE_STATE_DIR="${TAILSCALE_STATE_DIR:-${XDG_STATE_HOME:-${REPL_HOME:-$HOME/workspace}/.local/state}/tailscale}"
 TAILSCALE_SOCKET="${TAILSCALE_SOCKET:-$TAILSCALE_STATE_DIR/tailscaled.sock}"
+TAILSCALE_LOG="${TAILSCALE_LOG:-${REPL_HOME:-$HOME/workspace}/logs/tailscaled.log}"
+# Relocation migration: before the XDG layout, the default state dir was
+# $TAILSCALE_DATA_DIR/state, and the rc registry has been recording that
+# value into every shell since — so a plain ${VAR:-new-default} never
+# fires on an installed box (verified on repl-test, 2026-11-05: registry
+# value won, no migration). A value that still spells EXACTLY the old
+# default is the old default, not an operator choice: re-derive it (and
+# the socket spelled from it) to the XDG location. The state file itself
+# is adopted by the copy block below, and join stops the legacy daemon
+# before starting on the new paths. Any other explicit value is respected.
+if [[ "$TAILSCALE_STATE_DIR" == "$TAILSCALE_DATA_DIR/state" ]]; then
+  TAILSCALE_STATE_DIR="${XDG_STATE_HOME:-${REPL_HOME:-$HOME/workspace}/.local/state}/tailscale"
+fi
+if [[ "$TAILSCALE_SOCKET" == "$TAILSCALE_DATA_DIR/state/tailscaled.sock" ]]; then
+  TAILSCALE_SOCKET="$TAILSCALE_STATE_DIR/tailscaled.sock"
+fi
 # Node name asserted at join, empty = leave whatever the console says. Not a registry
 # var: which name a machine gets is the operator's choice, pinned per run (args/secret).
 TAILSCALE_NODE_NAME="${TAILSCALE_NODE_NAME:-}"
 if [[ ! -e "$TAILSCALE_STATE_DIR/tailscaled.state" ]]; then
-  for _ts_old in "$XDG_DATA_HOME/tailscale/state/tailscaled.state" "$HOME/.ts/state.json"; do
+  for _ts_old in "$TAILSCALE_DATA_DIR/state/tailscaled.state" "$XDG_DATA_HOME/tailscale/state/tailscaled.state" "$HOME/.ts/state.json"; do
     [[ -f "$_ts_old" ]] || continue
     mkdir -p "$TAILSCALE_STATE_DIR"
     if cp -f "$_ts_old" "$TAILSCALE_STATE_DIR/tailscaled.state"; then
@@ -231,7 +253,7 @@ seed_tool_wiring(){
   wire_tool aria2 -- "$XDG_BIN_HOME"
   wire_tool ffmpeg -- "$XDG_BIN_HOME"
   wire_tool cloudflared -- "$XDG_BIN_HOME"
-  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET -- "$XDG_BIN_HOME"
+  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_LOG -- "$XDG_BIN_HOME"
   wire_tool sshx -- "$XDG_BIN_HOME"
   wire_tool camofox CAMOUFOX_INSTALL_DIR CAMOFOX_STATE_DIR CAMOFOX_PROFILE_DIR \
     CAMOFOX_COOKIES_DIR CAMOFOX_UPLOADS_DIR CAMOFOX_TRACES_DIR -- "$XDG_BIN_HOME"

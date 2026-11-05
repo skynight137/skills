@@ -300,7 +300,8 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
 - `~/.ssh` itself is a symlink into `$REPL_HOME/.ssh` (persistent, so ssh `config`
   and `known_hosts` also survive); host key, sshd config, authorized key, log →
   `$REPL_HOME/.ssh/join-tailnet/`; tailnet node state →
-  `$REPL_HOME/.local/share/tailscale/state/`; managed `tailscale`/`tailscaled` binaries →
+  `$REPL_HOME/.local/state/tailscale/` (`$XDG_STATE_HOME/tailscale`), daemon log →
+  `$REPL_HOME/logs/tailscaled.log`; managed `tailscale`/`tailscaled` binaries →
   `$REPL_HOME/.local/bin/`. Nothing a reboot needs may live in `$HOME`.
 - a node whose key sits in `$HOME` re-registers from scratch on every boot: new `100.x`
   address, new node name, and every saved URL / `.ssh/config` entry rots. Reusing the
@@ -566,7 +567,7 @@ sampai kedaluwarsa.
   node lama dihapus manual di admin panel. Env var `TAILSCALE_PURGE_IDENTITY=true`
   tetap dihormati (dipakai flag itu di belakang layar).
 - Cek duplikat: `tailscale status | awk '{print $2}' | sort | uniq -c` → masing-masing 1.
-- State selalu di `$REPL_HOME/.local/share/tailscale/state` (persisten), bukan `$HOME`.
+- State selalu di `$REPL_HOME/.local/state/tailscale` (`$XDG_STATE_HOME/tailscale`, persisten), bukan `$HOME`; log daemon di `$REPL_HOME/logs/tailscaled.log`. State lama di `.local/share/tailscale/state` diadopsi otomatis saat setup jalan.
 
 `scripts/join-lifecycle-test.sh` menguji lifecycle join: install → uninstall detached →
 assertion (sshd mati, socket hilang, entri ssh asing **tidak** tersentuh) → rejoin.

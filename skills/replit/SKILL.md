@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.23.0
+version: 4.24.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -70,8 +70,9 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    *directory* mtime with uptime before trusting one. A tailnet node key under
    `$HOME` therefore re-registers on every boot (new `100.x`, new node name)
    and every saved URL / `.ssh/config` entry rots; keep node state in
-   `$TAILSCALE_DATA_DIR` (`$REPL_HOME/.local/share/tailscale`), which
-   `setup.sh --tailscale` / `--join` already use. A tool that insists on a
+   `$TAILSCALE_STATE_DIR` (`$REPL_HOME/.local/state/tailscale`, the XDG
+   state home), which `setup.sh --tailscale` / `--join` already use
+   (legacy `.local/share/tailscale/state` is adopted automatically). A tool that insists on a
    `$HOME` path (`~/.ssh`, `~/.gnupg`) is **symlinked** into `$REPL_HOME`
    (move the existing dir's contents in first, then `ln -s`) — see
    `references/platform.md` §1.
@@ -253,7 +254,7 @@ without ripgrep.
   store overlay is writable): tell = correct `$REPLIT_BASHRC` but dead aliases;
   restore from the pristine `*-replit-bashrc*` twin (the larger store file) —
   `references/shell-rc-and-zsh.md`.
-- **A fake-root `--join` still joins the REAL tailnet.** The tailscale state dir is hardcoded (`$REPL_HOME/.local/share/tailscale`), so a fake-root test re-registers the box's own node identity and can flap the live node; to test join isolation point the statedir at a scratch path first. And `--join -w` (workflow mode) keeps its task in the FOREGROUND by design — it prints a summary, then watches the tailscaled socket for as long as the daemon lives; a long-hanging test is the feature working, not a hang. Workflow consoles never stream runtime logs (that hangs the Replit UI): full logs live in files under `$REPL_HOME/logs/` (tailscaled's in its data dir), per the rule in `references/exposing-ports.md`.
+- **A fake-root `--join` still joins the REAL tailnet.** The tailscale state dir is the XDG state home (`$REPL_HOME/.local/state/tailscale`), so a fake-root test re-registers the box's own node identity and can flap the live node; to test join isolation point the statedir at a scratch path first. And `--join -w` (workflow mode) keeps its task in the FOREGROUND by design — it prints a summary, then watches the tailscaled socket for as long as the daemon lives; a long-hanging test is the feature working, not a hang. Workflow consoles never stream runtime logs (that hangs the Replit UI): full logs live in files under `$REPL_HOME/logs/` (tailscaled's included), per the rule in `references/exposing-ports.md`.
 - **After a skill's PR merges, the feature branch is gone.** `npx -y skills add owner/repo#branch` then fails with `Could not find remote branch`; re-point installs at the default branch (`skills add owner/repo`) once merged.
 - **Never declare a workflow or MCP entry missing from a truncated grep.** `.replit` keeps each workflow in its own `[[workflows.workflow]]` block, so a `grep -A4 <name>` window can display a different block and read as absence — list every header first (`grep -n '^name = ' .replit`) and quote the block you actually read before telling the operator something is not there. Same discipline for MCP parity: after any change, compare the `mcp_servers` key lists of the default config and EACH profile (`hermes mcp list` / `hermes -p <p> mcp list`), because a bare `hermes mcp add` writes the default config only while `hermes chat` and the WebUI resolve the profile one.
 - **The workflow set is an invariant across the operator's boxes, not per-box improvisation.**

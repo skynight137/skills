@@ -464,8 +464,12 @@ partition and never see `camofox.py`'s `--user` jar), `CAMOFOX_ENV_FILE`
 **No agent framework required.** The skill never hard-requires Hermes or any
 other tool. An env file is only *optional* convenience: both
 `setup.sh --camofox` and `camofox.py` load the first existing of
-`$CAMOFOX_ENV_FILE` → `$CAMOFOX_ROOT/.env`, then fall back to plain
-environment variables. No implicit home dirs are searched. No key
+`$CAMOFOX_ENV_FILE` → `$XDG_CONFIG_HOME/camofox/.env` → `$CAMOFOX_ROOT/.env`
+(legacy), then fall back to plain environment variables. The canonical
+home is `$XDG_CONFIG_HOME/camofox/.env` — the same directory as
+`server-keys.env`, so all camofox configuration lives in one place and a
+cleanup removes one directory instead of a trail across the workspace.
+No implicit home dirs are searched. No key
 at all is fine on a **guaranteed-loopback** server — it just means
 unauthenticated mode (loopback is trusted only outside `NODE_ENV=production`,
 and on Replit the proxy spoofs loopback, so ANY bound port is public and
@@ -481,7 +485,8 @@ Every tunable, with the Camofox default it overrides, is documented in the
 `references/camofox.md` (you are reading it). Set any of them by exporting it
 before launch (`CAMOFOX_PORT=9000 camofox`) — no env file needed.
 
-`CAMOFOX_ROOT/.env` and `$CAMOFOX_ENV_FILE` are still honored by the Camofox
+`$XDG_CONFIG_HOME/camofox/.env` is the canonical env file (see above);
+`$CAMOFOX_ROOT/.env` and `$CAMOFOX_ENV_FILE` are still honored by the Camofox
 tools if you already keep one, but nothing in this skill ships a template.
 
 ## Cold store (brand-new container, GTK never installed there)
@@ -680,7 +685,8 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   gates the *provision* task, not parallel consumers, so command-too-early
   → `Errno 111 Connection refused`. Run it even on first shell entry.
 - `--env FILE` (optional): the env file to load. When omitted, the CLI picks
-  the first **existing** of `$CAMOFOX_ENV_FILE` then `$CAMOFOX_ROOT/.env`;
+  the first **existing** of `$CAMOFOX_ENV_FILE`, then
+  `$XDG_CONFIG_HOME/camofox/.env`, then `$CAMOFOX_ROOT/.env` (legacy);
   with neither it uses plain environment variables. No implicit home dirs, no
   agent framework. No file and no key just means unauthenticated mode (fine
   unless `NODE_ENV=production`, which then 403s).
@@ -692,7 +698,7 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
 - ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_BASE_URL` (client dials) must
   agree** — both default to `9377`, but setting only one silently splits them
   and every request fails with a connection error. If you move the port, set
-  both (export both, or set them in a `$CAMOFOX_ROOT/.env` if you keep one).
+  both (export both, or set them in `$XDG_CONFIG_HOME/camofox/.env`).
 - **The env file is loaded at import, before any setting is read**, so it can
   carry *any* Camofox variable — `CAMOFOX_BASE_URL`, `CAMOFOX_ROOT`,
   `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key.
@@ -725,8 +731,8 @@ restarts, so one import per account is enough.
 - **`NODE_ENV=production` disables loopback import without a key** — set
   `CAMOFOX_API_KEY` in the env; the CLI sends `Authorization: Bearer <key>`.
   403 means the *server* started without the key (`setup.sh --camofox` loads an
-  env file on boot — `$CAMOFOX_ENV_FILE`, then `$CAMOFOX_ROOT/.env`, first
-  existing wins — to prevent this).
+  env file on boot — `$CAMOFOX_ENV_FILE`, then `$XDG_CONFIG_HOME/camofox/.env`,
+  then `$CAMOFOX_ROOT/.env`, first existing wins — to prevent this).
 - `__Host-` cookies are host-only (no domain in the export) but the
   validator hard-requires `domain`; pass the site domain anyway (e.g.
   `replit.com`) — the browser accepts them.
@@ -781,8 +787,9 @@ in-flight requests. A restart under a live loop is always the probe.
 
 `setup.sh --camofox` applies `TAB_INACTIVITY_MS=900000` and
 `SESSION_TIMEOUT_MS=1800000` as **overrides of Camofox's own defaults** (300000
-and 600000). Re-checked after the env-file load — `$CAMOFOX_ENV_FILE` then
-`$CAMOFOX_ROOT/.env`, first existing wins — which can clobber them. With those
+and 600000). Re-checked after the env-file load — `$CAMOFOX_ENV_FILE`, then
+`$XDG_CONFIG_HOME/camofox/.env`, then `$CAMOFOX_ROOT/.env`, first existing
+wins — which can clobber them. With those
 set, the
 loop period just needs to stay comfortably under 900s. Use `--tools refresh-page`
 with **`--interval 240`**. Cron is the wrong tool (1/min floor + fresh process
@@ -839,9 +846,55 @@ the usual cause of the columns running together.
   cookies never mix.
 - **`--session`** = a label for a *group of tabs* inside one user (API
   `listItemId`). Carries no auth. Same `--session` on re-open reattaches to
-  the group; `DELETE /tabs/group/:listItemId` clears the whole group.
-- Same user, **different URL** → give each loop its own `--session` (and
-  its own process); same `--session` reattaches instead of opening a new tab.
+  the group — but reattach is to the GROUP, not to a tab: every
+  `refresh-page` process still creates its OWN tab in the group
+  (`POST /tabs` always creates). N processes sharing one `--session` =
+  N tabs, not 1. `DELETE /tabs/group/:listItemId` clears the whole group;
+  `camofox.py --user <u> --session <s> --close` is the CLI form.
+- Same user, **different URL** → the default recipe (own `--session` and
+  own process per loop) buys isolation with one tab per loop. Read the
+  memory budget below before running more than a couple of loops against
+  heavy pages.
+
+### Memory budget: cookies are cheap, tabs are not (measured, repl-cfx-1, 2026-11-05)
+
+Sharing one `--user` (one cookie jar, imported once, reused by every
+loop) is correct and costs almost nothing. **RAM is spent per TAB** —
+each tab is a Firefox content process, and the page decides the price.
+Measured on an 8 GB box against `replit.com/@user/<project>` pages (the
+full IDE web app): **~550–650 MB of system RAM per IDE tab** (content
+processes at 498–580 MB RSS each). `/health`'s `memory.rssMb` counts
+only the node server (~200 MB) — judge memory by the system `free` and
+`/health`'s `activeTabs`, never by `rssMb` alone.
+
+Failure that taught this: one workflow ran **9 `refresh-page` tasks**
+(9 project URLs, same user, same `--session repl`) — 9 processes →
+9 IDE tabs → the box's 8 GB was exhausted and the container died. It was
+not "10 tabs being heavy"; it is what each of those tabs *is*. Worse, an
+IDE tab can multiply on its own: navigating the single demo tab from one
+project URL to another took `activeTabs` **1 → 10** in ~30 s (the IDE's
+boot opens companion tabs/popups) and RAM 4.1 → 7.8 GB, after which the
+server API itself started timing out.
+
+Low-memory rules for keep-alive work:
+
+- **Budget tabs, not processes.** On 8 GB, keep total live tabs
+  (companions included) at ~4 or fewer for IDE-class pages; light pages
+  cost far less, but measure once with `free` before trusting that.
+- **Sequential beats parallel.** For a tour of projects: open one tab,
+  let it load, screenshot/refresh, **close it** (`--close` or
+  `DELETE /tabs/group/<session>`), then move to the next project. Peak
+  stays at 1–2 tabs regardless of how many projects the tour covers.
+- **Never navigate a live IDE tab to another project's URL** (the
+  1 → 10 spawn above). Close and create fresh instead.
+- **Clients dying does not close tabs.** A killed/timeout
+  `refresh-page` leaves its tab on the server until the browser's idle
+  shutdown. Always `--close` groups you stop using; a stale group is
+  invisible in the workflow list and keeps eating RAM.
+- Screenshots of the same user+session write the same filename — parallel
+  loops sharing a `--session` and `--screenshot` dir overwrite each
+  other. Give parallel loops distinct sessions (and accept their tabs),
+  or run sequentially.
 
 ## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
 

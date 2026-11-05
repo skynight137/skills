@@ -47,20 +47,27 @@ def _read_env_file(path):
 
 def default_env():
     """First EXISTING candidate wins, else None. The env file is OPTIONAL and
-    no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop it
-    at $CAMOFOX_ROOT/.env (with no CAMOFOX_ROOT exported, the same
-    ${REPL_HOME:-$HOME}/camofox default as default_root() —
-    so a bare invocation on Replit auto-discovers the env file). With neither,
-    plain environment variables are used, and no key at all just means
-    unauthenticated mode.
+    no agent framework is consulted: point $CAMOFOX_ENV_FILE at one, or drop
+    it at the canonical config home, $XDG_CONFIG_HOME/camofox/.env — the
+    same directory as server-keys.env, so everything camofox-config lives
+    in ONE place and a cleanup removes one directory, not a trail. The
+    older $CAMOFOX_ROOT/.env (with no CAMOFOX_ROOT exported, the same
+    ${REPL_HOME:-$HOME}/camofox default as default_root()) still resolves
+    as a legacy fallback. With neither, plain environment variables are
+    used, and no key at all just means unauthenticated mode.
 
-    The root here is resolved from the AMBIENT env only — this runs before the
-    env file is applied, and the file cannot point at itself. The fallback is
-    an ABSOLUTE path, so no .env in an arbitrary CWD can be loaded."""
+    The paths here are resolved from the AMBIENT env only — this runs
+    before the env file is applied, and the file cannot point at itself.
+    The fallback is an ABSOLUTE path, so no .env in an arbitrary CWD can
+    be loaded."""
+    repl_home = os.environ.get("REPL_HOME") or os.path.expanduser("~")
     root = (os.environ.get("CAMOFOX_ROOT")
-            or os.path.join(os.environ.get("REPL_HOME") or os.path.expanduser("~"),
-                            "camofox"))
-    candidates = [os.environ.get("CAMOFOX_ENV_FILE"), os.path.join(root, ".env")]
+            or os.path.join(repl_home, "camofox"))
+    config_home = (os.environ.get("XDG_CONFIG_HOME")
+                   or os.path.join(repl_home, ".config"))
+    candidates = [os.environ.get("CAMOFOX_ENV_FILE"),
+                  os.path.join(config_home, "camofox", ".env"),
+                  os.path.join(root, ".env")]
     for p in candidates:
         if p and os.path.exists(p):
             return p
@@ -434,6 +441,11 @@ def main():
     ap.add_argument("--state", default=default_state())
     ap.add_argument("--wait", type=int, default=180,
                     help="max seconds to wait for :9377 to come up (default 180)")
+    ap.add_argument("--close", action="store_true",
+                    help="close (delete) the whole --session tab group for "
+                         "--user and exit — the cleanup half of the "
+                         "low-memory pattern: tabs outlive their client "
+                         "process and keep eating RAM until closed")
     ap.add_argument("--log-file", metavar="PATH",
                     help="refresh-page: send per-cycle detail to PATH (under "
                          "the workspace, e.g. logs/refresh-page.log) and keep "
@@ -462,6 +474,15 @@ def main():
     if a.session == "list":
         wait_for_server(key, min(a.wait, 5))
         list_sessions(a.state, key)
+        return
+    if a.close:
+        wait_for_server(key, min(a.wait, 5))
+        r = req(key, "DELETE",
+                f"/tabs/group/{a.session}?userId={a.user}")
+        if "_http_error" in r or "_error" in r:
+            print(f"close failed: {r}", file=sys.stderr)
+            sys.exit(1)
+        print(f"closed session group '{a.session}' for user {a.user}: {r}")
         return
 
     # action path: no key is allowed (unauthenticated mode) unless the server

@@ -105,10 +105,17 @@ Install: `bash setup.sh --tailscale`. It puts `tailscale` + `tailscaled` in
 `$XDG_BIN_HOME`, verifies the arch tarball against the channel's
 `<tarball>.sha256`, and writes a launcher, `$XDG_BIN_HOME/launch-tailscaled` —
 that is the file a `.replit` workflow should run (`waitForPort = 1055`). Node
-state lives under `$TAILSCALE_DATA_DIR` (`${REPL_HOME:-$HOME/workspace}/.local/share/tailscale`)
-and is ADOPTED when it is already there: a box that was set up by hand joins the tailnet
-with its existing identity, its Funnel/serve config and no re-auth, and only the binary
-paths change. `--clean tailscale` removes the binaries + launcher and keeps the state.
+state lives under `$TAILSCALE_STATE_DIR` (`${XDG_STATE_HOME:-$REPL_HOME/.local/state}/tailscale`,
+the fleet XDG pattern — flat, no `/state` suffix) and the daemon log at
+`$TAILSCALE_LOG` (`$REPL_HOME/logs/tailscaled.log`, with the other workspace
+logs). State is ADOPTED when it is already there: a box that was set up by
+hand — or by an older skill version whose state sat at
+`$TAILSCALE_DATA_DIR/state` (`.local/share/tailscale/state`) — joins the
+tailnet with its existing identity and no re-auth; setup copies the legacy
+state file into the XDG state dir and stops the legacy daemon before
+starting on the new paths, and `$TAILSCALE_DATA_DIR` keeps only the
+identity backup (`tailscaled.state.bak`). `--clean tailscale` removes the
+binaries + launcher and keeps the state.
 
 **Never under `$HOME`.** The container wipes `$HOME` on every restart, so a node key kept
 there re-registers as a brand-new node each boot: new `100.x` address, new node name, and

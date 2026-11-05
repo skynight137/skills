@@ -13,8 +13,8 @@ set -uo pipefail
 
 port="${1:-6800}"
 socks="${2:-1055}"
-state="${TAILSCALE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/tailscale}"
-sock="${TAILSCALE_SOCKET:-$state/state/tailscaled.sock}"
+state="${TAILSCALE_STATE_DIR:-${XDG_STATE_HOME:-${REPL_HOME:-$HOME/workspace}/.local/state}/tailscale}"
+sock="${TAILSCALE_SOCKET:-$state/tailscaled.sock}"
 tsc="$(command -v tailscale || printf '%s' "${XDG_BIN_HOME:-$HOME/.local/bin}/tailscale")"
 nc_bin="$(command -v nc || printf '%s' /repl/tools/bin/nc)"
 
