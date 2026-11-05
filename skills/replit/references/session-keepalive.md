@@ -45,9 +45,9 @@ Two verified causes of that 500 on this box (Sep 2026):
    cron shell** — source the snippet or use the shim. `--doctor` gates on both.
 2. **Missing `camofox/.env`.** Cookie import is key-gated: with no
    `CAMOFOX_API_KEY` in the SERVER env it answers 403 in production (not 500) —
-   write `$CAMOFOX_ROOT/.env` with the secret from `/run/replit/env/latest.json`
-   (chmod 600; `camofox/` is gitignored) so both server and `camofox.py` find it
-   without relying on platform env.
+   write `$XDG_CONFIG_HOME/camofox/.env` with the secret from
+   `/run/replit/env/latest.json` (chmod 600) so both server and `camofox.py`
+   find it without relying on platform env.
 
 Also note: this repl's workflow server runs on **`:9000`** (workflow env
 `CAMOFOX_PORT`), not the `:9377` default — clients dial `CAMOFOX_BASE_URL`,

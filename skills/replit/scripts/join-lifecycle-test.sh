@@ -10,7 +10,7 @@ set -u
 cd "${REPL_HOME:-$HOME/workspace}" || exit 1
 S="${SKILL_DIR:-skills/replit}/scripts/setup.sh"
 TS="${REPL_HOME:-$HOME/workspace}/.local/bin/tailscale"
-SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_DATA_DIR:-${REPL_HOME:-$HOME/workspace}/.local/share/tailscale}/state/tailscaled.sock}"
+SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_STATE_DIR:-${XDG_STATE_HOME:-${REPL_HOME:-$HOME/workspace}/.local/state}/tailscale}/tailscaled.sock}"
 OUT="$HOME/lifecycle.out"
 : >"$OUT"
 exec >>"$OUT" 2>&1

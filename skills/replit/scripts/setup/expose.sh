@@ -104,6 +104,7 @@ set -uo pipefail
 BASE="\${TAILSCALE_DATA_DIR:-$TAILSCALE_DATA_DIR}"
 STATE="\${TAILSCALE_STATE_DIR:-$TAILSCALE_STATE_DIR}"
 SOCK="\${TAILSCALE_SOCKET:-$TAILSCALE_SOCKET}"
+LOG="\${TAILSCALE_LOG:-$TAILSCALE_LOG}"
 BIN="$XDG_BIN_HOME"
 TSD="\$BIN/tailscaled"
 TS="\$BIN/tailscale"
@@ -115,6 +116,7 @@ for b in "\$TSD" "\$TS"; do
 done
 
 mkdir -p "\$STATE"
+mkdir -p "\${LOG%/*}"
 # Liveness is OUR socket answering, not a pid pattern: a second daemon on another
 # socket (test node, second tailnet) matches any reasonable pattern and would
 # silently suppress the start, leaving this socket dead.
@@ -127,7 +129,7 @@ if ! "\$TS" --socket="\$SOCK" status >/dev/null 2>&1; then
     --socket="\$SOCK" \\
     --socks5-server=localhost:1055 \\
     --outbound-http-proxy-listen=localhost:1055 \\
-    >> "\$BASE/tailscaled.log" 2>&1 &
+    >> "\$LOG" 2>&1 &
   sleep 8
 fi
 
@@ -217,8 +219,8 @@ install_tailscale() {
   # Paths AND the node name travel with the tool: every script reads them from the
   # environment instead of re-spelling the socket dir, and the rc block carries them
   # across shells so a run never has to be prefixed by hand.
-  record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET
-  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET -- "$XDG_BIN_HOME"
+  record_tool_env_vars TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_LOG
+  wire_tool tailscale TAILSCALE_DATA_DIR TAILSCALE_STATE_DIR TAILSCALE_SOCKET TAILSCALE_LOG -- "$XDG_BIN_HOME"
   tailscale_write_launcher
 }
 
