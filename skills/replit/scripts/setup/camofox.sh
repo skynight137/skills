@@ -343,7 +343,23 @@ fi
 # place under its own name — no snapshot variable.
 export PORT="${PORT:-80}"
 . "$ENVSH"
-exec camofox-browser "$@"
+
+# Workflow-console hygiene (skill-wide rule, references/exposing-ports.md):
+# the server's JSON request log streamed into a workflow terminal grows
+# without bound and makes the Replit UI hang, so the full log goes to a
+# file in the persistent workspace and the console gets a short summary
+# only. The launcher still holds its workflow open — by waiting on the
+# server process itself, never by tailing the log.
+LOG_DIR="${REPL_HOME:-$HOME}/logs"
+mkdir -p "$LOG_DIR"
+LOG="$LOG_DIR/camofox-browser.log"
+echo "=== launch-camofox-browser $(date -Is) ===" >>"$LOG"
+camofox-browser "$@" >>"$LOG" 2>&1 &
+SRV=$!
+echo "camofox-browser: starting on port ${PORT} (pid $SRV)"
+echo "  public: https://${REPLIT_DEV_DOMAIN:-<dev-domain>}/"
+echo "  full log: $LOG"
+wait $SRV
 EOF
   # The heredoc above is quoted (every runtime $ stays literal), so the one
   # generation-time value — this skill's own setup.sh, derived from
@@ -447,13 +463,56 @@ camofox_ensure_replit_nix() {
   fi
 }
 
+CAMOFOX_NIX_CHANNEL="stable-25_05"
+
+# replit.nix only takes effect when .replit declares a nix channel: with no
+# [nix] table the platform drops the repl into recovery mode and never
+# rebuilds (operator-verified on repl-test, 2026-11-05 — replit.nix written,
+# terminal said recovery mode, store stayed cold). Ensure the channel next
+# to the deps file; an existing channel (any value) is the operator's call
+# and is left untouched.
+camofox_ensure_nix_channel() {
+  local f="${REPL_HOME:-$WORKSPACE}/.replit" out
+  [[ -f "$f" ]] || { warn "camofox: no .replit at $f — cannot ensure the [nix] channel"; return 0; }
+  command -v python3 >/dev/null 2>&1 || { warn "camofox: python3 missing — add [nix] channel = \"$CAMOFOX_NIX_CHANNEL\" to .replit by hand"; return 0; }
+  out="$(CAMOFOX_NIX_CHANNEL="$CAMOFOX_NIX_CHANNEL" python3 - "$f" <<'PY'
+import os, re, sys
+p = sys.argv[1]; ch = os.environ["CAMOFOX_NIX_CHANNEL"]
+s = open(p).read()
+if re.search(r"(?m)^\[nix\]\s*$", s):
+    block = re.search(r"(?ms)^\[nix\]\n(.*?)(?=^\[|\Z)", s).group(1)
+    cm = re.search(r'(?m)^channel\s*=\s*"([^"]+)"', block)
+    if cm:
+        print("keep:" + cm.group(1)); sys.exit(0)
+    s = re.sub(r"(?m)^\[nix\]\s*$", '[nix]\nchannel = "%s"' % ch, s, count=1)
+    open(p, "w").write(s); print("inserted"); sys.exit(0)
+if not s.endswith("\n"):
+    s += "\n"
+open(p, "w").write(s + '\n[nix]\nchannel = "%s"\n' % ch)
+print("appended")
+PY
+)" || { warn "camofox: [nix] channel edit failed — add channel = \"$CAMOFOX_NIX_CHANNEL\" under [nix] in .replit by hand"; return 0; }
+  case "$out" in
+    keep:*)     skip "camofox: .replit [nix] channel already set (${out#keep:})" ;;
+    inserted)   ok "camofox: added channel = \"$CAMOFOX_NIX_CHANNEL\" under the existing [nix] in .replit (replit.nix can now rebuild)" ;;
+    appended)   ok "camofox: added [nix] channel = \"$CAMOFOX_NIX_CHANNEL\" to .replit (without it replit.nix triggers recovery mode and never rebuilds)" ;;
+    *)          warn "camofox: unexpected [nix] channel result: $out" ;;
+  esac
+  # A malformed .replit breaks every later dot_replit/setup run — verify.
+  python3 -c "import tomllib; tomllib.load(open('$f','rb'))" 2>/dev/null \
+    || warn "camofox: .replit no longer parses as TOML after the channel edit — check $f"
+}
+
 camofox_ensure_store_libs() {
+  # The persistence lane must be complete even on a warm box: replit.nix
+  # deps + the .replit [nix] channel that lets the platform rebuild it.
+  camofox_ensure_replit_nix
+  camofox_ensure_nix_channel
   if ! camofox_store_cold; then
     skip "camofox: nix store warm (GTK/ALSA/X11 libs present)"
     return 0
   fi
   warn "camofox: nix store is COLD — no GTK/ALSA/X11 libs yet (fresh workspace)"
-  camofox_ensure_replit_nix
   if command -v nix-env >/dev/null 2>&1; then
     echo "  warming the store for THIS container: nix-env -iA ${CAMOFOX_NIXENV_ATTRS[*]}"
     nix-env -iA "${CAMOFOX_NIXENV_ATTRS[@]}" \

@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.22.0
+version: 4.23.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -215,9 +215,11 @@ without ripgrep.
   See `references/camofox.md` §"npm-global lane".
   **Cold store (fresh workspace, no `replit.nix`): `--camofox` handles it by
   command — no hand-editing.** It writes/merges the workspace-root
-  `replit.nix` with the five Camofox deps (persistence lane; the platform
-  does not rebuild on the write, so it applies at the next rebuild/restart)
-  AND warms this container immediately with `nix-env -iA` (immediate lane;
+  `replit.nix` with the five Camofox deps plus a `[nix] channel` in
+  `.replit` (persistence lane; without the channel the platform drops the
+  repl into recovery mode and never rebuilds; the platform does not
+  rebuild on the write either way, so it applies at the next
+  rebuild/restart) AND warms this container immediately with `nix-env -iA` (immediate lane;
   Xvfb comes via the legacy `nixpkgs.xorg.xorgserver` attr — `nixpkgs.xorg.xvfb`
   is not a valid `nix-env -iA` path). The generated launcher's fix-it command
   is derived from `$SCRIPT_DIR` — never a hardcoded clone path.
@@ -227,9 +229,11 @@ without ripgrep.
   keep-alive loop). See camofox.md for its env-file contract.
 - `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
 - `$XDG_BIN_HOME/launch-camofox-browser` — **generated at install** (not a repo
-  file): sources the closure `env.sh`, preflights the install, then execs
-  `camofox-browser`. The entry point for any shell that cannot inline the
-  snippet — `.replit` workflows, the Run button, cron/MCP children.
+  file): sources the closure `env.sh`, preflights the install, then starts
+  `camofox-browser` with its full log going to `$REPL_HOME/logs/camofox-browser.log`,
+  prints a short summary, and waits on the server. The entry point for any
+  shell that cannot inline the snippet — `.replit` workflows, the Run
+  button, cron/MCP children.
 - `tests/camofox_mcp_check.sh` — one-shot MCP health probe (waits for REST, runs a
   real stdio handshake, asserts the 11 `camofox_*` tools; exit 0 = live). Used
   by the `.replit` "camofox mcp" workflow — the adapter itself is stdio-only,
@@ -249,7 +253,7 @@ without ripgrep.
   store overlay is writable): tell = correct `$REPLIT_BASHRC` but dead aliases;
   restore from the pristine `*-replit-bashrc*` twin (the larger store file) —
   `references/shell-rc-and-zsh.md`.
-- **A fake-root `--join` still joins the REAL tailnet.** The tailscale state dir is hardcoded (`$REPL_HOME/.local/share/tailscale`), so a fake-root test re-registers the box's own node identity and can flap the live node; to test join isolation point the statedir at a scratch path first. And `--join -w` (workflow mode) runs `tailscaled` in the FOREGROUND by design — a long-hanging test is the feature working, not a hang.
+- **A fake-root `--join` still joins the REAL tailnet.** The tailscale state dir is hardcoded (`$REPL_HOME/.local/share/tailscale`), so a fake-root test re-registers the box's own node identity and can flap the live node; to test join isolation point the statedir at a scratch path first. And `--join -w` (workflow mode) keeps its task in the FOREGROUND by design — it prints a summary, then watches the tailscaled socket for as long as the daemon lives; a long-hanging test is the feature working, not a hang. Workflow consoles never stream runtime logs (that hangs the Replit UI): full logs live in files under `$REPL_HOME/logs/` (tailscaled's in its data dir), per the rule in `references/exposing-ports.md`.
 - **After a skill's PR merges, the feature branch is gone.** `npx -y skills add owner/repo#branch` then fails with `Could not find remote branch`; re-point installs at the default branch (`skills add owner/repo`) once merged.
 - **Never declare a workflow or MCP entry missing from a truncated grep.** `.replit` keeps each workflow in its own `[[workflows.workflow]]` block, so a `grep -A4 <name>` window can display a different block and read as absence — list every header first (`grep -n '^name = ' .replit`) and quote the block you actually read before telling the operator something is not there. Same discipline for MCP parity: after any change, compare the `mcp_servers` key lists of the default config and EACH profile (`hermes mcp list` / `hermes -p <p> mcp list`), because a bare `hermes mcp add` writes the default config only while `hermes chat` and the WebUI resolve the profile one.
 - **The workflow set is an invariant across the operator's boxes, not per-box improvisation.**

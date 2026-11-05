@@ -337,11 +337,32 @@ def tool_screenshot(key, user, session, out_dir, full_page=True):
         with open(path, "wb") as f:
             f.write(data)
         saved.append(path)
-        print(f"saved {path} ({len(data)} bytes)")
+        detail(f"saved {path} ({len(data)} bytes)")
     return saved
 
 
-def tool_refresh_page(key, user, session, url, interval, shot_dir=None):
+# Per-cycle detail sink for the long-running tools. Workflow-console
+# hygiene (skill-wide rule): a keep-alive loop printing every cycle into a
+# .replit workflow terminal grows the console without bound and hangs the
+# Replit UI, so with --log-file the cycle detail goes to a file under the
+# persistent workspace and the console keeps only the startup summary (and
+# one short line per failed cycle). Without --log-file everything prints
+# to stdout as before.
+_LOGF = None
+
+
+def detail(*args):
+    print(*args, file=_LOGF if _LOGF is not None else sys.stdout, flush=True)
+
+
+def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
+                      log_file=None):
+    global _LOGF
+    if log_file:
+        os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
+        _LOGF = open(log_file, "a", buffering=1)
+        detail(f"--- refresh-page start {time.strftime('%Y-%m-%d %H:%M:%S')} "
+               f"user={user} session={session} interval={interval}s url={url}")
     r = req(key, "POST", "/tabs",
             {"userId": user, "sessionKey": session, "url": url})
     if "_http_error" in r or "_error" in r:
@@ -350,7 +371,8 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None):
     tab = r.get("tabId", "")
     print(f"refresh-page: user={user} session={session} tab={tab[:8]} "
           f"interval={interval}s url={url}"
-          + (f" screenshots={shot_dir}" if shot_dir else ""))
+          + (f" screenshots={shot_dir}" if shot_dir else "")
+          + (f" log={log_file}" if log_file else ""))
     if shot_dir:
         tool_screenshot(key, user, session, shot_dir, full_page=True)
     while True:
@@ -360,14 +382,18 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None):
             tool_screenshot(key, user, session, shot_dir, full_page=True)
         rr = req(key, "POST", f"/tabs/{tab}/refresh", {"userId": user})
         if "_http_error" in rr or "_error" in rr:
-            print("refresh error:", rr)
+            detail("refresh error:", rr)
+            if _LOGF is not None:
+                print(f"refresh-page: cycle failed @ "
+                      f"{time.strftime('%H:%M:%S')} — detail in {log_file}",
+                      flush=True)
             r = req(key, "POST", "/tabs",
                     {"userId": user, "sessionKey": session, "url": url})
             if "_http_error" not in r and "_error" not in r:
                 tab = r.get("tabId", "")
-                print("reopened tab", tab[:8])
+                detail("reopened tab", tab[:8])
         else:
-            print(f"refresh ok @ {time.strftime('%H:%M:%S')}")
+            detail(f"refresh ok @ {time.strftime('%H:%M:%S')}")
 
 
 TOOLS = {"refresh-page": tool_refresh_page}
@@ -408,6 +434,12 @@ def main():
     ap.add_argument("--state", default=default_state())
     ap.add_argument("--wait", type=int, default=180,
                     help="max seconds to wait for :9377 to come up (default 180)")
+    ap.add_argument("--log-file", metavar="PATH",
+                    help="refresh-page: send per-cycle detail to PATH (under "
+                         "the workspace, e.g. logs/refresh-page.log) and keep "
+                         "the console to the startup summary + failures — "
+                         "for .replit workflow runs, whose terminals hang "
+                         "under unbounded log output")
     a = ap.parse_args()
 
     key = load_key(a.env)
@@ -466,7 +498,7 @@ def main():
             sys.exit(1)
         if a.tools == "refresh-page":
             tool_refresh_page(key, a.user, a.session, a.url, a.interval,
-                              shot_dir=a.screenshot)
+                              shot_dir=a.screenshot, log_file=a.log_file)
         else:
             TOOLS[a.tools](key, a.user, a.session, a.url, a.interval)
     elif a.cookies is None and not a.tools:

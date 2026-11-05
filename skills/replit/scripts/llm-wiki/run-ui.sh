@@ -98,6 +98,19 @@ start_novnc() {
   log "noVNC FAILED (see $STATE/novnc.log)"; return 1
 }
 
+# Workflow-console hygiene (skill-wide rule, references/exposing-ports.md):
+# when stdout is not a TTY (a .replit workflow or agent run), print a short
+# summary to the console, then send the supervisor's own output to a log
+# file in the persistent workspace — a supervisor loop streaming into the
+# workflow terminal hangs the Replit UI. Interactive runs keep the console.
+LOG_FILE="${LLM_WIKI_UI_LOG_FILE:-$REPL_HOME/logs/llm-wiki-ui.log}"
+if [ ! -t 1 ]; then
+  mkdir -p "$(dirname "$LOG_FILE")"
+  log "llm-wiki ui supervisor: display=$DISP vnc=$VNC_PORT web=$WEB_PORT"
+  log "  full log: $LOG_FILE"
+  exec >>"$LOG_FILE" 2>&1
+  log "supervisor output redirected from console $(date -Is)"
+fi
 log "ui supervisor: display=$DISP vnc=$VNC_PORT web=$WEB_PORT"
 while true; do
   ensure_display; start_vnc; start_novnc

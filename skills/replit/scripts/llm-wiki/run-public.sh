@@ -142,6 +142,21 @@ for _d in "${REPL_HOME:-}/.local/lib" "$HOME/workspace/.local/lib" "$HOME/.local
 done
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}"
 ANY=0; ANY_HOST="${ANY}.${ANY}.${ANY}.${ANY}"
+# Workflow-console hygiene (skill-wide rule, references/exposing-ports.md):
+# when stdout is not a TTY (a .replit workflow or agent run), print a short
+# summary to the console, then send the supervisor's own output to a log
+# file in the persistent workspace. A supervisor loop streaming into the
+# workflow terminal grows the console without bound and hangs the Replit
+# UI; the file stays diagnosable. Interactive terminal runs keep the
+# console. The supervised children already log to files under $APP.
+LOG_FILE="${LLM_WIKI_LOG_FILE:-$REPL_HOME/logs/llm-wiki-public.log}"
+if [ ! -t 1 ]; then
+  mkdir -p "$(dirname "$LOG_FILE")"
+  log "llm-wiki public supervisor: public=:$PORT local=:$LOCAL_PORT project=$PROJECT"
+  log "  full log: $LOG_FILE"
+  exec >>"$LOG_FILE" 2>&1
+  log "supervisor output redirected from console $(date -Is)"
+fi
 log "supervisor start: app=$APP_PORT public=$PORT local=$LOCAL_PORT project=$PROJECT"
 while true; do
   start_display; start_wm; start_app; assert_project; start_public_server; start_local_server

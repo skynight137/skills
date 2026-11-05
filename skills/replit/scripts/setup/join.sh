@@ -148,7 +148,7 @@ __rs_workflow() {
   echo
   ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
   echo "    bash $(__rs_cmd) --tailscale --join --workflow"
-  ok "  nama workflow & urutannya bebas; --join yang menyalakan daemon, --workflow menahan task (tail -F) supaya job tidak di-reap"
+  ok "  nama workflow & urutannya bebas; --join yang menyalakan daemon, --workflow menahan task tetap hidup selama daemon jalan (terminal workflow hanya berisi summary; log penuh di file) supaya job tidak di-reap"
   # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
   if __rs_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi
 }
@@ -331,11 +331,21 @@ RCEOF
 
 
   # Workflow mode: a task whose command exits counts as DONE and the job is
-  # reaped, so the daemons die with it. Streaming the log keeps one foreground
-  # process (and visible output) for as long as the workflow should run.
+  # reaped, so the daemons die with it — the task must stay in the foreground
+  # for as long as the workflow should run. It used to `exec tail -F` the
+  # daemon log for that, but streaming a daemon log into the workflow
+  # terminal grows the console without bound and hangs the Replit UI
+  # (operator rule, 2026-11-05). The daemon already writes its full log to
+  # $TAILSCALE_DATA_DIR/tailscaled.log; the console gets a short summary
+  # only, and the task holds itself open by watching the daemon's socket —
+  # when the daemon dies the socket vanishes and the workflow ends, which
+  # is the truthful lifetime for both.
   if $WF; then
     echo
-    ok "mode workflow: log tailscaled mengalir di terminal (Ctrl-C untuk lepas)"
-    exec tail -n 20 -F "$TAILSCALE_DATA_DIR/tailscaled.log"
+    ok "mode workflow: tailscaled jalan (socket $sock)"
+    ok "  log penuh: $TAILSCALE_DATA_DIR/tailscaled.log"
+    ok "  terminal workflow sengaja sepi (summary saja) agar UI tidak hang; task menahan diri selama daemon hidup"
+    while [ -S "$sock" ]; do sleep 30; done
+    warn "tailscaled berhenti (socket $sock hilang) — workflow selesai"
   fi
 }
