@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.28.0
+version: 4.29.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -214,6 +214,14 @@ without ripgrep.
   in those shells dies on `libgtk-3.so.0: cannot open shared object file` and
   surfaces as an opaque 500 on cookie import**; use the snippet or the shim.
   See `references/camofox.md` §"npm-global lane".
+  **`--camofox` REQUIRES the managed Node.js 26 (the `--node` tarball
+  install) and installs it first when missing** — never the platform nix
+  node: the closure is generated from the node running the install, and a
+  platform-node closure prepends store libs whose sqlite needs a newer
+  glibc than the system one, so Firefox dies at every launch while the
+  server looks healthy. The closure is stamped with its build node
+  (`closure.node`); a stamp mismatch (or a pre-stamp closure) regenerates
+  it automatically on the next `--camofox` run.
   **Cold store (fresh workspace, no `replit.nix`): `--camofox` handles it by
   command — no hand-editing.** It writes/merges the workspace-root
   `replit.nix` with the five Camofox deps plus a `[nix] channel` in
