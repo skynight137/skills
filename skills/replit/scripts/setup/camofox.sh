@@ -31,6 +31,12 @@
 #      storage-state pages — the exact call a COOKIE IMPORT makes — so every
 #      cookie import 500s while ordinary tab work keeps working. Pinned to the
 #      newest compatible release (see CAMOFOX_PLAYWRIGHT_MAX).
+#   6. managed Node.js requirement — the install runs under the managed
+#      tarball node ($NODE_MAJOR, the --node install), NEVER the platform nix
+#      node: generate-closure.sh prepends the current node's linked store
+#      dirs to the closure, and the platform node's sqlite needs a newer
+#      glibc than the system one, so Firefox dies at every launch while the
+#      server looks healthy. camofox_ensure_node enforces it up front.
 
 CAMOFOX_NPM_PKG="@askjo/camofox-browser"
 camofox_pkg_dir() { printf '%s/lib/node_modules/@askjo/camofox-browser' "$NODE_DIR"; }
@@ -57,6 +63,11 @@ CAMOFOX_UPLOADS_DIR="$CAMOFOX_STATE_DIR/uploads"
 CAMOFOX_TRACES_DIR="$CAMOFOX_STATE_DIR/traces"
 CAMOFOX_CLOSURE_FILE="$CAMOFOX_STATE_DIR/closure.txt"
 CAMOFOX_ENV_SNIPPET="$CAMOFOX_STATE_DIR/env.sh"
+# Stamp recording WHICH node generated closure.txt (resolved path + version).
+# The closure is a function of the node that ran generate-closure.sh — that
+# script prepends the node's own linked store dirs — so a closure built under
+# a different node is stale even when every dir listed in it still exists.
+CAMOFOX_CLOSURE_STAMP="$CAMOFOX_STATE_DIR/closure.node"
 
 # One-time move of closure.txt/env.sh off the older $XDG_DATA_HOME/camofox
 # layout so an existing install keeps working without a re-fetch. Copy, never
@@ -562,10 +573,66 @@ camofox_ensure_store_libs() {
   camofox_store_cold || ok "camofox: store warmed for this container (nix-env profile; replit.nix carries it across recreates)"
 }
 
+# --- managed Node.js requirement ---------------------------------------------
+# Camofox REQUIRES the managed tarball node v$NODE_MAJOR (what --node
+# installs). The node that runs THIS install is load-bearing twice over:
+# `npm install -g` runs under it, and generate-closure.sh prepends the
+# CURRENT node's linked store dirs to the front of the closure. The platform
+# nix node's libs can require a newer glibc than the system one (its
+# sqlite-3.53.3 needs GLIBC_2.44; the system glibc is 2.39), and Firefox — a
+# system-glibc binary — then dies at EVERY launch with `GLIBC_2.44 not
+# found` while the server and /health look fine (verified repl-test +
+# repl-cfx, 2026-11-05). The managed node links only system libs, so nothing
+# is prepended and the closure's own older sqlite wins.
+# A bare `setup.sh --camofox` therefore installs the managed node FIRST
+# (the same install_node --node runs) instead of warning after the damage
+# is done, and dies if the node it ends up with is not the managed
+# $NODE_MAJOR — never a silent fallback to the platform node.
+camofox_node_id() {
+  local bin; bin="$(command -v node 2>/dev/null || true)"
+  [[ -n "$bin" ]] || { printf 'none'; return 0; }
+  printf '%s %s' "$(readlink -f "$bin" 2>/dev/null || printf '%s' "$bin")" \
+    "$(node --version 2>/dev/null || printf 'unknown')"
+}
+
+camofox_ensure_node() {
+  local bin="$NODE_DIR/bin/node" ver major
+  if [[ -x "$bin" ]]; then
+    ver="$("$bin" --version 2>/dev/null || true)"
+    major="${ver#v}"; major="${major%%.*}"
+    if [[ "$major" == "$NODE_MAJOR" ]]; then
+      skip "camofox: managed Node.js $ver present ($NODE_DIR)"
+    else
+      echo "  camofox: managed node at $NODE_DIR is ${ver:-unreadable} — camofox requires v$NODE_MAJOR.x, reinstalling"
+      install_node
+    fi
+  else
+    echo "  camofox requires the managed Node.js v$NODE_MAJOR.x (setup.sh --node) — installing it first"
+    install_node
+  fi
+  # Present is not enough: THIS run must resolve node/npm to the managed
+  # install even when PATH prefers the platform node (the usual case).
+  export PATH="$NODE_DIR/bin:$PATH"
+  # Hard-verify what the run will actually use — fail loudly, never fall
+  # back to whatever node PATH would otherwise have found.
+  local resolved; resolved="$(command -v node 2>/dev/null || true)"
+  [[ -n "$resolved" && "$(readlink -f "$resolved")" == "$(readlink -f "$bin")" ]] \
+    || die "camofox: node resolves to '${resolved:-nothing}' after ensuring the managed node — expected $bin. Fix PATH and re-run."
+  ver="$(node --version 2>/dev/null || true)"
+  major="${ver#v}"; major="${major%%.*}"
+  [[ "$major" == "$NODE_MAJOR" ]] \
+    || die "camofox: node is ${ver:-unknown} — camofox requires the managed v$NODE_MAJOR.x (the platform nix node poisons the closure; see camofox_ensure_node). Re-run: bash $SCRIPT_DIR/setup.sh --node"
+  command -v npm >/dev/null 2>&1 \
+    || die "camofox: npm not on PATH after ensuring the managed node ($NODE_DIR/bin)"
+  ok "camofox: using managed Node.js $ver ($bin)"
+}
+
 install_camofox() {
   step "Camofox browser (npm-global @askjo/camofox-browser)"
-  need_cmd npm
-  need_cmd node
+  # FIRST: the managed Node.js $NODE_MAJOR — the closure is generated from
+  # the node that runs this install, and the platform nix node poisons it
+  # (see camofox_ensure_node). Installs it via --node's installer if absent.
+  camofox_ensure_node
   mkdir -p "$XDG_BIN_HOME" "$CAMOFOX_STATE_DIR" "$CAMOUFOX_INSTALL_DIR"
   # Re-anchor closure.txt/env.sh from the older $XDG_DATA_HOME/camofox layout.
   camofox_migrate_aux_files
@@ -588,27 +655,28 @@ install_camofox() {
   #     below can be generated in the same run. No manual package editing.
   camofox_ensure_store_libs
 
-  # 2c) Platform-node warning: generate-closure.sh prepends the *current*
-  #     node's linked store dirs to the closure. The platform nix node's
-  #     libs can require a newer glibc than the system one (sqlite-3.53.3
-  #     needs GLIBC_2.44; system is 2.39), and Firefox — a system-glibc
-  #     binary — then dies at launch with `GLIBC_2.44 not found` even
-  #     though the server itself starts (verified repl-test, 2026-11-05).
-  #     The managed tarball node (--node) links only system libs and is
-  #     the verified path; warn, don't die — some platform nodes are fine.
-  local _node_bin; _node_bin="$(command -v node 2>/dev/null || true)"
-  case "$_node_bin" in
-    /nix/store/*)
-      warn "camofox: node is the platform nix build ($_node_bin) — its linked libs are prepended to the closure and may kill Firefox at launch (GLIBC version mismatch). Verified path: bash $SCRIPT_DIR/setup.sh --node --camofox (managed node first)" ;;
-  esac
+  # 2c) (The platform-node guard used to warn here, after the fact; the
+  #     requirement now runs FIRST — see camofox_ensure_node at the top.)
 
   # 3) lib closure (globally-safe: generate-closure.sh prunes openssl/curl/…).
-  #     The engine dir is forced onto the child fetch so it lands under the cache.
-  if [[ ! -s "$CAMOFOX_CLOSURE_FILE" ]] \
-     || [[ "$(tr ':' '\n' < "$CAMOFOX_CLOSURE_FILE" | while IFS= read -r d; do [[ -d "$d" ]] || echo gone; done)" != "" ]]; then
+  #     Regenerate when the file is missing, when a listed dir has vanished,
+  #     OR when it was built under a DIFFERENT node than the one this run
+  #     ensured (stamp mismatch). Closures built before the node requirement
+  #     carry no stamp at all, so a poisoned platform-node closure left on a
+  #     box regenerates here automatically instead of needing a manual rm.
+  local _closure_stale=0
+  [[ -s "$CAMOFOX_CLOSURE_FILE" ]] || _closure_stale=1
+  if [[ -s "$CAMOFOX_CLOSURE_FILE" ]]; then
+    [[ "$(tr ':' '\n' < "$CAMOFOX_CLOSURE_FILE" | while IFS= read -r d; do [[ -d "$d" ]] || echo gone; done)" != "" ]] && _closure_stale=1
+    [[ "$(cat "$CAMOFOX_CLOSURE_STAMP" 2>/dev/null || true)" == "$(camofox_node_id)" ]] || _closure_stale=1
+  fi
+  if ((_closure_stale)); then
     echo "  generating GTK/X11 lib closure -> $CAMOFOX_CLOSURE_FILE"
-    bash "$SCRIPT_DIR/setup/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE" \
-      || warn "closure generation failed — camofox will not start until the nix store has gtk3/alsa-lib/xorg.libXdamage"
+    if bash "$SCRIPT_DIR/setup/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE"; then
+      camofox_node_id > "$CAMOFOX_CLOSURE_STAMP"
+    else
+      warn "closure generation failed — camofox will not start until the nix store has gtk3/alsa-lib/xorg.libXdamage"
+    fi
   fi
 
   # 4) engine (package-pinned Camoufox; skipped when already present+valid)
@@ -656,7 +724,7 @@ clean_camofox() {
         "$XDG_BIN_HOME/launch-camofox-browser"
   # Engine (re-fetchable) + closure/env snippet (aux files under the state dir).
   rm -rf "$CAMOUFOX_INSTALL_DIR"
-  rm -f "$CAMOFOX_CLOSURE_FILE" "$CAMOFOX_ENV_SNIPPET"
+  rm -f "$CAMOFOX_CLOSURE_FILE" "$CAMOFOX_CLOSURE_STAMP" "$CAMOFOX_ENV_SNIPPET"
   rm -rf "$XDG_DATA_HOME/camofox"   # older layout, if still present
   # Server state (cookies/profiles) is user data — kept; delete $CAMOFOX_STATE_DIR to wipe.
   ok "Camofox removed (engine + closure + package; server state kept in $CAMOFOX_STATE_DIR)"
