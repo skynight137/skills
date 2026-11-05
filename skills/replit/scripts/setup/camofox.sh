@@ -292,10 +292,22 @@ camofox_write_launcher() {
 set -uo pipefail
 
 X="${XDG_CONFIG_HOME:-${REPL_HOME:-$HOME}/.config}"
+# A camofox-only install lands the npm binaries in $XDG_DATA_HOME/node/bin,
+# which is on PATH only when the node tool was also installed/wired — a
+# fresh box that ran just `setup.sh --camofox` fails this shim's own
+# preflight with "camofox-browser is not installed" even though setup.sh
+# reported success (verified live on repl-test, 2026-11-05). The shim is
+# the entry point for shells that cannot source anything, so it puts the
+# two bin dirs it relies on onto PATH itself.
+D="${XDG_DATA_HOME:-${REPL_HOME:-$HOME}/.local/share}"
+B="${XDG_BIN_HOME:-${REPL_HOME:-$HOME}/.local/bin}"
+case ":$PATH:" in *":$D/node/bin:"*) ;; *) PATH="$D/node/bin:$PATH" ;; esac
+case ":$PATH:" in *":$B:"*) ;; *) PATH="$B:$PATH" ;; esac
+export PATH
 ENVSH="$X/camofox/env.sh"
 CLOSURE="$X/camofox/closure.txt"
 ENGINE="${CAMOUFOX_INSTALL_DIR:-${XDG_CACHE_HOME:-${REPL_HOME:-$HOME}/.cache}/camoufox}"
-NOW="bash /home/runner/workspace/skynight137-skills/skills/replit/scripts/setup.sh"
+NOW="bash __CAMOFOX_SETUP_CMD__"
 
 missing=0
 if ! command -v camofox-browser >/dev/null 2>&1; then
@@ -333,8 +345,123 @@ export PORT="${PORT:-80}"
 . "$ENVSH"
 exec camofox-browser "$@"
 EOF
+  # The heredoc above is quoted (every runtime $ stays literal), so the one
+  # generation-time value — this skill's own setup.sh, derived from
+  # $SCRIPT_DIR like every other generated launcher (cf. expose.sh) — is
+  # substituted in afterwards. A hardcoded clone path here
+  # (/home/runner/workspace/skynight137-skills/...) sent fresh users to a
+  # root that exists on none of the npx-installed boxes.
+  sed -i "s#__CAMOFOX_SETUP_CMD__#$SCRIPT_DIR/setup.sh#" "$f"
   chmod +x "$f"
   ok "camofox launcher shim: $f"
+}
+
+# --- cold store: replit.nix (persistence) + nix-env (immediate) -------------
+# Verified fresh-box behaviour (repl-test, 2026-11-05):
+# * A fresh workspace has NO replit.nix and a COLD store: `nix eval` resolves
+#   gtk3/alsa-lib/libXdamage/xvfb/cacert but none of those paths exist, so
+#   generate-closure.sh fails — and a fresh user was told to hand-edit the
+#   package list into replit.nix themselves.
+# * Writing replit.nix from a command DOES work (it is just a workspace
+#   file), but the platform does NOT rebuild on the write (store still cold
+#   minutes later, no restart); it applies only at the next platform
+#   rebuild/restart. The file alone cannot finish an install in the same run.
+# * `nix-env -iA` warms the CURRENT container in seconds (cache.nixos.org ->
+#   local overlay store) and feeds generate-closure.sh through its
+#   ~/.nix-profile lane. Attr spelling differs per lane: the nix expression
+#   in replit.nix wants `pkgs.xorg.xvfb`, while `nix-env -iA` has NO
+#   `nixpkgs.xorg.xvfb` attr (verified: "attribute 'xvfb' ... not found") —
+#   the legacy attr that ships a working Xvfb is `nixpkgs.xorg.xorgserver`.
+# * `nix --store /nix/store build nixpkgs#xorg.xvfb` is NOT a substitute:
+#   its output lands in the chroot store (/nix/store/nix/store/<hash>) and
+#   is invisible to the shell that checks for it (references/nix.md §3b).
+# So: declare in replit.nix for the next rebuild AND nix-env for now. The
+# user never hand-edits a package list.
+CAMOFOX_NIX_DEPS_EXPR=(cacert gtk3 alsa-lib xorg.libXdamage xorg.xvfb)
+CAMOFOX_NIXENV_ATTRS=(nixpkgs.cacert nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage nixpkgs.xorg.xorgserver)
+
+camofox_store_cold() {
+  # Mirror generate-closure.sh's resolution: the profile symlink target OR
+  # the nixpkgs eval root must exist for each of the three closure libs.
+  local lib root target
+  for lib in libgtk-3.so.0 libasound.so.2 libXdamage.so.1; do
+    if [[ -e "$HOME/.nix-profile/lib/$lib" ]]; then
+      target="$(readlink -f "$HOME/.nix-profile/lib/$lib" 2>/dev/null || true)"
+      [[ -e "$target" ]] && continue
+    fi
+    case "$lib" in
+      libgtk-3.so.0)   root="$(nix eval --raw nixpkgs#gtk3 2>/dev/null || true)" ;;
+      libasound.so.2)  root="$(nix eval --raw nixpkgs#alsa-lib 2>/dev/null || true)" ;;
+      libXdamage.so.1) root="$(nix eval --raw nixpkgs#xorg.libXdamage 2>/dev/null || true)" ;;
+    esac
+    [[ -n "$root" && -e "$root/lib/$lib" ]] && continue
+    return 0   # cold: at least one lib unresolvable
+  done
+  return 1     # warm
+}
+
+camofox_ensure_replit_nix() {
+  local f="${REPL_HOME:-$WORKSPACE}/replit.nix"
+  local -a missing=()
+  local d tmp
+  if [[ ! -f "$f" ]]; then
+    {
+      echo '{pkgs}: {'
+      echo '  deps = ['
+      for d in "${CAMOFOX_NIX_DEPS_EXPR[@]}"; do echo "    pkgs.$d"; done
+      echo '  ];'
+      echo '}'
+    } > "$f" || { warn "camofox: cannot write $f — add pkgs gtk3/alsa-lib/xorg.libXdamage/xorg.xvfb/cacert there by hand"; return 0; }
+    ok "camofox: wrote $f with the Camofox nix deps (applies at the next Replit rebuild/restart)"
+    return 0
+  fi
+  for d in "${CAMOFOX_NIX_DEPS_EXPR[@]}"; do
+    grep -qF "pkgs.$d" "$f" || missing+=("$d")
+  done
+  if ((${#missing[@]} == 0)); then
+    skip "camofox: $f already declares the Camofox nix deps"
+    return 0
+  fi
+  if grep -q 'deps = \[' "$f"; then
+    # Insert each missing dep right after the `deps = [` line (idempotent —
+    # the grep above filters deps already present anywhere in the file).
+    tmp="$(mktemp)"
+    if awk -v deps="$(printf '%s ' "${missing[@]}")" '
+      BEGIN { n = split(deps, a, " "); done = 0 }
+      { print }
+      /deps = \[/ && !done { for (i = 1; i <= n; i++) if (a[i] != "") print "    pkgs." a[i]; done = 1 }
+    ' "$f" > "$tmp" && mv "$tmp" "$f"; then
+      ok "camofox: added to $f: ${missing[*]} (applies at the next Replit rebuild/restart)"
+    else
+      rm -f "$tmp"
+      warn "camofox: could not edit $f — add by hand: pkgs.${missing[*]}"
+      return 0
+    fi
+  else
+    warn "camofox: $f has no 'deps = [' block — not auto-edited. Add by hand: pkgs.${missing[*]} (file: $f)"
+    return 0
+  fi
+  if command -v nix-instantiate >/dev/null 2>&1; then
+    nix-instantiate --parse "$f" >/dev/null 2>&1 \
+      || warn "camofox: $f no longer parses as nix — check the edit before the next rebuild"
+  fi
+}
+
+camofox_ensure_store_libs() {
+  if ! camofox_store_cold; then
+    skip "camofox: nix store warm (GTK/ALSA/X11 libs present)"
+    return 0
+  fi
+  warn "camofox: nix store is COLD — no GTK/ALSA/X11 libs yet (fresh workspace)"
+  camofox_ensure_replit_nix
+  if command -v nix-env >/dev/null 2>&1; then
+    echo "  warming the store for THIS container: nix-env -iA ${CAMOFOX_NIXENV_ATTRS[*]}"
+    nix-env -iA "${CAMOFOX_NIXENV_ATTRS[@]}" \
+      || warn "camofox: nix-env warm-up failed — closure generation will likely fail; the replit.nix above fixes it after a Replit rebuild/restart"
+  else
+    warn "camofox: nix-env not found — cannot warm the store now; the replit.nix above fixes it after a Replit rebuild/restart"
+  fi
+  camofox_store_cold || ok "camofox: store warmed for this container (nix-env profile; replit.nix carries it across recreates)"
 }
 
 install_camofox() {
@@ -357,6 +484,25 @@ install_camofox() {
   camofox_patch_webgl
   camofox_raise_newpage_timeout
   camofox_pin_playwright
+
+  # 2b) cold store (fresh workspace): declare the deps in replit.nix for the
+  #     next rebuild AND warm this container with nix-env, so the closure
+  #     below can be generated in the same run. No manual package editing.
+  camofox_ensure_store_libs
+
+  # 2c) Platform-node warning: generate-closure.sh prepends the *current*
+  #     node's linked store dirs to the closure. The platform nix node's
+  #     libs can require a newer glibc than the system one (sqlite-3.53.3
+  #     needs GLIBC_2.44; system is 2.39), and Firefox — a system-glibc
+  #     binary — then dies at launch with `GLIBC_2.44 not found` even
+  #     though the server itself starts (verified repl-test, 2026-11-05).
+  #     The managed tarball node (--node) links only system libs and is
+  #     the verified path; warn, don't die — some platform nodes are fine.
+  local _node_bin; _node_bin="$(command -v node 2>/dev/null || true)"
+  case "$_node_bin" in
+    /nix/store/*)
+      warn "camofox: node is the platform nix build ($_node_bin) — its linked libs are prepended to the closure and may kill Firefox at launch (GLIBC version mismatch). Verified path: bash $SCRIPT_DIR/setup.sh --node --camofox (managed node first)" ;;
+  esac
 
   # 3) lib closure (globally-safe: generate-closure.sh prunes openssl/curl/…).
   #     The engine dir is forced onto the child fetch so it lands under the cache.

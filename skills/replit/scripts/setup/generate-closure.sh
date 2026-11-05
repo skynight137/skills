@@ -78,7 +78,7 @@ for lib in libgtk-3.so.0 libasound.so.2 libXdamage.so.1; do
         echo "       Cold store: nothing has installed the GTK/ALSA/X11 libs yet (no [nix]" >&2
         echo "       packages build, no nix-env). The nixpkgs channel resolves the name; the libs must" >&2
         echo "       actually exist in the store. Fix (one of):" >&2
-        echo "         replit.nix  deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]  # recommended; wait for rebuild" >&2
+        echo "         replit.nix (workspace root)  deps = [ pkgs.gtk3 pkgs.alsa-lib pkgs.xorg.libXdamage ]  # setup.sh --camofox writes this for you; wait for rebuild" >&2
         echo "         .replit  [nix] packages = [\"gtk3\", \"alsa-lib\", \"xorg.libXdamage\"]  # alternate lane" >&2
         echo "         nix-env -iA nixpkgs.gtk3 nixpkgs.alsa-lib nixpkgs.xorg.libXdamage" >&2
         exit 1
@@ -129,10 +129,16 @@ if [[ -n "$node_bin" ]]; then
         node_bin="$(grep -oE '/nix/store/[^ "]*nodejs-[^ "]*' "$node_bin" 2>/dev/null | head -1 || true)"
     fi
     if [[ -x "$node_bin" ]]; then
+        # `|| node_dirs=""`: with a managed (tarball) node, ldd shows NO
+        # /nix/store paths, the grep -vE selects nothing and exits 1, and
+        # pipefail + set -e then killed the script here — after the closure
+        # file was written, so callers reported a spurious failure and the
+        # sanity check below never ran (verified live on repl-test,
+        # 2026-11-05, after the read-EOF fix exposed this next failure).
         node_dirs="$(ldd "$node_bin" 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i ~ /^\/nix\/store\//) print $i}' \
             | xargs -r -n1 dirname 2>/dev/null \
             | grep -vE '(^|/)libg?c\.so|glibc|libgcc' \
-            | sort -u | paste -sd: -)"
+            | sort -u | paste -sd: -)" || node_dirs=""
     fi
 fi
 if [[ -n "$node_dirs" ]]; then
@@ -142,7 +148,12 @@ if [[ -n "$node_dirs" ]]; then
 fi
 
 # sanity: the critical libs must be resolvable inside the closure
-IFS=':' read -ra dirs < "$OUT"
+# (`|| true`: the closure file is one line with NO trailing newline, so
+# `read` hits EOF and returns 1 even though it filled the array — under
+# `set -e` that killed the script here, after the file was written, and
+# callers reported a spurious "closure generation failed". Verified live
+# on repl-test 2026-11-05: file written, exit code 1, sanity never ran.)
+IFS=':' read -ra dirs < "$OUT" || true
 for lib in libgtk-3.so.0 libXdamage.so.1 libasound.so.2 libX11-xcb.so.1; do
     ok=0
     for d in "${dirs[@]}"; do
