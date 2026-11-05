@@ -380,8 +380,54 @@ def detail(*args):
     print(*args, file=_LOGF if _LOGF is not None else sys.stdout, flush=True)
 
 
+# Generic modal dismissal for the keep-alive tools. The MECHANISM is
+# site-agnostic — find a visible dialog whose text mentions a caller-given
+# needle, click ITS close control — while the needle itself is data the
+# caller supplies (--dismiss), so no site-specific strings live in this
+# client. Deliberately conservative: only dialog-ish containers, only a
+# plausible close control (aria-label close/dismiss, or a bare × / ✕
+# label) — never a CTA like "Upgrade" or "Subscribe".
+_DISMISS_JS = """(() => {
+  const needle = %s;
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight ||
+                             el.getClientRects().length);
+  const boxes = [...document.querySelectorAll(
+    '[role="dialog"], dialog, [class*="modal" i]')];
+  for (const box of boxes) {
+    if (!visible(box)) continue;
+    if (!(box.innerText || '').toLowerCase().includes(needle)) continue;
+    const btns = [...box.querySelectorAll('button, [role="button"]')];
+    const close = btns.find((b) =>
+      /close|dismiss/i.test(b.getAttribute('aria-label') || '') ||
+      ['\\u00d7', '\\u2715'].includes((b.textContent || '').trim()));
+    if (close) { close.click(); return 'dismissed'; }
+    return 'found-no-close';
+  }
+  return 'not-found';
+})()"""
+
+
+def dismiss_dialogs(key, user, tab, needles):
+    """Best-effort: close dialogs matching each needle text. Never raises —
+    a failed dismissal must not kill a keep-alive loop; outcomes go to the
+    detail sink so the log shows whether the box was actually closed."""
+    for needle in needles:
+        try:
+            r = req(key, "POST", f"/tabs/{tab}/evaluate",
+                    {"userId": user,
+                     "expression": _DISMISS_JS % json.dumps(needle.lower())},
+                    timeout=30)
+            outcome = r.get("result") if isinstance(r, dict) else None
+            if outcome:
+                detail(f"dismiss '{needle}': {outcome}")
+            elif isinstance(r, dict) and ("_http_error" in r or "_error" in r):
+                detail(f"dismiss '{needle}': request failed {r}")
+        except Exception as e:  # noqa: BLE001 — best-effort by design
+            detail(f"dismiss '{needle}': error {e}")
+
+
 def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
-                      log_file=None):
+                      log_file=None, dismiss=()):
     global _LOGF
     if log_file:
         os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
@@ -398,10 +444,14 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
           f"interval={interval}s url={url}"
           + (f" screenshots={shot_dir}" if shot_dir else "")
           + (f" log={log_file}" if log_file else ""))
+    if dismiss:
+        dismiss_dialogs(key, user, tab, dismiss)
     if shot_dir:
         tool_screenshot(key, user, session, shot_dir, full_page=True)
     while True:
         time.sleep(interval)
+        if dismiss:
+            dismiss_dialogs(key, user, tab, dismiss)
         if shot_dir:
             # capture the currently fully-loaded page BEFORE refreshing it
             tool_screenshot(key, user, session, shot_dir, full_page=True)
@@ -470,6 +520,13 @@ def main():
                          "the console to the startup summary + failures — "
                          "for .replit workflow runs, whose terminals hang "
                          "under unbounded log output")
+    ap.add_argument("--dismiss", action="append", default=[], metavar="TEXT",
+                    help="refresh-page: after each load, close any visible "
+                         "dialog whose text contains TEXT by clicking its "
+                         "close control (repeatable). Generic mechanism — "
+                         "the TEXT is the caller's site-specific data, e.g. "
+                         "--dismiss 'Keep using Replit?' for the Replit "
+                         "Starter-limit upsell modal")
     a = ap.parse_args()
 
     # Config provenance (see the import block): one short line per resolved
@@ -542,7 +599,8 @@ def main():
             sys.exit(1)
         if a.tools == "refresh-page":
             tool_refresh_page(key, a.user, a.session, a.url, a.interval,
-                              shot_dir=a.screenshot, log_file=a.log_file)
+                              shot_dir=a.screenshot, log_file=a.log_file,
+                              dismiss=a.dismiss)
         else:
             TOOLS[a.tools](key, a.user, a.session, a.url, a.interval)
     elif a.cookies is None and not a.tools:
