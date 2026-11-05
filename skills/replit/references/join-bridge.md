@@ -38,6 +38,14 @@ still usable from the agent by driving the browser canvas:
   ssh. The installed copy lands in `.agents/skills/<name>/`, and `npx` may print an
   npm-upgrade notice before the real output — judge by the folder appearing, not by
   the last line.
+- **Keep the install PLAIN — `.agents` is the only store on a Replit workspace.**
+  `npx -y skills <author>/<repo>` already distributes into `WS/.agents` by
+  default. Agent-selection flags (`--all`, `--agent …`) make the CLI ALSO write
+  per-agent copies into dirs OUTSIDE `.agents` (`.claude/skills/`, `.codex/…`) —
+  redundant duplicates that drift from the canonical copy; `--json` adds nothing
+  the folder check above doesn't. Verified 2026-11-05: `--all --json` runs left
+  `.claude/skills/{muse,replit}` spill on repl-test + repl-cfx (removed); plain
+  runs leave `.agents` only.
 
 Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
 works from its own terminal.
