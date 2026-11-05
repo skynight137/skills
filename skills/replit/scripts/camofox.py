@@ -17,8 +17,12 @@ Cookies otherwise persist per --user on disk and auto-reload — omit to reuse.
 Auth/config: the env file is loaded into the environment at import, BEFORE any
 setting is read, so EVERY Camofox variable can live in it — CAMOFOX_BASE_URL,
 CAMOFOX_ROOT, CAMOFOX_STATE_DIR, CAMOFOX_API_KEY, … not just the key. No agent
-framework required: only $CAMOFOX_ENV_FILE and $CAMOFOX_ROOT/.env are consulted
-(see default_env). The server URL is dialed via CAMOFOX_BASE_URL only.
+framework required: discovery is $CAMOFOX_ENV_FILE, then the canonical
+$XDG_CONFIG_HOME/camofox/.env, then legacy $CAMOFOX_ROOT/.env (see
+default_env). Precedence: the system environment WINS per var, the file only
+fills gaps, and the source of each var is logged at startup. setup.sh
+--camofox drops a fill-in .env.example next to the real .env. The server URL
+is dialed via CAMOFOX_BASE_URL only.
 """
 import argparse, glob, json, os, sys, time, urllib.error, urllib.request
 from typing import cast
@@ -80,10 +84,24 @@ ENV_FILE = default_env()
 # `set -a` AFTER exporting its own defaults, so there the FILE wins. Verified
 # both ways. Harmless in practice (the file is the config, and the script only
 # exports the same names), but do not "unify" them by assumption.
-if ENV_FILE:
-    for _k, _v in _read_env_file(ENV_FILE).items():
-        os.environ.setdefault(_k, _v)
-    del _k, _v
+#
+# The precedence is also LOGGED, per var, at startup (main): the operator's
+# "big env" rule is that the system environment is honoured first and the
+# .env file is only a fallback — and the choice must be auditable, not
+# silent. Only name + source are ever logged, never a key's value.
+_CONFIG_VARS = ("CAMOFOX_BASE_URL", "CAMOFOX_ACCESS_KEY", "CAMOFOX_API_KEY",
+                "CAMOFOX_ROOT", "CAMOFOX_STATE_DIR")
+CONFIG_SOURCES = []
+_file_vars = _read_env_file(ENV_FILE) if ENV_FILE else {}
+for _name in _CONFIG_VARS:
+    if os.environ.get(_name):
+        _tail = "(.env file skipped)" if _file_vars.get(_name) else \
+            "(no .env value)"
+        CONFIG_SOURCES.append(f"{_name}: from system env {_tail}")
+    elif _file_vars.get(_name):
+        CONFIG_SOURCES.append(f"{_name}: from .env file ({ENV_FILE})")
+for _k, _v in _file_vars.items():
+    os.environ.setdefault(_k, _v)
 
 # Canonical dial var (official MCP-adapter name, server.mjs:46). One name for
 # both clients; no legacy fallback — a wrong var just means the default.
@@ -453,6 +471,11 @@ def main():
                          "for .replit workflow runs, whose terminals hang "
                          "under unbounded log output")
     a = ap.parse_args()
+
+    # Config provenance (see the import block): one short line per resolved
+    # CAMOFOX_* var, naming the source — system env or the .env fallback.
+    for _line in CONFIG_SOURCES:
+        print(f"config: {_line}")
 
     key = load_key(a.env)
 
