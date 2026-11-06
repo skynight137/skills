@@ -60,16 +60,17 @@ and a shell without it (or a probe hardcoding
 Both are `setInterval(..., 60_000)` in `server.js`, so thresholds quantize to
 60s and the worst case is `threshold + 60s`.
 
-| reaper | env var | code default | set by `setup.sh --camofox` | what it closes | code |
-|---|---|---|---|---|---|
-| tab | `TAB_INACTIVITY_MS` | `300000` (5min) | `900000` (15min) | the tab only | `server.js:6040`, `lib/config.js:149` |
-| session | `SESSION_TIMEOUT_MS` | `600000` (10min) | `1800000` (30min) | the session | `server.js:5978`, `lib/config.js:116` |
-| browser | `BROWSER_IDLE_TIMEOUT_MS` | `300000` | **`0` → disabled** | the whole browser | `server.js:698` |
+| reaper | env var | value (package default — setup sets none of these) | what it closes | code |
+|---|---|---|---|---|
+| tab | `TAB_INACTIVITY_MS` | `300000` (5min) | the tab only | `server.js:6040`, `lib/config.js:149` |
+| session | `SESSION_TIMEOUT_MS` | `600000` (10min) | the session | `server.js:5978`, `lib/config.js:116` |
+| browser | `BROWSER_IDLE_TIMEOUT_MS` | `300000` (5min) | the whole browser | `server.js:698` |
 
-The **browser** timer is the one people wrongly blame: `setup.sh --camofox`
-exports `BROWSER_IDLE_TIMEOUT_MS=0`, and `scheduleBrowserIdleShutdown` returns
-early on `BROWSER_IDLE_TIMEOUT_MS <= 0` (`server.js:698`). On this box it is
-**never armed**, so `closeSession` does *not* start a 5-minute browser countdown.
+The **browser** timer is the one people wrongly blame for tabs dying under a
+live session: it is armed (package default), but `scheduleBrowserIdleShutdown`
+only counts down while `sessions.size === 0` (`server.js:698`) — with any
+session alive it never fires. A tab that dies mid-loop is the tab/session
+reaper or the health probe, not this timer.
 
 ## Why the session reaper is the real hazard
 
@@ -123,28 +124,35 @@ Only a request that *touches the session*:
 
 ## Correct configuration
 
-`setup.sh --camofox` applies these **as overrides of Camofox's own defaults**
-(shown after each), so the script works out of the box:
+**None — the package defaults rule** (operator decision, 2026-11-06).
+`setup.sh --camofox` deliberately does NOT export any of the reaper vars;
+`env.sh` carries only port/path exports (`PORT`, the `CAMOFOX_*_DIR` family,
+`LD_LIBRARY_PATH`). Earlier revisions of this doc claimed setup applied
+900000/1800000/0 overrides — it never did in the shipped code, and the live
+servers run the defaults: tab `300000`, session `600000`, browser idle
+`300000`. If you want a different value, set it in the server's env yourself;
+the tunables are documented in references/camofox.md.
 
-```bash
-export TAB_INACTIVITY_MS="${TAB_INACTIVITY_MS:-900000}"     # Camofox default: 300000
-export SESSION_TIMEOUT_MS="${SESSION_TIMEOUT_MS:-1800000}"  # Camofox default: 600000
-```
+The binding constraint for a keep-alive loop is therefore the **tab**
+threshold: a session-touching request must land at least every 300s, and
+with the 60s reaper tick the safe rule is `interval + 60 < 300` with margin
+to spare. `--interval 180` (the `camofox.py` default) peaks at ~240s of
+inactivity in the worst tick phase; `--interval 240` leaves under a minute
+of slack; `--interval 300` **races** the reaper — jitter alone gets tabs
+reaped, then the session, after which the login survives only via the
+persistence plugin's restore.
 
-To take the Camofox default instead, comment the line out or set it yourself —
-in the shell (`export SESSION_TIMEOUT_MS=600000`)  — tunables documented in references/camofox.md.
+**Do not** just raise `--interval` toward the 5min tab reaper and call it
+done — a reaped tab empties the session, the session reaper follows, and
+the context (with its in-memory cookie jar) is closed.
 
-Then the loop period only has to stay under 900s. `--interval 240` gives ~2min
-margin under the session threshold's 900s worst case.
+## Pitfall: an env file is where an override would hide
 
-**Do not** just raise `--interval` under the 5min tab reaper and call it done —
-that leaves the session reaper live, which is the one that drops the login.
-
-## Pitfall: the env file load can clobber your exports
-
-`setup.sh --camofox` loads an env file with `set -a` **after** setting
-the defaults. Any `TAB_INACTIVITY_MS` / `SESSION_TIMEOUT_MS` in that file wins.
-Candidate order (first existing): `$CAMOFOX_ENV_FILE`, `$CAMOFOX_ROOT/.env`.
+Setup sets no reaper defaults, so if a box behaves as if a reaper were
+tuned, the value came from the env file the server loads at boot
+(`set -a`; first existing wins) or from the platform/workflow env — check
+those before believing the defaults are in force. Candidate order:
+`$CAMOFOX_ENV_FILE`, `$XDG_CONFIG_HOME/camofox/.env`, `$CAMOFOX_ROOT/.env`.
 Check the file it actually picked:
 
 ```bash

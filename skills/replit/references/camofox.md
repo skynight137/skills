@@ -331,9 +331,10 @@ launches on first tab create, and the first launch can take ~60-90s
 The browser can also **restart out from under a live session** — the 60s active
 health probe (`server.js:6978`) fails, calls `restartBrowser`, and
 `closeAllSessions` + `closeBrowserFully` kill in-flight requests. Old tabIds die
-with each restart; create a fresh tab. `BROWSER_IDLE_TIMEOUT_MS=0` (the script's
-default) disables the *idle* path, so a restart always means the probe — see
-*Frozen vs dead browser* under Troubleshooting.
+with each restart; create a fresh tab. The browser-idle path
+(`BROWSER_IDLE_TIMEOUT_MS`, package default 300000) only counts down while
+zero sessions exist, so a restart under a live session always means the
+probe — see *Frozen vs dead browser* under Troubleshooting.
 
 If the script refuses early with `ERROR: no store root for libgtk-3.so.0`,
 your `/nix/store` is **cold** (fresh container, GTK never installed there)
@@ -570,7 +571,7 @@ Useful greps:
 |---------|-------|-----|
 | `browserConnected:false` after start | lazy launch — normal | POST `/tabs` with `-m 90`; first launch ~60-90s |
 | `POST /tabs` → 500 `new page timed out after 60000ms` ×2, engine log shows `signal 11` in content processes | engine cannot init a page in time (or at all) on this host — check `LD_LIBRARY_PATH` first: a closure containing the nix **glibc/libgcc** dirs stack-smashes node AND a *missing* one (pool-only) dies at `XPCOMGlueLoad: libgtk-3.so.0` | regenerate the closure with `scripts/setup/generate-closure.sh` (its glibc/gcc exclusion list is load-bearing); `newPageTimeoutMs` floor is 60000 in `setup.sh --camofox` step 4b — verify with `grep newPageTimeoutMs camofox.config.json` inside the repo clone (an old 10000 there = the script never ran for this server) |
-| `Tab no longer exists (browser was restarted)` | **not** idle-shutdown (`BROWSER_IDLE_TIMEOUT_MS=0` disables that) — the 60s active health probe failed and called `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, killing in-flight work | re-create the tab; see *Frozen vs dead browser* |
+| `Tab no longer exists (browser was restarted)` | **not** the browser-idle timer (it only fires at zero sessions) — the 60s active health probe failed and called `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, killing in-flight work | re-create the tab; see *Frozen vs dead browser* |
 | `POST /sessions/<u>/cookies` never returns (client dies at its own 300s timeout) | browser is **frozen**, not dead — the route awaits `getSession`/`addCookies` (`server.js:473-474`) with no server-side timeout | `pkill -9 -f camoufox-bin` (a *dead* browser 500s instantly), then re-import; see *Frozen vs dead browser* |
 | a failed run's log just **stops** at `listening on :9377`, error missing | client `print()`s are block-buffered when stdout is a pipe (no TTY); and `session:created` (`plugins/persistence/index.js:120`) awaits the state restore, so a wedged browser never reaches the route's `req` log line | run the CLI as `python3 -u` (or `PYTHONUNBUFFERED=1`) |
 | first `POST /tabs` on a Cloudflare site returns `httpStatus:403` (e.g. g2.com, glassdoor.com) | CF frontdoor challenges the cold profile; the URL may even be rewritten to a `__cf_chl_rt_tk` token | **retry the same sessionKey** — the second attempt usually returns `navigationOk:true` with full content (verified: g2.com 403 → 200 on retry, real reviews loaded) |
@@ -756,14 +757,15 @@ restarts, so one import per account is enough.
 **Keep-alive** — the reapers (all `setInterval(..., 60_000)`, so thresholds
 quantize to 60s and worst case is `threshold + 60s`):
 
-| reaper | env | code default | `setup.sh --camofox` | closes | evidence |
-|---|---|---|---|---|---|
-| tab | `TAB_INACTIVITY_MS` | 300000 (5min) | 900000 (15min) | tab only | `server.js:6040`, `lib/config.js:149` |
-| session | `SESSION_TIMEOUT_MS` | 600000 (10min) | 1800000 (30min) | session → `context.close()` | `server.js:5978`, `lib/config.js:116` |
-| browser | `BROWSER_IDLE_TIMEOUT_MS` | 300000 | **0 → disabled** | whole browser, only when `sessions.size === 0` | `server.js:698` |
+| reaper | env | value (package default — setup sets none of these) | closes | evidence |
+|---|---|---|---|---|
+| tab | `TAB_INACTIVITY_MS` | 300000 (5min) | tab only | `server.js:6040`, `lib/config.js:149` |
+| session | `SESSION_TIMEOUT_MS` | 600000 (10min) | session → `context.close()` | `server.js:5978`, `lib/config.js:116` |
+| browser | `BROWSER_IDLE_TIMEOUT_MS` | 300000 (5min) | whole browser, only when `sessions.size === 0` | `server.js:698` |
 
-The browser timer is **never armed on this box** — the script exports `0` and
-`server.js:698` returns early on `<= 0`. Don't blame it for restarts.
+The browser timer is armed at its default but only counts down while zero
+sessions exist, so under any live session it never fires. Don't blame it
+for restarts — those are the health probe (below).
 
 Only a request that *touches the session* resets both — `POST /tabs/{tabId}/refresh`
 bumps `tabState.toolCalls` **and** `session.lastAccess` (`server.js:4892`/`:4889`).
@@ -784,31 +786,26 @@ is dead or frozen, the import fails — see *Frozen vs dead browser* for the two
 distinct shapes (dead → instant `Target page, context or browser has been
 closed`; frozen → the request pends with no server-side timeout).
 
-**Do not blame the idle timers on this setup.** `setup.sh --camofox` exports
-`BROWSER_IDLE_TIMEOUT_MS=0`, and `scheduleBrowserIdleShutdown` returns early on
-`BROWSER_IDLE_TIMEOUT_MS <= 0` (`server.js:698`) — so the browser idle timer is
-**never armed here**, and `closeSession` does *not* hand the browser to a
-countdown. The timers that remain live are the tab and session ones:
-
-| timer | env | code default | set by `setup.sh --camofox` | effect |
-|---|---|---|---|---|
-| browser | `BROWSER_IDLE_TIMEOUT_MS` | 300000 | **0 → disabled** | closes the whole browser; only armed when `sessions.size === 0` (`server.js:698`) |
-| session | `SESSION_TIMEOUT_MS` | 600000 | 1800000 | closes the session; `0` genuinely disables (`server.js:5978`) |
-| tab | `TAB_INACTIVITY_MS` | 300000 | 900000 | reaps the tab only |
+**The timers run at package defaults — setup tunes none of them**
+(operator decision, 2026-11-06: follow upstream defaults; `env.sh` exports
+only port/path vars). Earlier revisions of this doc claimed
+`setup.sh --camofox` exported `BROWSER_IDLE_TIMEOUT_MS=0`,
+`TAB_INACTIVITY_MS=900000` and `SESSION_TIMEOUT_MS=1800000` — the shipped
+code never did, and the live servers' process env proves the defaults are
+what actually run. The one timer that looks guilty but isn't is the
+browser's: `scheduleBrowserIdleShutdown` (`server.js:698`) counts down
+only while `sessions.size === 0`, so it never fires under a live loop.
 
 The `health probe failed` in that symptom line is **not** an idle timer firing —
 it is the 60s active probe (`server.js:6978`) failing and calling
 `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, which kills
 in-flight requests. A restart under a live loop is always the probe.
 
-`setup.sh --camofox` applies `TAB_INACTIVITY_MS=900000` and
-`SESSION_TIMEOUT_MS=1800000` as **overrides of Camofox's own defaults** (300000
-and 600000). Re-checked after the env-file load — `$CAMOFOX_ENV_FILE`, then
-`$XDG_CONFIG_HOME/camofox/.env`, then `$CAMOFOX_ROOT/.env`, first existing
-wins — which can clobber them. With those
-set, the
-loop period just needs to stay comfortably under 900s. Use `--tools refresh-page`
-with **`--interval 240`**. Cron is the wrong tool (1/min floor + fresh process
+With the tab threshold at its 300s default, the loop period must satisfy
+`interval + 60 < 300` with margin (the reaper ticks every 60s): use
+`--tools refresh-page` with **`--interval 180`** (the client default; it
+peaks at ~240s worst-phase inactivity). `--interval 300` races the reaper.
+Cron is the wrong tool (1/min floor + fresh process
 each tick); a long-running loop is right.
 
 Verify it is actually working by **tab identity, not freshness**: screenshots
