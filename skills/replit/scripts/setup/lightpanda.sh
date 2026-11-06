@@ -92,9 +92,39 @@ EOF
 # (connect_over_cdp; no browser is ever downloaded — the engine is the
 # browser). The pin is the version the fleet trial proved against
 # Lightpanda 1.0.3's CDP (references/lightpanda.md).
+#
+# The venv is created by uv when uv is on PATH, else by
+# python3 -m venv — and the playwright install uses whatever the
+# resulting venv actually offers: a uv-created venv ships NO pip (uv
+# manages it from outside), so it is installed into with
+# `uv pip install --python <venv python>`; a python3 venv carries its
+# own pip and uses it. (Verified the hard way on the first fleet
+# rollout: `python -m pip` inside a uv venv dies "No module named
+# pip", mid-lane, on both captain boxes.)
+lightpanda_venv_ok() {
+  local py="$LIGHTPANDA_VENV/bin/python"
+  [[ -x "$py" ]] && "$py" -c 'import playwright' 2>/dev/null
+}
+
+# Lane-start preflight for the venv step. Creating the venv needs uv
+# or a venv-CAPABLE python3 — a bare python3 is not enough, it must
+# bring the venv + ensurepip modules. A fresh Replit join shell has
+# NEITHER (no uv, no python3 on PATH), so without this check the lane
+# died mid-run, after the ~77 MB binary download. Die here instead,
+# before any download, naming the remedy. A healthy existing venv
+# exempts the run: re-running the installer is the repair path and
+# must stay cheap on a box whose shell PATH lost python.
+lightpanda_preflight_venv() {
+  lightpanda_venv_ok && return 0
+  if command -v uv >/dev/null 2>&1; then return 0; fi
+  if command -v python3 >/dev/null 2>&1 \
+     && python3 -c 'import venv, ensurepip' 2>/dev/null; then return 0; fi
+  die "lightpanda: cannot create the tour venv — neither uv nor a venv-capable python3 found. Run 'setup.sh --uv' first (installs uv), then re-run --lightpanda"
+}
+
 lightpanda_ensure_venv() {
   local py="$LIGHTPANDA_VENV/bin/python"
-  if [[ -x "$py" ]] && "$py" -c 'import playwright' 2>/dev/null; then
+  if lightpanda_venv_ok; then
     skip "lightpanda tour venv present ($LIGHTPANDA_VENV)"
     return 0
   fi
@@ -107,10 +137,24 @@ lightpanda_ensure_venv() {
     python3 -m venv "$LIGHTPANDA_VENV" \
       || die "lightpanda: 'python3 -m venv' failed — install uv (setup.sh --uv) or a venv-capable python3, then re-run"
   else
-    die "lightpanda: neither uv nor python3 found — cannot create the tour venv (setup.sh --uv installs uv)"
+    # Unreachable via install_lightpanda (its preflight dies first);
+    # kept so this function stays safe if reused standalone.
+    die "lightpanda: neither uv nor python3 found — run 'setup.sh --uv' first, then re-run"
   fi
-  "$py" -m pip install --quiet "playwright==$LIGHTPANDA_PLAYWRIGHT_VERSION" \
-    || die "lightpanda: pip install playwright==$LIGHTPANDA_PLAYWRIGHT_VERSION failed in the tour venv"
+  # Install via the venv's own pip ONLY when the venv actually has
+  # pip (python3-created venvs); otherwise install through uv against
+  # the venv's interpreter (uv-created venvs have no pip — see the
+  # note above). End state is identical either way: playwright ==
+  # $LIGHTPANDA_PLAYWRIGHT_VERSION importable from the venv.
+  if "$py" -m pip --version >/dev/null 2>&1; then
+    "$py" -m pip install --quiet "playwright==$LIGHTPANDA_PLAYWRIGHT_VERSION" \
+      || die "lightpanda: pip install playwright==$LIGHTPANDA_PLAYWRIGHT_VERSION failed in the tour venv"
+  elif command -v uv >/dev/null 2>&1; then
+    uv pip install --python "$py" "playwright==$LIGHTPANDA_PLAYWRIGHT_VERSION" \
+      || die "lightpanda: 'uv pip install' playwright==$LIGHTPANDA_PLAYWRIGHT_VERSION failed in the tour venv"
+  else
+    die "lightpanda: the tour venv has no pip and uv is not available — run 'setup.sh --uv' first, then re-run"
+  fi
   "$py" -c 'import playwright' 2>/dev/null \
     || die "lightpanda: playwright still not importable in $LIGHTPANDA_VENV after install"
   ok "lightpanda tour venv ready: $LIGHTPANDA_VENV (playwright $LIGHTPANDA_PLAYWRIGHT_VERSION)"
@@ -118,6 +162,10 @@ lightpanda_ensure_venv() {
 
 install_lightpanda() {
   step "Lightpanda browser (pinned $LIGHTPANDA_VERSION + tour venv)"
+  # Before ANY download: the venv step's toolchain preflight (dies
+  # naming the --uv remedy on a fresh shell with neither uv nor a
+  # venv-capable python3 — see lightpanda_preflight_venv).
+  lightpanda_preflight_venv
   need_cmd curl
   mkdir -p "$XDG_BIN_HOME" "$LIGHTPANDA_HOME"
 

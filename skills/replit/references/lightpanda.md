@@ -42,6 +42,17 @@ Probe trap: the binary has **no `--version` flag** (unknown command,
 exit 1). The version probe is the subcommand: `lightpanda version`
 prints `1.0.3`.
 
+Venv prerequisite: creating the tour venv needs **uv** or a
+**venv-capable python3** (one that brings `venv` + `ensurepip`) on
+PATH. A fresh Replit join shell has neither — the lane preflights
+this and dies *before* downloading anything, naming the remedy: run
+`bash setup.sh --uv` first, then re-run `--lightpanda`. (A healthy
+existing venv exempts a re-run.) Mind which creator made the venv:
+a **uv-created venv ships no pip**, so playwright is installed with
+`uv pip install --python <venv python>`; a `python3 -m venv` venv
+carries its own pip and uses it. The installer picks by whether the
+venv actually has pip.
+
 ### Layout — `$LIGHTPANDA_HOME` (`$XDG_CONFIG_HOME/lightpanda`)
 
 | path | what |
@@ -165,5 +176,7 @@ same way it did — by running.
 | every stop is `LOGGED-OUT-WALL` | the jar is stale/expired — re-export it from the account's browser session and drop it at `LP_COOKIES`; the tour picks it up next round |
 | `CF-STALL` on one stop | Cloudflare did not clear inside `LP_POLL_S` this time; transient stalls happen — the breaker only aborts on *consecutive* failures |
 | tour dies at start: `lightpanda binary missing` | run `bash setup.sh --lightpanda` (or `--fix` to restore the symlink) |
+| `--lightpanda` dies at start: `neither uv nor a venv-capable python3` | fresh join shell — run `bash setup.sh --uv` first, then re-run `--lightpanda` |
+| `No module named pip` inside the tour venv | the venv was created by uv (uv venvs ship no pip) — reinstall via `uv pip install --python <venv>/bin/python playwright==…`, or just re-run `bash setup.sh --lightpanda` (4.34.1+ picks the installer by the venv) |
 | venv python dies on `libstdc++.so.6` | you ran `lp-tour.py` directly — run it via `lp-tour.sh`, which assembles `LD_LIBRARY_PATH` |
 | `lightpanda --version` exits 1 | by design — the probe is `lightpanda version` |
