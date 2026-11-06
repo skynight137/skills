@@ -381,15 +381,11 @@ def detail(*args):
 
 
 # Console severity colors for the exit-path messages printed to stderr
-# (the detail log stays plain). Same convention as the tour script:
-# on unless NO_COLOR is set or CAMOFOX_COLOR=never; the message text
-# itself is untouched inside the span, so grep keeps working.
-_COLOR = (not os.environ.get("NO_COLOR")
-          and os.environ.get("CAMOFOX_COLOR", "always") != "never")
-
-
+# (the detail log stays plain). House style, same as the tour script:
+# always on, no opt-out — the eye catches color before text. The
+# message itself is untouched inside the span, so grep keeps working.
 def _paint(s, code):
-    return f"\033[{code}m{s}\033[0m" if _COLOR else s
+    return f"\033[{code}m{s}\033[0m"
 
 
 # Generic modal dismissal for the keep-alive tools. The MECHANISM is
