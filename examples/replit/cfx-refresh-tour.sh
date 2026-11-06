@@ -39,6 +39,14 @@ INTERVAL="${TOUR_INTERVAL_S:-180}"
 # early-failed stops (0 = never). A stop that serves its full dwell (or
 # exits 0) resets the count.
 MAX_EARLY="${TOUR_MAX_EARLY_FAILURES:-3}"
+# Log colors, setup-script style: severity you can scan at a glance.
+# On unless NO_COLOR is set or TOUR_COLOR=never. The phrases stay plain
+# text inside the color span, so grep on the log keeps working.
+if [ -z "${NO_COLOR:-}" ] && [ "${TOUR_COLOR:-always}" != "never" ]; then
+  C_STOP=$'\033[0;36m' C_OK=$'\033[0;32m' C_WARN=$'\033[1;33m' C_ERR=$'\033[1;31m' C_DIM=$'\033[2m' C_RST=$'\033[0m'
+else
+  C_STOP="" C_OK="" C_WARN="" C_ERR="" C_DIM="" C_RST=""
+fi
 PY="$(command -v python3 || ls /nix/store/*-python3-3.1*/bin/python3 2>/dev/null | head -1)"
 CLI=".agents/skills/replit/scripts/camofox.py"
 
@@ -68,7 +76,7 @@ while true; do
   for url in "${LINKS[@]}"; do
     slug="$(slug_for "$url")"
     sess="tour-$slug"
-    echo "[$(date +%H:%M:%S)] stop: $slug ($url) session=$sess dwell=${DWELL}s"
+    echo "${C_STOP}[$(date +%H:%M:%S)] stop: $slug ($url) session=$sess dwell=${DWELL}s${C_RST}"
     args=(--user "$USER_ID" --session "$sess" --wait 10 --tools refresh-page
           --interval "$INTERVAL" --url "$url" --screenshot "$SHOT_DIR"
           --log-file "logs/tour-$slug.log")
@@ -78,17 +86,17 @@ while true; do
     rc=0
     timeout "$DWELL" "$PY" -u "$CLI" "${args[@]}" || rc=$?
     if [ "$rc" != 0 ] && [ "$rc" != 124 ]; then
-      echo "*** stop FAILED early (rc=$rc): $slug - see logs/tour-$slug.log (content checker / crash) ***"
+      echo "${C_WARN}*** stop FAILED early (rc=$rc): $slug - see logs/tour-$slug.log (content checker / crash) ***${C_RST}"
       early_fails=$((early_fails + 1))
     else
       early_fails=0
     fi
     "$PY" "$CLI" --user "$USER_ID" --session "$sess" --close || true
-    echo "[$(date +%H:%M:%S)] closed: $slug"
+    echo "${C_DIM}[$(date +%H:%M:%S)] closed: $slug${C_RST}"
     if [ "$MAX_EARLY" != 0 ] && [ "$early_fails" -ge "$MAX_EARLY" ]; then
-      echo "*** tour ABORTED: $early_fails consecutive early failures (TOUR_MAX_EARLY_FAILURES=$MAX_EARLY) - exiting ***"
+      echo "${C_ERR}*** tour ABORTED: $early_fails consecutive early failures (TOUR_MAX_EARLY_FAILURES=$MAX_EARLY) - exiting ***${C_RST}"
       exit 1
     fi
   done
-  echo "[$(date +%H:%M:%S)] round complete - restarting tour"
+  echo "${C_OK}[$(date +%H:%M:%S)] round complete - restarting tour${C_RST}"
 done

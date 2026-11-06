@@ -944,6 +944,13 @@ Low-memory rules for keep-alive work:
   (e.g. every stop failing the checker on one stale cookie jar) stops
   the workflow instead of looping rounds forever. Like `--dismiss`,
   the mechanism is generic and the needles are caller data.
+- **Log colors (tour + client).** Severity you can scan: tour stops
+  cyan, `closed:` dim, round-complete green, `FAILED early` bold
+  yellow, `ABORTED` bold red; the client's two stderr exit messages
+  (content check, max failures) print bold red while its detail log
+  stays plain. On by default; `NO_COLOR=1` (either side) or
+  `TOUR_COLOR=never` / `CAMOFOX_COLOR=never` turns it off. Message
+  text is untouched inside the span, so grep on the logs still works.
 
 ## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
 

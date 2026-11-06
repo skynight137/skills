@@ -380,6 +380,18 @@ def detail(*args):
     print(*args, file=_LOGF if _LOGF is not None else sys.stdout, flush=True)
 
 
+# Console severity colors for the exit-path messages printed to stderr
+# (the detail log stays plain). Same convention as the tour script:
+# on unless NO_COLOR is set or CAMOFOX_COLOR=never; the message text
+# itself is untouched inside the span, so grep keeps working.
+_COLOR = (not os.environ.get("NO_COLOR")
+          and os.environ.get("CAMOFOX_COLOR", "always") != "never")
+
+
+def _paint(s, code):
+    return f"\033[{code}m{s}\033[0m" if _COLOR else s
+
+
 # Generic modal dismissal for the keep-alive tools. The MECHANISM is
 # site-agnostic — find a visible dialog whose text mentions a caller-given
 # needle, click ITS close control — while the needle itself is data the
@@ -477,7 +489,7 @@ def check_fail_text(key, user, tab, needles):
            f"{list(needles)} (session state is not what this loop exists "
            f"to keep alive — e.g. logged out / stale cookies). Exiting.")
     detail(msg)
-    print(msg, file=sys.stderr, flush=True)
+    print(_paint(msg, "1;31"), file=sys.stderr, flush=True)
     sys.exit(1)
 
 
@@ -546,7 +558,7 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
                            f"cycles (refresh + reopen) — exiting. "
                            f"Last error: {r}")
                     detail(msg)
-                    print(msg, file=sys.stderr, flush=True)
+                    print(_paint(msg, "1;31"), file=sys.stderr, flush=True)
                     sys.exit(1)
         else:
             fails = 0
