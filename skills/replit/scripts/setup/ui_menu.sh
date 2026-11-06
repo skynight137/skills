@@ -31,6 +31,7 @@ _MENU_ITEMS=(
   "ori|ORI (AI Coding)"
   ""
   "camofox|Camofox browser (anti-detection Firefox server)"
+  "lightpanda|Lightpanda browser (lightweight CDP engine — keepalive tours)"
   "rclone|rclone (cloud storage sync)"
   "qbt|qBittorrent-nox (headless BitTorrent)"
   "aria2|aria2c (download utility)"
@@ -87,6 +88,7 @@ _status_init() {
     "tailscale|tailscale"
     "sshx|sshx"
     "camofox|camofox-browser"
+    "lightpanda|lightpanda"
     "llm-wiki|run-public.sh"
   )
   local npm_root; npm_root="$(npm root -g 2>/dev/null || true)"
@@ -113,6 +115,13 @@ _status_init() {
       ver="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' \
         "$npm_root/@askjo/camofox-browser/package.json" 2>/dev/null | head -1 || true)"
       [[ -n "$ver" ]] && ver="camofox-browser $ver"
+    elif [[ "$bin" == "lightpanda" ]]; then
+      # Lightpanda has no --version FLAG (it exits 1 as an unknown
+      # command, and the generic probe would read its error line as a
+      # version): the probe is the `version` SUBCOMMAND, which prints
+      # the bare version.
+      ver="$("$path" version 2>/dev/null | head -1 || true)"
+      [[ -n "$ver" ]] && ver="lightpanda $ver"
     elif [[ -n "$path" ]]; then
       ver="$("$path" --version 2>&1 | grep -v '^Picked up' | head -1 || true)"
     fi
@@ -246,6 +255,7 @@ _menu_apply() {
       hermes)   INSTALL_HERMES=true ;;
       ori)      INSTALL_ORI=true ;;
       camofox)  INSTALL_CAMOFOX=true ;;
+      lightpanda) INSTALL_LIGHTPANDA=true ;;
       llmwiki|llm-wiki) INSTALL_LLM_WIKI=true ;;
       rclone)   INSTALL_RCLONE=true ;;
       qbt)      INSTALL_QBT=true ;;

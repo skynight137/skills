@@ -56,6 +56,14 @@ Options:
                         Camoufox engine into the persistent cache, applies the Replit
                         lib closure + WebGL auto-skip, then run: camofox-browser
                         (API on http://127.0.0.1:9377)
+  -lp, --lightpanda         Install Lightpanda (lightweight CDP browser engine,
+                        pinned 1.0.3 binary, SHA256-verified) + the keep-alive
+                        tour venv under \$LIGHTPANDA_HOME
+                        (\$XDG_CONFIG_HOME/lightpanda). No resident server:
+                        scripts/lp-tour.sh opens one project at a time
+                        (~380 MB per stop, zero idle). Not part of --all;
+                        install it explicitly where a fleet tour runs.
+                        See references/lightpanda.md
   -lw, --llm-wiki           Install the llm-wiki server (knowledge base for agents):
                         scripts/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
                         AppImage + shared token (.env, chmod 600). Start with
@@ -87,7 +95,7 @@ Options:
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|zsh|oc|opencode|ollama|
-                        claude|hermes|ori|camofox|hermes-chromium|llm-wiki|
+                        claude|hermes|ori|camofox|lightpanda|hermes-chromium|llm-wiki|
                         rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx
                         removes one tool
                         (tailscale = biner + sshd join + state + wiring ssh).
@@ -98,8 +106,9 @@ Options:
                         restorable via `hermes import`) and the archive copied
                         to $XDG_CONFIG_HOME/hermes/hermes-backup.zip BEFORE its
                         dir is removed (left intact if the backup fails);
-                        ollama models and
-                        camofox server state are preserved.
+                        ollama models,
+                        camofox server state and the lightpanda tour config +
+                        cookie jar are preserved.
                         NON-INTERACTIVE: a bare \`--clean\` with no target is
                         REFUSED (it would wipe everything, Hermes included).
                         Use \`--clean all -y\` to confirm a full wipe.
@@ -149,6 +158,7 @@ parse_args() {
       -j|--join)                 INSTALL_JOIN=true; INSTALL_TAILSCALE=true ;;
       -w|--workflow)             INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
       -cm|--camofox)             INSTALL_CAMOFOX=true ;;
+      -lp|--lightpanda)          INSTALL_LIGHTPANDA=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       -lw|--llm-wiki)            INSTALL_LLM_WIKI=true ;;
       -d|--doctor)               DOCTOR=true ;;
@@ -195,7 +205,7 @@ parse_args() {
      && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
      && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN \
-     && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
+     && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI && ! $INSTALL_LIGHTPANDA \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi

@@ -1,0 +1,169 @@
+# Lightpanda — the lightweight CDP engine for keep-alive tours
+
+Lightpanda is a single static headless-browser binary that speaks CDP
+(`lightpanda serve`). In this skill it exists for ONE job: the
+session keep-alive tour (`scripts/lp-tour.py`), where a fleet of
+Replit workspaces is held inside its idle tolerance by an open
+cadence — open a project logged-in, hold the tab for the dwell,
+close, next (the mechanism is the cadence, not the engine; see
+references/session-keepalive.md for the measured engine comparison).
+
+Pick it over Camofox when the job is open-and-hold only: ~380 MB
+per stop and **zero idle cost** (no resident server), against
+Camofox's 550–650 MB per tab plus a ~174–200 MB resident server.
+Pick Camofox when the target fights back (Cloudflare/Turnstile/WAF
+fingerprinting, interactive browsing, MCP): it is the anti-detection
+Firefox and remains the fleet-proven production engine.
+
+## Install
+
+```bash
+bash setup.sh --lightpanda    # alias -lp; NOT part of --all
+bash setup.sh --doctor        # probes `lightpanda version` + the tour venv
+bash setup.sh --clean lightpanda   # binary + venv go; config + jar stay
+```
+
+The lane is explicit-only (like `--llm-wiki`): a tour host opts in.
+The installer pins **Lightpanda 1.0.3** (`LIGHTPANDA_VERSION` in
+setup.sh). The release publishes **no checksum asset**, so
+`setup/lightpanda.sh` carries the per-arch size + SHA256 pins
+computed from the official downloads:
+
+| arch | asset | bytes | sha256 |
+|---|---|---|---|
+| x86_64 | `lightpanda-x86_64-linux` | 77403464 | `53eb34da…82e8b0` |
+| aarch64 | `lightpanda-aarch64-linux` | 74485832 | `20a5348b…d78549` |
+
+A download that fails the size or hash check dies before anything is
+placed. The pins move with the version: bump `LIGHTPANDA_VERSION`
+without refreshing them and the install refuses, loudly, by design.
+
+Probe trap: the binary has **no `--version` flag** (unknown command,
+exit 1). The version probe is the subcommand: `lightpanda version`
+prints `1.0.3`.
+
+### Layout — `$LIGHTPANDA_HOME` (`$XDG_CONFIG_HOME/lightpanda`)
+
+| path | what |
+|---|---|
+| `lightpanda` | the engine binary (symlinked into `$XDG_BIN_HOME`) |
+| `venv/` | tour client venv: python + playwright **client library only** (`connect_over_cdp`; no browser download — the engine is the browser), pinned to `LIGHTPANDA_PLAYWRIGHT_VERSION` |
+| `.env` | operator tour config (never written by setup) |
+| `.env.example` | fill-in template, refreshed by every `--lightpanda` run |
+| `cookies.json` | default login jar (`LP_COOKIES` overrides) |
+| `logs/` | per-stop server logs (`lp-server-<project>.log`) |
+
+`--clean lightpanda` removes the binary, the symlink and the venv.
+`.env` and the cookie jar are operator data and are **preserved**
+(delete `$LIGHTPANDA_HOME` by hand to wipe them) — the same rule as
+Camofox server state.
+
+## Tour config
+
+Fleet "big env" rule: a var already set in the **system environment
+wins**; `$LIGHTPANDA_HOME/.env` only fills gaps. `lp-tour.py` logs
+one `config: <VAR>: from …` line per var at startup — name + source
+only — so a run's config is auditable, never silent.
+
+| var | default | meaning |
+|---|---|---|
+| `LP_LINKS` | — (required) | comma/whitespace-separated project URLs, in stop order. Put the tour's own host FIRST: a pilot that opens itself first heals itself before touring the others |
+| `LP_COOKIES` | `$LIGHTPANDA_HOME/cookies.json` | login jar (browser-export or Playwright JSON) for an account that can open every link |
+| `TOUR_DWELL_S` | 60 | seconds the tab is held per stop |
+| `TOUR_GAP_S` | 0 | sleep between stops (tab closed) |
+| `TOUR_MAX_EARLY_FAILURES` | 3 | consecutive non-SHELL stops before `*** tour ABORTED` + exit 1; a SHELL stop resets the count; 0 = never |
+| `LP_POLL_S` | 150 | budget for the shell marker to appear |
+| `LP_BASE_PORT` | 19401 | first CDP port; stop *i* uses base+*i* |
+| `LP_MAX_ROUNDS` | 0 | 0 = tour forever |
+| `LP_ONLY` | — | run only the stop whose last path segment matches |
+| `LIGHTPANDA_BIN` | `$LIGHTPANDA_HOME/lightpanda`, then PATH | engine override |
+
+Round time is `len(LP_LINKS) × (TOUR_DWELL_S + TOUR_GAP_S)` — the
+round must fit inside the target platform's idle tolerance with
+margin (see the staged dwell ladder in session-keepalive.md).
+
+## Running it
+
+```bash
+bash scripts/lp-tour.sh --check   # preflight: config sources, binary, jar
+bash scripts/lp-tour.sh           # the tour (stdout = the tour log)
+```
+
+`lp-tour.sh` is a justified shim, not a wrapper: it assembles the
+env the program cannot assemble for itself — the venv's greenlet
+needs `libstdc++.so.6` from the nix store on `LD_LIBRARY_PATH`
+**before** python starts, and it resolves the venv python. All
+logic lives in `lp-tour.py`.
+
+For a `.replit` workflow, point the task at `lp-tour.sh` and
+redirect stdout to a file under `$REPL_HOME/logs/` (workflow
+consoles never stream runtime logs — references/exposing-ports.md);
+workflow names and wiring stay the operator's, as with every other
+tool in this skill.
+
+## The mechanics (proven — do not improvise around them)
+
+1. **One fresh `lightpanda serve` per stop**, spawned for that stop
+   and torn down after it. Zero idle cost is the whole point; a
+   resident server throws it away.
+2. **Server output goes to a per-stop log FILE, never a pipe.** An
+   undrained PIPE wedges the server silently (the first trial's
+   240 s hang was this harness bug, not the engine).
+3. **Cookies plant ONLY via the native `--cookie` loader**, with
+   the jar converted to a CDP cookie array (the loader also accepts
+   Netscape format; the tour standardizes on the array). Playwright's
+   `Storage.setCookies` fails against Lightpanda with
+   `BrowserContextNotLoaded` — CDP cookie planting does not work,
+   do not switch to it. The jar is re-converted **every round**, so
+   a re-imported jar is picked up without restarting the tour.
+4. **Always navigate via `ctx.new_page()`.** The default CDP page is
+   a non-navigable STARTUP session; navigating it goes nowhere.
+5. **Poll for the shell marker** (`Files` / `Invite` / `Console` /
+   `Shell` / `Personal workspace` / the project name, on a
+   >200-char body). Cloudflare's interstitial clears **by itself**
+   in ~7–18 s; time-to-shell observed 13–25 s. Never click through
+   the interstitial.
+6. **Verdicts per stop:** `SHELL` / `LOGGED-OUT-WALL` (visible text
+   contains both `Log in` and `Sign up`, confirmed by a second probe
+   5 s later — the camofox `--fail-text` discipline) / `CF-STALL`
+   (poll budget spent on the `Just a moment...` title) / `ERROR` /
+   `UNKNOWN`. After a SHELL verdict the tab is held for the full
+   dwell and re-probed — `still-shell` is logged, and the engine's
+   peak RSS for the stop is sampled from `/proc/<pid>/smaps_rollup`.
+7. **Teardown is verified**: leftover `lightpanda serve` processes
+   are killed before and after every stop, and a signal to the tour
+   kills the live server with it.
+
+## Evidence and caveats
+
+Measured 2026-11-06 on the jafibaw wing (full write-up in the fleet
+notes; comparison table in references/session-keepalive.md):
+
+- Decisive single run (pilot `repl-cfx` → `repl-11`): cookies
+  planted via the native loader, page rendered logged-in,
+  Cloudflare cleared in ~7 s, time-to-shell 16.6 s, full 60 s hold
+  with the shell still up after, footprint one process at
+  297–380 MB RSS≈PSS, clean teardown.
+- Live tour trial (same pilot, 4 stops, dwell 60 s / gap 0): round 1
+  verified **4/4 SHELL**, per-stop RSS peaks 373–391 MB — and the
+  user then let the tour run unattended as the wing's keepalive.
+
+Caveats, plainly: the decisive run is **n=1 on one target** and
+verification is **marker-level** (the same standard the other lanes
+were judged by). Repeat reliability across days and behaviour on
+other accounts' fleets were unproven when this lane landed; Camofox
+remains the proven production engine, and this lane earns trust the
+same way it did — by running.
+
+## Troubleshooting
+
+| symptom | cause / fix |
+|---|---|
+| `BrowserContextNotLoaded` on cookie work | you planted cookies over CDP — use the native `--cookie` loader (mechanic 3) |
+| server starts but never answers, no error | its stdout is an undrained pipe — redirect to a per-stop log file (mechanic 2) |
+| navigation silently does nothing | you navigated the default CDP page — `ctx.new_page()` first (mechanic 4) |
+| every stop is `LOGGED-OUT-WALL` | the jar is stale/expired — re-export it from the account's browser session and drop it at `LP_COOKIES`; the tour picks it up next round |
+| `CF-STALL` on one stop | Cloudflare did not clear inside `LP_POLL_S` this time; transient stalls happen — the breaker only aborts on *consecutive* failures |
+| tour dies at start: `lightpanda binary missing` | run `bash setup.sh --lightpanda` (or `--fix` to restore the symlink) |
+| venv python dies on `libstdc++.so.6` | you ran `lp-tour.py` directly — run it via `lp-tour.sh`, which assembles `LD_LIBRARY_PATH` |
+| `lightpanda --version` exits 1 | by design — the probe is `lightpanda version` |

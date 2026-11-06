@@ -86,6 +86,14 @@ fix_derive_wiring() {
     camofox_write_env_snippet
     camofox_write_launcher
   fi
+  # Lightpanda: the home binary is the marker. Re-assert the PATH symlink
+  # and the config template so --fix repairs a wiped bin entry or a lost
+  # .env.example without a reinstall.
+  if [[ -x "$LIGHTPANDA_BIN" ]]; then
+    record_tool_env_vars LIGHTPANDA_HOME LIGHTPANDA_BIN; record_tool_path_dirs "$XDG_BIN_HOME"
+    ln -sfn "$LIGHTPANDA_BIN" "$XDG_BIN_HOME/lightpanda"
+    lightpanda_write_env_example
+  fi
   local b
   # Direct-binary tools own nothing but their file in $XDG_BIN_HOME, so one
   # presence check per tool is the whole wiring.

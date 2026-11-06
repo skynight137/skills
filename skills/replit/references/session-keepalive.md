@@ -6,6 +6,26 @@ logged out. Verified against `camofox-browser` on this box (Sep 2026).
 it ran turned out not to be the keep-alive mechanism — the caller's
 open cadence is. See the cadence note in references/camofox.md.)
 
+## Which engine runs the tour — measured comparison (2026-11-06)
+
+The keep-alive mechanism is the **open cadence** (round = stops ×
+(dwell + gap) must fit inside the target platform's idle tolerance),
+and it is engine-agnostic: anything that can open the project
+logged-in, hold it for the dwell and close can run a tour. Three
+engines were measured on the same open-only job, same RSS method
+per row:
+
+| engine | cost while a stop is held | idle cost | Cloudflare passage | verdict |
+|---|---|---|---|---|
+| **Lightpanda 1.0.3** (`scripts/lp-tour.py`, references/lightpanda.md) | ~370–391 MB total (one process, RSS≈PSS) | **zero** — one fresh `serve` per stop, torn down after | interstitial clears by itself in ~7–18 s; 4/4 SHELL in the live tour trial | **proven for the open-only job** — the cheap lane |
+| **Camofox** (`camofox.py --tools open-page`) | 550–650 MB per tab **plus** the resident server | ~174–200 MB resident server, always on | the anti-detection Firefox lane; passes what the others cannot | **production engine** — the proven, heavy one |
+| Playwright + bundled Chromium | ~1.9–2.1 GB RSS per tab (≈3× a camofox tab like-for-like) | zero | fresh profile 0/7 reached Replit; persistent profile passed once, then stalled repeatedly despite a stored `cf_clearance`; headless blocked outright | **falsified on both axes** — cost and edge; not a tour engine |
+
+Everything below this section (the two reapers, the persistence
+plugin, the silent-reopen trap) is **Camofox-specific**: Lightpanda
+holds no session state between stops at all — each stop is a fresh
+server and a fresh page, kept alive only by the next round's open.
+
 ## Failure triage: opaque 500 on `POST /sessions/:userId/cookies`
 
 `camofox.py` prints `import failed: {'_http_error': 500, '_body': '{"error":"Internal server error"}'}`

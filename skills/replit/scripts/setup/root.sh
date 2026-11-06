@@ -129,6 +129,8 @@ manifest_record_for() {
     camofox) manifest_record camofox "$(camofox_pkg_dir 2>/dev/null || true)" "$CAMOUFOX_INSTALL_DIR" \
                "$XDG_BIN_HOME/camofox-browser" "$XDG_BIN_HOME/launch-camofox-browser" \
                "$CAMOUFOX_CLOSURE_FILE" "$CAMOUFOX_ENV_SNIPPET" ;;
+    lightpanda) manifest_record lightpanda "$LIGHTPANDA_BIN" "$LIGHTPANDA_VENV" \
+               "$XDG_BIN_HOME/lightpanda" ;;
     hermes-chromium) manifest_record hermes-chromium "$HERMES_CHROME_STATE" "$XDG_BIN_HOME/launch-hermes-chrome" ;;
     llm-wiki) manifest_record llm-wiki "${LLM_WIKI_HOME:-${REPL_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}/llmwiki-app}" ;;
     rclone)  manifest_record rclone "$XDG_BIN_HOME/rclone" ;;
