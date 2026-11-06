@@ -1,2 +1,7 @@
+# Git worktrees (local scratch checkouts)
+.worktree/
+.worktrees/
+
+# Python bytecode (validation smokes)
 __pycache__/
 *.pyc
