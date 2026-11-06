@@ -29,23 +29,23 @@ still usable from the agent by driving the browser canvas:
   the xterm. It needs a real PTY on the far side — a command that fails to allocate
   one (plain nohup without a tty) renders a dead canvas. `bash` inside the xterm
   works; some REPLs do not.
-- **Update a skill ON the far box with `skills add`, not file sync.** The CLI clones
-  from GitHub: `npx -y skills add owner/repo#branch` (branch refs work until the
-  branch is deleted on merge — afterwards use the default branch, `owner/repo`
-  alone). It needs `node` and `npx` on PATH because the CLI's shebang is
-  `env node`; on a minimal Replit box PATH them from the nix store
-  (`/nix/store/*nodejs-slim-*/bin`, `*-nodejs-slim-*-npm/bin`) for non-interactive
-  ssh. The installed copy lands in `.agents/skills/<name>/`, and `npx` may print an
-  npm-upgrade notice before the real output — judge by the folder appearing, not by
-  the last line.
-- **Keep the install PLAIN — `.agents` is the only store on a Replit workspace.**
-  `npx -y skills <author>/<repo>` already distributes into `WS/.agents` by
-  default. Agent-selection flags (`--all`, `--agent …`) make the CLI ALSO write
-  per-agent copies into dirs OUTSIDE `.agents` (`.claude/skills/`, `.codex/…`) —
-  redundant duplicates that drift from the canonical copy; `--json` adds nothing
-  the folder check above doesn't. Verified 2026-11-05: `--all --json` runs left
-  `.claude/skills/{muse,replit}` spill on repl-test + repl-cfx (removed); plain
-  runs leave `.agents` only.
+- **Update a skill ON the far box with git, not file sync and not npx.**
+  `git clone https://github.com/skynight137/skills skills` in the workspace;
+  later updates are `git -C skills pull`. git is the reason: a fresh Replit
+  box has no `node`/`npx` until something installs them (the old npx route
+  spent a whole Node install on the installer alone), while git is basic
+  tooling that is effectively always present. The clone carries the full
+  repo: bundles at `skills/skills/<name>/`, payloads at
+  `skills/scripts/<name>/`. A merged feature branch is deleted, so clones
+  track the default branch and `git pull` is the whole update.
+- **Boxes wired before the git route still run from `.agents`.** The npx-era
+  layout landed bundles in `WS/.agents/skills/<name>/`, and existing
+  workflow args still point there; that copy goes stale the moment updates
+  move to the clone. When you rewire a box, move every workflow arg to the
+  clone's paths in the same edit — never leave two live copies drifting.
+  (The retired npx route also taught: agent-selection flags wrote redundant
+  per-agent copies outside `.agents` — `.claude/skills/`, `.codex/…` —
+  removed wherever found.)
 
 Preferred: real `sshd` on B, key-only, plus a reachability path. Then the agent
 works from its own terminal.

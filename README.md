@@ -12,20 +12,27 @@ operator, and fetches it (clone, or a single file via `curl`).
 
 ## Install & run
 
-Install the (slim) bundle with the skills CLI:
+The standard route is a plain git clone — git is the only tool it needs,
+which matters on fresh VMs that have no Node.js yet (the npx route spent a
+whole Node install on the installer alone):
+
+```bash
+git clone https://github.com/skynight137/skills          # bundles + payloads + docs + full history
+git -C skills pull                                       # every later update is just this
+bash scripts/<skill>/setup.sh [args...]                  # per-skill entry point, from the clone
+```
+
+Bundle-only install (curated memory without payloads, for agents that want
+the smallest possible context):
 
 ```bash
 npx -y skills add skynight137/skills -s muse     # just the muse skill
 npx -y skills add skynight137/skills -s replit   # just the replit skill
 ```
 
-Payloads are fetched on demand, never assumed present:
+Or a single payload file, fetched on demand:
 
 ```bash
-git clone https://github.com/skynight137/skills          # recommended: payloads + docs + full history
-bash scripts/<skill>/setup.sh [args...]                  # per-skill entry point, from the clone
-
-# or a single payload file:
 curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/<skill>/<path> -o <dest>
 ```
 
