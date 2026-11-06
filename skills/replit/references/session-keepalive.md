@@ -1,7 +1,10 @@
 # Camofox session keep-alive — the two reapers
 
-Source of truth for why a long `--tools refresh-page` loop silently ends up
+Source of truth for why a long-held `--tools open-page` tab silently ends up
 logged out. Verified against `camofox-browser` on this box (Sep 2026).
+(The tool was named `refresh-page` until 2026-11-06; the refresh loop
+it ran turned out not to be the keep-alive mechanism — the caller's
+open cadence is. See the cadence note in references/camofox.md.)
 
 ## Failure triage: opaque 500 on `POST /sessions/:userId/cookies`
 
@@ -133,18 +136,19 @@ servers run the defaults: tab `300000`, session `600000`, browser idle
 `300000`. If you want a different value, set it in the server's env yourself;
 the tunables are documented in references/camofox.md.
 
-The binding constraint for a keep-alive loop is therefore the **tab**
-threshold: a session-touching request must land at least every 300s, and
-with the 60s reaper tick the safe rule is `interval + 60 < 300` with margin
-to spare. `--interval 180` (the `camofox.py` default) peaks at ~240s of
-inactivity in the worst tick phase; `--interval 240` leaves under a minute
-of slack; `--interval 300` **races** the reaper — jitter alone gets tabs
-reaped, then the session, after which the login survives only via the
-persistence plugin's restore.
+The binding constraint for a tab HELD open is therefore the **tab**
+threshold: a session-touching request must land at least every 300s, or
+the tab is reaped, then the session, after which the login survives
+only via the persistence plugin's restore. There is no client
+`--interval` anymore (removed 2026-11-06 with the refresh loop): a
+caller either touches a held tab inside that window itself, or — the
+fleet-tour pattern — never holds a tab anywhere near that long and
+instead re-opens on a round, where the binding clock is the TARGET
+platform's idle tolerance, not this reaper.
 
-**Do not** just raise `--interval` toward the 5min tab reaper and call it
-done — a reaped tab empties the session, the session reaper follows, and
-the context (with its in-memory cookie jar) is closed.
+**Do not** hold a tab and assume it stays alive — a reaped tab empties
+the session, the session reaper follows, and the context (with its
+in-memory cookie jar) is closed.
 
 ## Pitfall: an env file is where an override would hide
 

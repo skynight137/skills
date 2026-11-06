@@ -680,23 +680,24 @@ python3 scripts/camofox.py                     # bare = both summaries
 # import (or re-import) cookies into an account
 python3 scripts/camofox.py --cookies /path/cookies.json --user rl
 
-# open + keep-alive loop, reusing persisted cookies (no --cookies needed)
-python3 scripts/camofox.py --tools refresh-page \
+# open a page once and hold it, reusing persisted cookies (no --cookies
+# needed) — the open itself is what wakes the target workspace
+python3 scripts/camofox.py --tools open-page \
   --url 'https://replit.com/@me/MyProject' --user rl \
-  --session live-session --interval 180
+  --session live-session
 
-# same loop as a .replit workflow: --log-file keeps the workflow terminal
-# to the startup summary (per-cycle detail goes to the workspace log file;
+# same hold as a .replit workflow: --log-file keeps the workflow terminal
+# to the startup summary (detail goes to the workspace log file;
 # an unbounded console hangs the Replit UI — references/exposing-ports.md)
-python3 scripts/camofox.py --tools refresh-page \
+python3 scripts/camofox.py --tools open-page \
   --url 'https://replit.com/@me/MyProject' --user rl \
-  --session live-session --interval 180 --log-file logs/refresh-page.log
+  --session live-session --log-file logs/open-page.log
 
 # screenshot currently-open tab(s) to PNGs and exit (one-shot, no loop)
 python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
 ```
 
-- `--wait N` (default 180): polls `GET /health` until the server is up
+- `--wait-service-ready N` (default 180): polls `GET /health` until the server is up
   before acting. **Required** — `setup.sh --camofox` can take minutes (npm
   install + engine fetch + browser boot), and Replit `waitForPort` only
   gates the *provision* task, not parallel consumers, so command-too-early
@@ -735,8 +736,9 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   (cookies/profiles/traces); only list modes read it. `$CAMOFOX_ROOT` resolves
   from the environment, else the `${REPL_HOME:-$HOME}/camofox` fallback — never
   a relative or guessed-wrong path.
-- Full flag set: `--cookies --user --session --tools --url --interval` +
-  `--screenshot --full-page --wait --env --state`. `--user list` /
+- Full flag set: `--cookies --user --session --tools --url` +
+  `--screenshot --full-page --wait-service-ready --env --state --close` +
+  `--log-file --max-failures --dismiss --fail-text`. `--user list` /
   `--session list` are listing sentinels; a bare invocation prints both.
 
 `--cookies` is optional and only needed to (re)import; **cookies persist
@@ -801,12 +803,15 @@ it is the 60s active probe (`server.js:6978`) failing and calling
 `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, which kills
 in-flight requests. A restart under a live loop is always the probe.
 
-With the tab threshold at its 300s default, the loop period must satisfy
-`interval + 60 < 300` with margin (the reaper ticks every 60s): use
-`--tools refresh-page` with **`--interval 180`** (the client default; it
-peaks at ~240s worst-phase inactivity). `--interval 300` races the reaper.
-Cron is the wrong tool (1/min floor + fresh process
-each tick); a long-running loop is right.
+With the tab threshold at its 300s default, a HELD tab that nobody
+touches is reaped after ~300s — but that reaper is not what keeps a
+target alive. `open-page` has no refresh period (the `--interval` flag
+was removed 2026-11-06, with the tool's rename from `refresh-page`):
+it opens once and holds, and keep-alive cadence belongs to the
+caller — re-open each target on a round shorter than the TARGET
+platform's idle tolerance. For the Replit fleet the binding clock
+proved to be Replit's own idle recycle, not this reaper: a 5-minute
+round of 30s opens, tabs closed per stop, holds 10 nodes up.
 
 Verify it is actually working by **tab identity, not freshness**: screenshots
 keep updating even while the tab is being reaped and reopened. Sample
@@ -824,25 +829,21 @@ shots every live tab for that user (indexed `_0`... when >1).
 - `--full-page` defaults on; `--no-full-page` for viewport-only (faster on
   lazy-rendered pages).
 
-**`--screenshot` + `--tools refresh-page` compose** into a keep-alive loop
-that also snapshots each cycle (this is what the `.replit` "alive" workflow
-uses). They are NOT mutually exclusive — combined, they run the loop and
-screenshot on every tick, overwriting the same file (no disk growth):
+**`--screenshot` + `--tools open-page` compose**: the screenshot is
+taken once, right after the open, while the tab is held (this is what
+the `.replit` "alive" workflow uses). They are NOT mutually exclusive —
+combined, they open, snapshot the loaded page, and hold:
 
 ```
-t=0      open (page loads) → screenshot
-t=180    screenshot (settled page) → refresh
-t=360    screenshot → refresh ...
+t=0      open (page loads) → screenshot → hold until the caller stops it
 ```
 
-The loop's failures are **bounded**: when a cycle's refresh fails, the
-client tries to reopen the tab; a cycle counts as failed only when the
-reopen fails too, and after `--max-failures N` **consecutive** failed
-cycles (default 3) the loop prints the last error and **exits non-zero**
-instead of spinning forever against a dead server or a browser that can
-no longer launch. Any success (refresh or reopen — e.g. after a browser
-restart) resets the counter, so transients never accumulate. Set
-`--max-failures 0` only if you truly want the old unbounded behaviour.
+The open's failures are **bounded**: a failed open is retried, and
+after `--max-failures N` **consecutive** failed opens (default 3) the
+client prints the last error and **exits non-zero** instead of
+spinning forever against a dead server or a browser that can no
+longer launch. Set `--max-failures 0` only if you truly want retries
+without bound.
 
 Screenshot runs **before** the refresh in each cycle, so it captures the
 fully-loaded page from the previous reload, not a half-loaded one. `--screenshot`
@@ -869,7 +870,7 @@ the usual cause of the columns running together.
 - **`--session`** = a label for a *group of tabs* inside one user (API
   `listItemId`). Carries no auth. Same `--session` on re-open reattaches to
   the group — but reattach is to the GROUP, not to a tab: every
-  `refresh-page` process still creates its OWN tab in the group
+  `open-page` process still creates its OWN tab in the group
   (`POST /tabs` always creates). N processes sharing one `--session` =
   N tabs, not 1. `DELETE /tabs/group/:listItemId` clears the whole group;
   `camofox.py --user <u> --session <s> --close` is the CLI form.
@@ -889,7 +890,7 @@ processes at 498–580 MB RSS each). `/health`'s `memory.rssMb` counts
 only the node server (~200 MB) — judge memory by the system `free` and
 `/health`'s `activeTabs`, never by `rssMb` alone.
 
-Failure that taught this: one workflow ran **9 `refresh-page` tasks**
+Failure that taught this: one workflow ran **9 `refresh-page` tasks** (the tool's former name; now `open-page`)
 (9 project URLs, same user, same `--session repl`) — 9 processes →
 9 IDE tabs → the box's 8 GB was exhausted and the container died. It was
 not "10 tabs being heavy"; it is what each of those tabs *is*. Worse, an
@@ -910,7 +911,7 @@ Low-memory rules for keep-alive work:
 - **Never navigate a live IDE tab to another project's URL** (the
   1 → 10 spawn above). Close and create fresh instead.
 - **Clients dying does not close tabs.** A killed/timeout
-  `refresh-page` leaves its tab on the server until the browser's idle
+  `open-page` leaves its tab on the server until the browser's idle
   shutdown. Always `--close` groups you stop using; a stale group is
   invisible in the workflow list and keeps eating RAM.
 - Screenshots of the same user+session write the same filename — parallel
@@ -918,7 +919,7 @@ Low-memory rules for keep-alive work:
   other. Give parallel loops distinct sessions (and accept their tabs),
   or run sequentially.
 - **Dismiss upsell/limit modals before the screenshot** with
-  `--dismiss TEXT` (repeatable): after each load, `refresh-page` finds a
+  `--dismiss TEXT` (repeatable): after the load, `open-page` finds a
   visible dialog whose text contains TEXT and clicks its close control —
   e.g. `--dismiss 'Keep using Replit?'` closes Replit's Starter-limit
   upsell ("You've reached your Starter limit"), which otherwise sits in
@@ -927,8 +928,8 @@ Low-memory rules for keep-alive work:
   the caller (workflow args / tour script), and each attempt's outcome
   (`dismissed` / `not-found` / `found-no-close`) lands in the detail log.
 - **Assert the page is worth keeping alive** with `--fail-text TEXT`
-  (repeatable): after the tab opens and before every refresh,
-  `refresh-page` exits non-zero if the page's visible text contains
+  (repeatable): after the tab opens,
+  `open-page` exits non-zero if the page's visible text contains
   **all** of the given TEXTs (a conjunction — one common word in a
   project's own code must not trip it), confirmed by a second probe 5s
   later. This is the checker for the failure screenshots cannot flag:
@@ -1121,7 +1122,7 @@ Use a freshly generated key for each test run, store it in a file under the scra
 - Key selection: `load_key()` (`camofox.py:118`) sends `CAMOFOX_API_KEY` in preference to `CAMOFOX_ACCESS_KEY` whenever both are set. A server with the global gate on rejects the API key on `/tabs` (401), so `camofox.py` fails even though the access key is also set. On a build where `load_key()` still prefers the API key, `/tabs` returns 401 even with the access key set. Verified: API key alone → 401 on `/tabs`; access key alone → past the gate. Cookie import is the exception: it needs the API key, and the access key gets 403.
 - Verify certificates on the client machine. A sandbox that does not trust the Replit proxy root CA fails the same probe with `CERTIFICATE_VERIFY_FAILED`, and the script reports that as "not ready". Test the URL with `urllib` or `curl` first. Only the Replit root CA fixes this, not disabling verification.
 - Test `/health` with no key, then `/tabs` with no key (expect 401), then with the access key (expect past the gate).
-- `refresh-page` loops and never exits on its own. A `timeout` kill leaves the output empty, which looks like a failure. Confirm a tab operation from the server log (`tab created`, status 200) or from one direct `camofox.req` call, not from the loop's output.
+- `open-page` holds its tab and never exits on its own. A `timeout` kill leaves the output empty, which looks like a failure. Confirm a tab operation from the server log (`tab created`, status 200) or from one direct `camofox.req` call, not from the client's output.
 
 ## Verification (done)
 

@@ -8,8 +8,8 @@ Modes (sentinel values):
     camofox.py --user list              # list existing users (cookie jars)
     camofox.py --session list           # list live sessions (open tabs)
     camofox.py --user rl --cookies X    # import cookies into user rl
-    camofox.py --tools refresh-page --url URL [--user u] [--session s] \
-               [--cookies X] [--interval 180]   # open + keep-alive loop
+    camofox.py --tools open-page --url URL [--user u] [--session s] \
+               [--cookies X]   # open a page once and hold it open
 
 --cookies <json>: if present, (re)import into --user BEFORE any tool runs.
 Cookies otherwise persist per --user on disk and auto-reload — omit to reuse.
@@ -481,7 +481,7 @@ def check_fail_text(key, user, tab, needles):
     if _fail_text_probe(key, user, tab, needles) != "matched":
         detail("fail-text: clear on re-probe — continuing")
         return
-    msg = (f"refresh-page: CONTENT CHECK FAILED — page contains all of "
+    msg = (f"open-page: CONTENT CHECK FAILED — page contains all of "
            f"{list(needles)} (session state is not what this loop exists "
            f"to keep alive — e.g. logged out / stale cookies). Exiting.")
     detail(msg)
@@ -489,23 +489,46 @@ def check_fail_text(key, user, tab, needles):
     sys.exit(1)
 
 
-def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
-                      log_file=None, dismiss=(), max_failures=3,
-                      fail_text=()):
+def tool_open_page(key, user, session, url, shot_dir=None,
+                   log_file=None, dismiss=(), max_failures=3,
+                   fail_text=()):
     global _LOGF
     if log_file:
         os.makedirs(os.path.dirname(os.path.abspath(log_file)), exist_ok=True)
         _LOGF = open(log_file, "a", buffering=1)
-        detail(f"--- refresh-page start {time.strftime('%Y-%m-%d %H:%M:%S')} "
-               f"user={user} session={session} interval={interval}s url={url}")
-    r = req(key, "POST", "/tabs",
-            {"userId": user, "sessionKey": session, "url": url})
-    if "_http_error" in r or "_error" in r:
-        print(f"open failed: {r}", file=sys.stderr)
-        sys.exit(1)
+        detail(f"--- open-page start {time.strftime('%Y-%m-%d %H:%M:%S')} "
+               f"user={user} session={session} url={url}")
+    # Open ONCE — the open itself is the act that wakes the target
+    # workspace. There is deliberately NO refresh loop: a refresh was
+    # never what kept anything alive (the fleet ran a full day on
+    # 2026-11-06 with the refresh interval longer than the dwell, so
+    # zero refreshes ever fired, and the fleet stayed up on opens
+    # alone). The caller owns the cadence (one open per round) and how
+    # long the tab lives (e.g. a timeout wrapper); this tool just
+    # holds the tab open until it is stopped.
+    # Bounded failure on the open itself: count CONSECUTIVE failed
+    # opens and exit non-zero at max_failures (0 = retry forever), so
+    # a supervising caller sees a hard failure instead of a silent
+    # spin — a workflow that looks "running" while accomplishing
+    # nothing is worse than a dead one.
+    fails = 0
+    while True:
+        r = req(key, "POST", "/tabs",
+                {"userId": user, "sessionKey": session, "url": url})
+        if "_http_error" not in r and "_error" not in r:
+            break
+        fails += 1
+        detail(f"open failed ({fails}/{max_failures} consecutive):", r)
+        if 0 < max_failures <= fails:
+            msg = (f"open-page: {fails} consecutive failed opens — "
+                   f"exiting. Last error: {r}")
+            detail(msg)
+            print(_paint(msg, "1;31"), file=sys.stderr, flush=True)
+            sys.exit(1)
+        time.sleep(5)
     tab = r.get("tabId", "")
-    print(f"refresh-page: user={user} session={session} tab={tab[:8]} "
-          f"interval={interval}s url={url}"
+    print(f"open-page: user={user} session={session} tab={tab[:8]} "
+          f"url={url}"
           + (f" screenshots={shot_dir}" if shot_dir else "")
           + (f" log={log_file}" if log_file else ""))
     if dismiss:
@@ -514,54 +537,13 @@ def tool_refresh_page(key, user, session, url, interval, shot_dir=None,
         check_fail_text(key, user, tab, fail_text)
     if shot_dir:
         tool_screenshot(key, user, session, shot_dir, full_page=True)
-    # Bounded failure: a keep-alive loop must not spin forever when EVERY
-    # cycle fails (dead server, browser that can no longer launch, ...).
-    # Count CONSECUTIVE cycles where refresh failed AND the reopen failed
-    # too; a successful refresh — or a successful reopen, e.g. after a
-    # browser restart — resets the count, so transients never accumulate.
-    # At max_failures the loop exits non-zero and says so on the console:
-    # a workflow that looks "running" while accomplishing nothing is worse
-    # than a dead one, because nobody comes to fix it.
-    fails = 0
+    # Hold the tab open until the caller stops this process. No
+    # refresh, no re-checks — the page simply stays open.
     while True:
-        time.sleep(interval)
-        if dismiss:
-            dismiss_dialogs(key, user, tab, dismiss)
-        if fail_text:
-            check_fail_text(key, user, tab, fail_text)
-        if shot_dir:
-            # capture the currently fully-loaded page BEFORE refreshing it
-            tool_screenshot(key, user, session, shot_dir, full_page=True)
-        rr = req(key, "POST", f"/tabs/{tab}/refresh", {"userId": user})
-        if "_http_error" in rr or "_error" in rr:
-            detail("refresh error:", rr)
-            if _LOGF is not None:
-                print(f"refresh-page: cycle failed @ "
-                      f"{time.strftime('%H:%M:%S')} — detail in {log_file}",
-                      flush=True)
-            r = req(key, "POST", "/tabs",
-                    {"userId": user, "sessionKey": session, "url": url})
-            if "_http_error" not in r and "_error" not in r:
-                tab = r.get("tabId", "")
-                detail("reopened tab", tab[:8])
-                fails = 0
-            else:
-                fails += 1
-                detail(f"reopen failed ({fails}/{max_failures} "
-                       f"consecutive):", r)
-                if 0 < max_failures <= fails:
-                    msg = (f"refresh-page: {fails} consecutive failed "
-                           f"cycles (refresh + reopen) — exiting. "
-                           f"Last error: {r}")
-                    detail(msg)
-                    print(_paint(msg, "1;31"), file=sys.stderr, flush=True)
-                    sys.exit(1)
-        else:
-            fails = 0
-            detail(f"refresh ok @ {time.strftime('%H:%M:%S')}")
+        time.sleep(3600)
 
 
-TOOLS = {"refresh-page": tool_refresh_page}
+TOOLS = {"open-page": tool_open_page}
 
 
 # --- main --------------------------------------------------------------------
@@ -590,42 +572,44 @@ def main():
     ap.add_argument("--session", default="camofox")
     ap.add_argument("--tools", choices=sorted(TOOLS))
     ap.add_argument("--url")
-    ap.add_argument("--interval", type=int, default=180)
     ap.add_argument("--screenshot", metavar="DIR",
                     help="screenshot live tab(s) into DIR and exit (PNGs)")
     ap.add_argument("--full-page", action=argparse.BooleanOptionalAction,
                     default=True, help="full-page screenshot (default: on)")
     ap.add_argument("--env", default=default_env())
     ap.add_argument("--state", default=default_state())
-    ap.add_argument("--wait", type=int, default=180,
-                    help="max seconds to wait for :9377 to come up (default 180)")
+    ap.add_argument("--wait-service-ready", type=int, default=180,
+                    help="max seconds to wait for the camofox SERVER to "
+                         "become ready (its /health endpoint) before "
+                         "acting (default 180). Named for what it waits "
+                         "for — the service, not the page; this CLI has "
+                         "several unrelated waits")
     ap.add_argument("--close", action="store_true",
                     help="close (delete) the whole --session tab group for "
                          "--user and exit — the cleanup half of the "
                          "low-memory pattern: tabs outlive their client "
                          "process and keep eating RAM until closed")
     ap.add_argument("--log-file", metavar="PATH",
-                    help="refresh-page: send per-cycle detail to PATH (under "
-                         "the workspace, e.g. logs/refresh-page.log) and keep "
+                    help="open-page: send detail to PATH (under "
+                         "the workspace, e.g. logs/open-page.log) and keep "
                          "the console to the startup summary + failures — "
                          "for .replit workflow runs, whose terminals hang "
                          "under unbounded log output")
     ap.add_argument("--max-failures", type=int, default=3, metavar="N",
-                    help="refresh-page: exit non-zero after N consecutive "
-                         "cycles where both the refresh AND the reopen "
-                         "failed (default 3; 0 = loop forever). A success "
-                         "resets the count, so transient browser restarts "
-                         "never accumulate")
+                    help="open-page: exit non-zero after N consecutive "
+                         "failed opens (default 3; 0 = retry forever). "
+                         "A successful open ends the count, so transient "
+                         "browser restarts never accumulate")
     ap.add_argument("--dismiss", action="append", default=[], metavar="TEXT",
-                    help="refresh-page: after each load, close any visible "
+                    help="open-page: after the page loads, close any visible "
                          "dialog whose text contains TEXT by clicking its "
                          "close control (repeatable). Generic mechanism — "
                          "the TEXT is the caller's site-specific data, e.g. "
                          "--dismiss 'Keep using Replit?' for the Replit "
                          "Starter-limit upsell modal")
     ap.add_argument("--fail-text", action="append", default=[], metavar="TEXT",
-                    help="refresh-page: content assertion — after the tab "
-                         "opens and before every refresh, exit non-zero if "
+                    help="open-page: content assertion — after the tab "
+                         "opens, exit non-zero if "
                          "the page's visible text contains ALL of the given "
                          "TEXTs (repeatable; conjunction, confirmed by a "
                          "second probe 5s later). Catches a session that "
@@ -653,15 +637,15 @@ def main():
     # listing sentinels: probe briefly so live-tab counts work if server is
     # up, but don't block list output on a slow/hung server.
     if a.user == "list":
-        wait_for_server(key, min(a.wait, 5))
+        wait_for_server(key, min(a.wait_service_ready, 5))
         list_users(a.state, key)
         return
     if a.session == "list":
-        wait_for_server(key, min(a.wait, 5))
+        wait_for_server(key, min(a.wait_service_ready, 5))
         list_sessions(a.state, key)
         return
     if a.close:
-        wait_for_server(key, min(a.wait, 5))
+        wait_for_server(key, min(a.wait_service_ready, 5))
         r = req(key, "DELETE",
                 f"/tabs/group/{a.session}?userId={a.user}")
         if "_http_error" in r or "_error" in r:
@@ -680,7 +664,7 @@ def main():
 
     # block until server is actually up (fixes Errno 111 Connection refused
     # when this runs before the camofox launcher finishes, e.g. parallel .replit)
-    if not wait_for_server(key, a.wait):
+    if not wait_for_server(key, a.wait_service_ready):
         sys.exit(1)
 
     decode_session = None if a.session == "camofox" else a.session
@@ -702,13 +686,10 @@ def main():
         if not a.url:
             print(f"--tools {a.tools} requires --url", file=sys.stderr)
             sys.exit(1)
-        if a.tools == "refresh-page":
-            tool_refresh_page(key, a.user, a.session, a.url, a.interval,
-                              shot_dir=a.screenshot, log_file=a.log_file,
-                              dismiss=a.dismiss, max_failures=a.max_failures,
-                              fail_text=a.fail_text)
-        else:
-            TOOLS[a.tools](key, a.user, a.session, a.url, a.interval)
+        TOOLS[a.tools](key, a.user, a.session, a.url,
+                       shot_dir=a.screenshot, log_file=a.log_file,
+                       dismiss=a.dismiss, max_failures=a.max_failures,
+                       fail_text=a.fail_text)
     elif a.cookies is None and not a.tools:
         # bare invocation -> show summary
         list_users(a.state, key)
