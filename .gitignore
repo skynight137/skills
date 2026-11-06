@@ -1,3 +1,2 @@
-# Git worktrees (local scratch checkouts)
-.worktree/
-.worktrees/
+__pycache__/
+*.pyc
