@@ -17,9 +17,12 @@
 # the upsell dismiss + login checker (--fail-text); an early non-timeout
 # exit (checker / crash) leaves a *** FAILED early *** banner here.
 #
-# Tunables (env): TOUR_DWELL_S (seconds per link, default 600),
-# TOUR_INTERVAL_S (refresh-page interval within a stop, default 180 —
-# keep interval + 60 well under the 300s default tab reaper).
+# Tunables (env): TOUR_DWELL_S (seconds on a link's page, default
+# 30 - one open only has to wake the workspace and start its
+# workflow), TOUR_GAP_S (plain sleep between stops, spent outside
+# camofox with the tab closed, default 300), TOUR_INTERVAL_S
+# (refresh-page interval within a stop, default 180 - keep
+# interval + 60 well under the 300s default tab reaper).
 # Detail goes to logs/refresh-tour.log (+ logs/tour-<slug>.log per
 # stop); the workflow console keeps the startup summary only.
 set -uo pipefail
@@ -33,8 +36,13 @@ LINKS=(
   "https://replit.com/~"
   "https://replit.com/@your-replit-username/YourProject"
 )
-DWELL="${TOUR_DWELL_S:-600}"
+DWELL="${TOUR_DWELL_S:-30}"
 INTERVAL="${TOUR_INTERVAL_S:-180}"
+# Plain sleep BETWEEN stops, spent OUTSIDE camofox (the client has
+# exited and its tab is closed): one open only has to wake the
+# workspace and start its workflow - nothing needs babysitting
+# until the next stop. One round = LINKS x (DWELL + GAP).
+GAP="${TOUR_GAP_S:-300}"
 # Circuit breaker: abort the whole tour after this many CONSECUTIVE
 # early-failed stops (0 = never). A stop that serves its full dwell (or
 # exits 0) resets the count.
@@ -59,7 +67,7 @@ slug_for() {
 }
 
 LOG="$PWD/logs/refresh-tour.log"
-echo "refresh-tour: ${#LINKS[@]} links, one tab at a time (dwell ${DWELL}s, round ~$(( ${#LINKS[@]} * DWELL / 60 )) min)"
+echo "refresh-tour: ${#LINKS[@]} links, one tab at a time (dwell ${DWELL}s + gap ${GAP}s, round ~$(( ${#LINKS[@]} * (DWELL + GAP) / 60 )) min)"
 echo "  user=$USER_ID  full log: $LOG"
 if [ ! -t 1 ]; then
   mkdir -p logs
@@ -94,6 +102,8 @@ while true; do
       echo "${C_ERR}*** tour ABORTED: $early_fails consecutive early failures (TOUR_MAX_EARLY_FAILURES=$MAX_EARLY) - exiting ***${C_RST}"
       exit 1
     fi
+    echo "${C_DIM}[$(date +%H:%M:%S)] next stop in ${GAP}s${C_RST}"
+    sleep "$GAP"
   done
   echo "${C_OK}[$(date +%H:%M:%S)] round complete - restarting tour${C_RST}"
 done
