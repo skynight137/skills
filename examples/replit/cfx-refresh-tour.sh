@@ -39,14 +39,11 @@ INTERVAL="${TOUR_INTERVAL_S:-180}"
 # early-failed stops (0 = never). A stop that serves its full dwell (or
 # exits 0) resets the count.
 MAX_EARLY="${TOUR_MAX_EARLY_FAILURES:-3}"
-# Log colors, setup-script style: severity you can scan at a glance.
-# On unless NO_COLOR is set or TOUR_COLOR=never. The phrases stay plain
-# text inside the color span, so grep on the log keeps working.
-if [ -z "${NO_COLOR:-}" ] && [ "${TOUR_COLOR:-always}" != "never" ]; then
-  C_STOP=$'\033[0;36m' C_OK=$'\033[0;32m' C_WARN=$'\033[1;33m' C_ERR=$'\033[1;31m' C_DIM=$'\033[2m' C_RST=$'\033[0m'
-else
-  C_STOP="" C_OK="" C_WARN="" C_ERR="" C_DIM="" C_RST=""
-fi
+# Log colors, setup-script style (house style): severity you can scan
+# at a glance. Always on, no opt-out - the eye catches color before
+# text, so diagnosis starts from the color. Phrases stay plain inside
+# the color span, so grep on the log keeps working.
+C_STOP=$'\033[0;36m' C_OK=$'\033[0;32m' C_WARN=$'\033[1;33m' C_ERR=$'\033[1;31m' C_DIM=$'\033[2m' C_RST=$'\033[0m'
 PY="$(command -v python3 || ls /nix/store/*-python3-3.1*/bin/python3 2>/dev/null | head -1)"
 CLI=".agents/skills/replit/scripts/camofox.py"
 
