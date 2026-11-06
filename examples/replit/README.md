@@ -14,7 +14,7 @@ and run it yourself — nothing here is wired into `setup.sh`.
 | Script | What it does |
 |---|---|
 | `refresh-page-keepalive.sh` | Keep ONE page alive: import cookies once, loop `refresh-page` with the upsell dismiss + login checker armed, screenshot per cycle, close the session group on exit. |
-| `cfx-refresh-tour.sh` | Keep MANY pages alive on a small box: tour full links one tab at a time (open → dwell → close → next), per-link logs and screenshots. This is the pattern that replaced running one IDE tab per project in parallel (≈600 MB each). |
+| `cfx-refresh-tour.sh` | Keep MANY pages alive on a small box: tour full links one tab at a time (open → short dwell → close → plain sleep → next), per-link logs and screenshots. This is the pattern that replaced running one IDE tab per project in parallel (≈600 MB each). |
 
 Both assume the server is already running (see the skill's
 `references/camofox.md`) and follow its settled rules:
