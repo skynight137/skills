@@ -101,3 +101,50 @@ to an exact tailnet IP), unaffected by the Direct-network toggles above.
 - **Tools whose remote transport is itself a quick tunnel** (e.g. 9remote)
   inherit the same wall: they run in local mode only, and no pairing key
   is ever issued.
+
+## Three agent egress paths — tell blocks apart before diagnosing
+
+The shell's two ways out (above) are not the only traffic leaving this
+VM. Three agent-visible paths exist, each with its OWN egress, and the
+same host can fare differently on each (verified 2026-11-06 against
+`tailscale.com`):
+
+| Path | What it is | tailscale.com |
+|---|---|---|
+| Shell via the env CONNECT proxy | The platform's proxy (`hatch-egress-proxy:3128`, pre-set in the shell env) — NOT a proxy of ours | `200` |
+| Platform browser service | The agent's live browser; its fetches ride the browser service's own egress (its allow-all covers only its own fetches) | `ERR_CONNECTION_RESET` |
+| Agent text fetcher | The page-fetch tool (`browser.open`); a separate platform service | `403` / fetch failure |
+
+Diagnostic rule: **same host, different result per path ⇒ the block is
+path- or target-side, not the gateway's blocklist.** Destination
+servers/CDNs reject the browser and fetcher services' source IPs as
+datacenter traffic; that is the target's bot policy, not our firewall.
+Always confirm via the shell proxy before declaring a host blocked —
+declaring `tailscale.com` "blocked like trycloudflare" from the browser
+result alone would have been wrong.
+
+## What actually blocks, and at which checkpoint
+
+Verified inventory (2026-11-06). Two checkpoints exist: our gateway
+judges the destination NAME of the first connection leaving the VM;
+the target server judges the source IP that arrives.
+
+1. **Gateway destination blocklist** — name-based, enforced at the
+   CONNECT proxy (the CONNECT request carries the hostname in clear),
+   host/path-specific. Proven entry: `POST api.trycloudflare.com`
+   tunnel provisioning (timeout → `403` signature above). The full list
+   is NOT enumerable from inside. Note the large MASE datasets found on
+   the platform are a content-classification corpus, NOT this
+   blocklist — never cite a domain as blocked from set membership.
+2. **Per-tuple approvals on direct dials** — binary path + IP + port,
+   no blanket allow (see Permission categories).
+3. **Silent black-hole classes** — e.g. direct port-22 egress connects
+   at TCP level but no banner ever arrives, even with the toggle on.
+4. **Target-side filtering** — not a block of ours at all (see the
+   matrix above).
+
+Corollary for self-hosted proxies: a proxy of our own still leaves
+through the gateway as its first hop, and the gate judges THAT
+connection's name/tuple — so a changed downstream source IP does not
+change the gate's decision on a blocklisted name. (Proven pattern:
+third-party proxy/tunnel attempts terminated at the gateway.)
