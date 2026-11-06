@@ -35,6 +35,10 @@ LINKS=(
 )
 DWELL="${TOUR_DWELL_S:-600}"
 INTERVAL="${TOUR_INTERVAL_S:-180}"
+# Circuit breaker: abort the whole tour after this many CONSECUTIVE
+# early-failed stops (0 = never). A stop that serves its full dwell (or
+# exits 0) resets the count.
+MAX_EARLY="${TOUR_MAX_EARLY_FAILURES:-3}"
 PY="$(command -v python3 || ls /nix/store/*-python3-3.1*/bin/python3 2>/dev/null | head -1)"
 CLI=".agents/skills/replit/scripts/camofox.py"
 
@@ -59,6 +63,7 @@ if [ ! -t 1 ]; then
 fi
 
 first=1
+early_fails=0
 while true; do
   for url in "${LINKS[@]}"; do
     slug="$(slug_for "$url")"
@@ -74,9 +79,16 @@ while true; do
     timeout "$DWELL" "$PY" -u "$CLI" "${args[@]}" || rc=$?
     if [ "$rc" != 0 ] && [ "$rc" != 124 ]; then
       echo "*** stop FAILED early (rc=$rc): $slug - see logs/tour-$slug.log (content checker / crash) ***"
+      early_fails=$((early_fails + 1))
+    else
+      early_fails=0
     fi
     "$PY" "$CLI" --user "$USER_ID" --session "$sess" --close || true
     echo "[$(date +%H:%M:%S)] closed: $slug"
+    if [ "$MAX_EARLY" != 0 ] && [ "$early_fails" -ge "$MAX_EARLY" ]; then
+      echo "*** tour ABORTED: $early_fails consecutive early failures (TOUR_MAX_EARLY_FAILURES=$MAX_EARLY) - exiting ***"
+      exit 1
+    fi
   done
   echo "[$(date +%H:%M:%S)] round complete - restarting tour"
 done

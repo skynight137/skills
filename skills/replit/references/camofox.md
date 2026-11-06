@@ -937,8 +937,13 @@ Low-memory rules for keep-alive work:
   tour will happily screenshot for hours. Replit wiring (tour scripts):
   `--fail-text "Log in" --fail-text "Sign up"` on replit.com stops; the
   tour script turns the early exit into a `*** stop FAILED early`
-  banner in its own log. Like `--dismiss`, the mechanism is generic and
-  the needles are caller data.
+  banner in its own log, and a circuit breaker
+  (`TOUR_MAX_EARLY_FAILURES`, default 3, 0 = off) aborts the whole tour
+  after that many *consecutive* early-failed stops — a stop that serves
+  its full dwell resets the count — so a systematically dead session
+  (e.g. every stop failing the checker on one stale cookie jar) stops
+  the workflow instead of looping rounds forever. Like `--dismiss`,
+  the mechanism is generic and the needles are caller data.
 
 ## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
 
