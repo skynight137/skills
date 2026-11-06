@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.34.1
+version: 4.35.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -11,6 +11,28 @@ metadata:
 ---
 
 # Replit toolkit — one skill, four lanes
+
+## Payloads live outside this bundle
+
+This bundle is curated memory only (`SKILL.md` + `references/`). The executable
+payload tree — `setup.sh` + its `setup/` modules, `lp-tour.*`, `camofox.py`,
+the probes, the llm-wiki bundle — is NOT in the bundle. It lives at the repo
+root: `scripts/replit/` in `skynight137/skills` (public).
+
+**Path rule.** Every `scripts/…` path in this file and its references denotes
+a file inside that payload tree (on a box: inside the landed tree below).
+
+**When a task needs a payload, ask the operator first**, then fetch:
+
+- clone (recommended): `git clone https://github.com/skynight137/skills` — payloads at `scripts/replit/`, this memory at `skills/replit/`.
+- or one file: `curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/replit/<path> -o <dest>`.
+
+Land the tree where the box's workflows already point —
+`.agents/skills/replit/scripts/` — whole tree, layout unchanged (modules
+resolve via `$SCRIPT_DIR`, so the tree must stay intact). `npx skills`
+installs/updates only this slim bundle: a fresh box has NO payloads until
+fetched; a box updated from a fat bundle keeps its on-disk payloads until
+something removes them.
 
 Lane 5 pointer: reaching a *second* box from this one (sshd bootstrap, proxy
 port reality, `command -v`/banner-probe traps, path-not-paste delivery) lives in
@@ -418,7 +440,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
 10. **Expect the lockout and stage the way back first.** After a full uninstall nothing on the
     box can be reached from here (sshd and tailscaled are both gone), so line up the recovery
     line before starting — `cd ~/workspace && TAILSCALE_NODE_NAME=<node> bash
-    skills/replit/scripts/setup.sh --tailscale --join`, typed by the operator in the platform
+    scripts/replit/setup.sh --tailscale --join`, typed by the operator in the platform
     shell. It needs no auth key while the state dir survives; a clean that already wiped the
     state does need `TAILSCALE_AUTH_KEY`.
 11. **A rename of the state dir orphans the old directory.** Nothing migrates, so

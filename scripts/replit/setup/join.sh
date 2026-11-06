@@ -22,7 +22,7 @@
 
 : "${RS_PORT:=6800}"
 RS_DIR="${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/join-tailnet}"
-RS_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")/../.." 2>/dev/null && pwd)"
+RS_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")/.." 2>/dev/null && pwd)"
 
 __rs_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }
 
@@ -31,7 +31,7 @@ __rs_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }
 # dir cannot leave a dead absolute path behind. Only an outside copy needs the absolute
 # one, and then the caller says so.
 __rs_cmd() {
-  local base="${REPL_HOME:-$HOME/workspace}" cmd="$RS_SKILL_ROOT/scripts/setup.sh"
+  local base="${REPL_HOME:-$HOME/workspace}" cmd="$RS_SKILL_ROOT/setup.sh"
   [[ "$cmd" == "$base"/* ]] && cmd="${cmd#"$base"/}"
   printf '%s\n' "$cmd"
 }

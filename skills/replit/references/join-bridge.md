@@ -483,7 +483,7 @@ An absolute local path is only reachable on the SAME box. The skill therefore ha
 to exist on B before `--join` can run there — clone/copy the skill dir once (it is
 persistent), then the whole setup is one command and stays re-runnable. If a file on
 B must be delivered by URL, pin it at the commit SHA
-(`.../<sha>/skills/replit/scripts/setup.sh`): a branch name drifts, a SHA cannot.
+(`.../<sha>/scripts/replit/setup.sh`): a branch name drifts, a SHA cannot.
 Verify the raw URL answers 200 first, and never put a token in the URL when the
 repo is already public.
 

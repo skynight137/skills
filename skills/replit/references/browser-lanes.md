@@ -62,7 +62,7 @@ gotchas), `references/web-content-lanes.md` (coarse lane picker).
   portable between hosts, so never copy a `/nix/store/...` path):
   ```bash
   # resolve soname -> nixpkgs attr -> store root, then export the closure
-  bash skills/replit/scripts/setup/resolve-libs.sh /tmp/chromium-closure.txt chromium
+  bash scripts/replit/setup/resolve-libs.sh /tmp/chromium-closure.txt chromium
   export LD_LIBRARY_PATH="$(cat /tmp/chromium-closure.txt)"
   /home/runner/workspace/.hermes/tools/chromium-1208/chrome-linux64/chrome \
     --headless=new --no-sandbox --disable-gpu --dump-dom https://example.com
