@@ -20,7 +20,7 @@
 # Tunables (env): TOUR_DWELL_S (seconds on a link's page, default
 # 30 - one open only has to wake the workspace and start its
 # workflow), TOUR_GAP_S (plain sleep between stops, spent outside
-# camofox with the tab closed, default 300), TOUR_INTERVAL_S
+# camofox with the tab closed, default 0), TOUR_INTERVAL_S
 # (refresh-page interval within a stop, default 180 - keep
 # interval + 60 well under the 300s default tab reaper).
 # Detail goes to logs/refresh-tour.log (+ logs/tour-<slug>.log per
@@ -33,16 +33,20 @@ USER_ID="your-replit-username"
 COOKIES=".config/cookies/repl-${USER_ID}.json"
 SHOT_DIR="attached_assets/cfx-refresh-page"
 LINKS=(
+  # the host's OWN project first: pilot self-heal stop (Plan A)
+  "https://replit.com/@your-replit-username/ThisHostProject"
   "https://replit.com/~"
   "https://replit.com/@your-replit-username/YourProject"
 )
 DWELL="${TOUR_DWELL_S:-30}"
 INTERVAL="${TOUR_INTERVAL_S:-180}"
 # Plain sleep BETWEEN stops, spent OUTSIDE camofox (the client has
-# exited and its tab is closed): one open only has to wake the
-# workspace and start its workflow - nothing needs babysitting
-# until the next stop. One round = LINKS x (DWELL + GAP).
-GAP="${TOUR_GAP_S:-300}"
+# exited and its tab is closed). Plan A default is 0: an unattended
+# node survives only ~1-5 min, so the WHOLE round (LINKS x DWELL)
+# must fit inside one ~5-min window - stops run back-to-back and
+# the first link is this host itself (pilot self-heal stop).
+# One round = LINKS x (DWELL + GAP).
+GAP="${TOUR_GAP_S:-0}"
 # Circuit breaker: abort the whole tour after this many CONSECUTIVE
 # early-failed stops (0 = never). A stop that serves its full dwell (or
 # exits 0) resets the count.
