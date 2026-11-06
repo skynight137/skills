@@ -1192,7 +1192,7 @@ in the repo and bump the `version:` in the frontmatter when behaviour changes.
 `.replit` workflows invoke skill scripts by their **full repo path** rather
 than a `$REPL_HOME/scripts/` symlink farm (that farm is removed — call the
 script directly, e.g.
-`python3 skynight137-skills/skills/replit/scripts/camofox.py …`).
+`python3 skynight137-skills/scripts/replit/camofox.py …`).
 
 Running any script in this skill writes `scripts/__pycache__/`; the repo has no
 `.gitignore`, so `git status` shows it as untracked noise. It is not tracked —

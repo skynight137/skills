@@ -1,7 +1,7 @@
 ---
 name: muse
 description: "Muse sandbox toolkit: platform facts for the Muse personal-agent VM (systemd-nspawn container, btrfs home vs ephemeral overlay root, fake-IP DNS + CONNECT-proxy egress and its permission categories, no SHELL_ENV injection, the runtime cell's spawnd renders and which platform policy is shipped in the guest vs host-side-only), the two Tailscale join routes (built-in connector vs userspace auth-key node) and why inbound only works as reverse SSH, and the automation trio (systemd units vs runtime cron vs hooks). Use for anything running ON a Muse VM."
-version: 1.2.4
+version: 1.3.0
 license: MIT
 platforms: [linux]
 compatibility: "Muse VM (hostname htch-runtime, HOME=/home/hatch, shell runs as root). Facts verified live 2026-11-01/02; re-verify with the commands in references/platform.md before quoting numbers."
@@ -17,6 +17,20 @@ normal Linux assumptions (the box is a container that gets replaced, DNS lies,
 egress is gated per category), and each lane below is a verified playbook for
 one job. Facts are dated 2026-11-02; this machine's own records beat this file
 when they disagree — re-run the probes instead of trusting stale text.
+
+## Payloads live outside this bundle
+
+This bundle is curated memory only (`SKILL.md` + `references/`). The executable
+payload — `setup.sh` + `ts_proxy_connect.py` — is NOT in the bundle. It lives
+at the repo root: `scripts/muse/` in `skynight137/skills` (public).
+
+**Path rule.** `scripts/…` in this file and its references denotes that
+payload tree. **When a task needs the payload, ask the operator first**, then
+fetch: clone `https://github.com/skynight137/skills` (recommended), or one
+file via `curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/muse/<path> -o <dest>`.
+On a Muse VM the canonical working copy is the clone
+(`~/skynight137/skills/scripts/muse/setup.sh`); `~/workspace/custom-skills/muse`
+symlinks to this slim bundle and no longer carries the payload.
 
 | You want to… | Read |
 |---|---|

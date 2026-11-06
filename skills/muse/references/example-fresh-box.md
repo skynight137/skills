@@ -12,7 +12,7 @@ hop differences are marked.
 ```sh
 cd ~/workspace && timeout 10 npx -y skills add skynight137/skills --all --json
 # or work from a clone: ~/skynight137/skills/skills/muse
-SETUP=~/workspace/custom-skills/muse/scripts/setup.sh   # path varies by install route
+SETUP=~/skynight137/skills/scripts/muse/setup.sh   # payload tree in the clone; path varies by install route
 ```
 
 ## 1. Fill the vars (the only hands-on part)

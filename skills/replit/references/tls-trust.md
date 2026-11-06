@@ -53,7 +53,7 @@ Current generator (`setup/rc.sh`, `setup/common.sh`): guarded on
 `NIX_SSL_CERT_FILE` is not set: nix resolves its own cache without it
 (`nix flake metadata nixpkgs` verified against Replit's mirror) and nothing else reads
 it. Confirm the state on your branch before assuming:
-`git show origin/main:skills/replit/scripts/setup/rc.sh | grep -n 'etc/ssl/certs/ca-certificates.crt'`.
+`git show origin/main:scripts/replit/setup/rc.sh | grep -n 'etc/ssl/certs/ca-certificates.crt'`.
 
 Every one of these variables can be unset without breaking the registry — curl 200,
 `node fetch` 200, nix resolution fine. They exist so Node, which keeps its own bundled
