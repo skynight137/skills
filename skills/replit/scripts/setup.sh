@@ -70,6 +70,16 @@ TAILSCALE_PKGS_BASE="https://pkgs.tailscale.com/stable"
 # tarball the sshx.io/get script pulls. No checksum published.
 SSHX_DOWNLOAD_BASE="https://s3.amazonaws.com/sshx"
 
+# Lightpanda: lightweight headless browser (CDP server) for keep-alive
+# tours. Pinned release — the release publishes NO checksum asset, so
+# setup/lightpanda.sh carries the per-arch size + SHA256 pins computed
+# from the official downloads; they move with this version.
+LIGHTPANDA_VERSION="1.0.3"
+LIGHTPANDA_RELEASE_BASE="https://github.com/lightpanda-io/browser/releases/download"
+# The tour client's playwright pin — the version proven against
+# Lightpanda 1.0.3's CDP in the fleet trial (references/lightpanda.md).
+LIGHTPANDA_PLAYWRIGHT_VERSION="1.64.1"
+
 # AI agent
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 
@@ -176,6 +186,7 @@ source "$SCRIPT_DIR/setup/download.sh"
 source "$SCRIPT_DIR/setup/expose.sh"
 source "$SCRIPT_DIR/setup/join.sh"
 source "$SCRIPT_DIR/setup/camofox.sh"
+source "$SCRIPT_DIR/setup/lightpanda.sh"
 source "$SCRIPT_DIR/setup/hermes_chromium.sh"
 source "$SCRIPT_DIR/setup/llm-wiki.sh"
 source "$SCRIPT_DIR/setup/cleanup.sh"

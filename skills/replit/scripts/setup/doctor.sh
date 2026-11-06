@@ -69,6 +69,17 @@ doctor() {
     warn "tailscale: TAILSCALE_SOCKET/TAILSCALE_DATA_DIR export missing from the rc block — run 'bash setup.sh --fix'"
   fi
   check_tool "sshx" "$XDG_BIN_HOME/sshx"
+  # Lightpanda also takes a SUBCOMMAND ('version'), not a flag — passing
+  # --version exits 1 by design and would read as a broken install.
+  check_tool "Lightpanda" "$XDG_BIN_HOME/lightpanda" version
+  if [[ -x "$XDG_BIN_HOME/lightpanda" ]]; then
+    if [[ -x "${LIGHTPANDA_HOME:-}/venv/bin/python" ]] \
+       && "${LIGHTPANDA_HOME}/venv/bin/python" -c 'import playwright' 2>/dev/null; then
+      ok "lightpanda tour venv: playwright importable (${LIGHTPANDA_HOME}/venv)"
+    else
+      warn "lightpanda tour venv missing or playwright not importable (${LIGHTPANDA_HOME:-}/venv) — lp-tour cannot run; run: bash setup.sh --lightpanda"
+    fi
+  fi
   # llm-wiki is a server, not a CLI: there is no --version to probe, so check the
   # installed bundle instead. Warn-only — the server is opt-in and a box that
   # does not want a knowledge base must not fail its doctor run over it.

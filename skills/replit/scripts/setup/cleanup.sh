@@ -102,6 +102,7 @@ back_up_tool() {
     hermes)  hermes_backup ;;
     ollama)  : ;;  # models are preserved in place by clean_ollama (too big to archive)
     camofox) : ;;  # ~/.camofox server state is preserved by clean_camofox
+    lightpanda) : ;;  # tour config + cookie jar are preserved by clean_lightpanda
     hermes-chromium) : ;;  # the browser itself is Hermes-managed; clean_ drops only the closure
     *)       : ;;  # nothing user-owned (binary-only tools)
   esac
@@ -120,6 +121,7 @@ clean_paths_for() {
     hermes)        echo "$HERMES_HOME (backed up via hermes CLI first), hermes launchers, hermes-chromium closure prep" ;;
     ori)           echo "$XDG_BIN_HOME/ori" ;;
     camofox)       echo "npm package, $CAMOUFOX_INSTALL_DIR engine, closure (server state PRESERVED)" ;;
+    lightpanda)    echo "$LIGHTPANDA_BIN binary + tour venv (config + cookie jar PRESERVED)" ;;
     hermes-chromium) echo "$HERMES_CHROME_STATE closure + launch-hermes-chrome launcher (the browser itself is Hermes-managed; untouched)" ;;
     rclone)        echo "$XDG_BIN_HOME/rclone" ;;
     qbt)           echo "$XDG_BIN_HOME/qbittorrent-nox" ;;
@@ -565,7 +567,7 @@ clean() {
   local _pf=""
   case "$CLEAN_TARGET" in
     ""|all) _pf="" ;;
-    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       _pf="$CLEAN_TARGET"; [[ "$_pf" == android-tools ]] && _pf=android; [[ "$_pf" == oc ]] && _pf=opencode ;;
   esac
   if [[ -n "$_pf" ]]; then
@@ -582,7 +584,7 @@ clean() {
   summary="$CLEAN_TARGET"
   hint="bash setup.sh --all"
   case "$CLEAN_TARGET" in
-    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       hint="bash setup.sh --$CLEAN_TARGET"
       ;;
   esac
@@ -624,11 +626,12 @@ clean() {
       clean_tailscale
       clean_sshx
       clean_camofox
+      clean_lightpanda
       clean_hermes_chromium
       clean_llm_wiki
       ok "Full toolchain cleanup complete"
       ;;
-    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
+    android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
       # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
       # source), then remove the binaries + payload. Labels here differ from
@@ -660,6 +663,7 @@ clean() {
         hermes)        clean_hermes ;;
         ori)           clean_ori ;;
         camofox)       clean_camofox ;;
+        lightpanda)    clean_lightpanda ;;
         llm-wiki)      clean_llm_wiki ;;
         hermes-chromium) clean_hermes_chromium ;;
         rclone)        clean_rclone ;;
@@ -700,6 +704,7 @@ clean() {
           hermes)   clean_hermes ;;
           ori)      clean_ori ;;
           camofox)  clean_camofox ;;
+          lightpanda) clean_lightpanda ;;
           hermes-chromium) clean_hermes_chromium ;;
           zsh)      clean_zsh ;;
           llm-wiki) clean_llm_wiki ;;
@@ -715,7 +720,7 @@ clean() {
       done
       ;;
     *)
-      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, zsh, oc, opencode, ollama, claude, hermes, ori, camofox, hermes-chromium, llm-wiki, rclone, qbt, aria2, ffmpeg, cloudflared, tailscale, sshx"
+      die "Unknown --clean target '$CLEAN_TARGET'. Valid: all, android-tools, uv, node, zsh, oc, opencode, ollama, claude, hermes, ori, camofox, lightpanda, hermes-chromium, llm-wiki, rclone, qbt, aria2, ffmpeg, cloudflared, tailscale, sshx"
       ;;
   esac
   # Manifest mop-up: remove anything install recorded for the labels this
@@ -726,7 +731,7 @@ clean() {
   # records by design, so it is a no-op there.
   local -a _sweep_labels=()
   case "$CLEAN_TARGET" in
-    all) _sweep_labels=(android uv node zsh opencode ollama claude hermes ori camofox hermes-chromium llm-wiki rclone qbt aria2 ffmpeg cloudflared sshx) ;;
+    all) _sweep_labels=(android uv node zsh opencode ollama claude hermes ori camofox lightpanda hermes-chromium llm-wiki rclone qbt aria2 ffmpeg cloudflared sshx) ;;
     "")  _sweep_labels=("${CLEAN_TOOLS[@]}") ;;
     *)   local _one="$CLEAN_TARGET"
          [[ "$_one" == android-tools ]] && _one=android
