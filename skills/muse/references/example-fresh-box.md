@@ -10,8 +10,8 @@ hop differences are marked.
 ## 0. Get the skill
 
 ```sh
-cd ~/workspace && timeout 10 npx -y skills add skynight137/skills --all --json
-# or work from a clone: ~/skynight137/skills/skills/muse
+cd ~/workspace && git clone https://github.com/skynight137/skills ~/skynight137/skills
+# bundle-only alternative: npx -y skills add skynight137/skills -s muse
 SETUP=~/skynight137/skills/scripts/muse/setup.sh   # payload tree in the clone; path varies by install route
 ```
 

@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.35.0
+version: 4.35.1
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -29,10 +29,11 @@ a file inside that payload tree (on a box: inside the landed tree below).
 
 Land the tree where the box's workflows already point —
 `.agents/skills/replit/scripts/` — whole tree, layout unchanged (modules
-resolve via `$SCRIPT_DIR`, so the tree must stay intact). `npx skills`
-installs/updates only this slim bundle: a fresh box has NO payloads until
-fetched; a box updated from a fat bundle keeps its on-disk payloads until
-something removes them.
+resolve via `$SCRIPT_DIR`, so the tree must stay intact). The git-clone
+route carries the payloads with it; `npx skills` installs/updates only
+this slim bundle, so an npx-only box has NO payloads until fetched; a box
+updated from a fat bundle keeps its on-disk payloads until something
+removes them.
 
 Lane 5 pointer: reaching a *second* box from this one (sshd bootstrap, proxy
 port reality, `command -v`/banner-probe traps, path-not-paste delivery) lives in
@@ -295,13 +296,13 @@ without ripgrep.
   restore from the pristine `*-replit-bashrc*` twin (the larger store file) —
   `references/shell-rc-and-zsh.md`.
 - **A fake-root `--join` still joins the REAL tailnet.** The tailscale state dir is the XDG state home (`$REPL_HOME/.local/state/tailscale`), so a fake-root test re-registers the box's own node identity and can flap the live node; to test join isolation point the statedir at a scratch path first. And `--join -w` (workflow mode) keeps its task in the FOREGROUND by design — it prints a summary, then watches the tailscaled socket for as long as the daemon lives; a long-hanging test is the feature working, not a hang. Workflow consoles never stream runtime logs (that hangs the Replit UI): full logs live in files under `$REPL_HOME/logs/` (tailscaled's included), per the rule in `references/exposing-ports.md`.
-- **After a skill's PR merges, the feature branch is gone.** `npx -y skills add owner/repo#branch` then fails with `Could not find remote branch`; re-point installs at the default branch (`skills add owner/repo`) once merged.
+- **After a skill's PR merges, the feature branch is gone.** Clones track the default branch, so a `git pull` is the whole update; never leave a box pointed at a merged feature branch (the old npx route failed there with `Could not find remote branch`).
 - **Never declare a workflow or MCP entry missing from a truncated grep.** `.replit` keeps each workflow in its own `[[workflows.workflow]]` block, so a `grep -A4 <name>` window can display a different block and read as absence — list every header first (`grep -n '^name = ' .replit`) and quote the block you actually read before telling the operator something is not there. Same discipline for MCP parity: after any change, compare the `mcp_servers` key lists of the default config and EACH profile (`hermes mcp list` / `hermes -p <p> mcp list`), because a bare `hermes mcp add` writes the default config only while `hermes chat` and the WebUI resolve the profile one.
 - **The workflow set is an invariant across the operator's boxes, not per-box improvisation.**
   Every box carries `tailscale-join` (`bash .agents/skills/replit/scripts/setup.sh --tailscale -j -w`)
   with `waitForPort = 1055` (the tailscaled SOCKS5 port) so the boxes stay one tailnet, plus its own
   role workflow (`launch-camofox-browser` on `80`, `llm-wiki-server` on `8199`) and
-  `skills add replit` (`npx -y skills add skynight137/skills -s replit`). `Project` chains them by
+  `skills add replit` (git sync into `skills/`: clone when absent, `git -C skills pull` when present). `Project` chains them by
   NAME, so a workflow name is an identifier: keep it kebab-case without spaces and move every
   `args = "<old name>"` reference in the same edit — a `Project` step pointing at a renamed or
   absent block silently drops that boot stage. A `waitForPort` that does not equal the port the
@@ -482,8 +483,20 @@ The Camofox tunables (with defaults) are documented in `references/camofox.md`.
 
 ## Installing this skill pack
 
-One skill, one command:
+The standard route is git — a fresh box has no node/npx, and git is already
+there:
 
 ```bash
-npx -y skills add skynight137/skills -s replit
+git clone https://github.com/skynight137/skills   # lands in ./skills: bundles + payloads
+git -C skills pull                                # every later update
 ```
+
+Fleet boxes carry this as their `skills add replit` workflow, with a sync
+command that does the right thing in both states:
+
+```bash
+if [ -d skills/.git ]; then git -C skills pull --ff-only; else git clone https://github.com/skynight137/skills.git skills; fi
+```
+
+Bundle-only (curated memory, no payloads — the cheap-context channel):
+`npx -y skills add skynight137/skills -s replit`.
