@@ -5,11 +5,11 @@ live runs on this box (headless, no `/dev/dri`, no GPU; `DISPLAY=:0` is set
 but no X server is required for any lane). Where something could not be tested
 it says so.
 
-Related refs: `references/playwright-chromium.md` (lane 1 detail),
-`references/camofox.md` (lane 4 detail), `references/platform.md` (Nix/`$HOME`
-gotchas), `references/web-content-lanes.md` (coarse lane picker).
+Related refs: `../skills/replit/references/playwright-chromium.md` (lane 1 detail),
+`../skills/replit/references/camofox.md` (lane 4 detail), `../skills/replit/references/platform.md` (Nix/`$HOME`
+gotchas), `../skills/replit/references/web-content-lanes.md` (coarse lane picker).
 
-> Discrepancy found: `web-content-lanes.md` cites Camofox on `:8008`. The
+> Discrepancy found: `../skills/replit/references/web-content-lanes.md` cites Camofox on `:8008`. The
 > running server on this box answers on **`:9377`** (verified below).
 
 ---
@@ -175,7 +175,7 @@ gotchas), `references/web-content-lanes.md` (coarse lane picker).
   a coherent non-headless-looking Firefox fingerprint (no `HeadlessFirefox`
   token). Camoufox randomizes/spoofs the fingerprint; from a cold profile a
   Cloudflare site may 403 once, then succeed on retrying the **same
-  sessionKey** (see `web-content-lanes.md`).
+  sessionKey** (see `../skills/replit/references/web-content-lanes.md`).
 - **VERIFIED load:** `POST /tabs {…,"url":"https://example.com/"}` →
   `httpStatus 200, navigationOk true`; `GET /tabs` then reported
   `title:"Example Domain"`. Data flows through the API.
@@ -226,7 +226,7 @@ gotchas), `references/web-content-lanes.md` (coarse lane picker).
   behavior, not a measured CDP run in this session.
 - **L3 WebGL** not measured directly — inferred from it driving L2's Chrome.
 - No lane was exercised against a real WAF site in this session; the
-  Cloudflare-retry claim is quoted from `web-content-lanes.md`, not re-verified
+  Cloudflare-retry claim is quoted from `../skills/replit/references/web-content-lanes.md`, not re-verified
   here.
 - GPU: `/dev/dri` does not exist; every lane ran CPU-only. `DISPLAY=:0` was set
   but no X server was needed.
