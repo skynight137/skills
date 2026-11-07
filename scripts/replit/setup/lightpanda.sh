@@ -3,8 +3,8 @@
 # keep-alive tours. Sourced by setup.sh.
 #
 # Design: one static binary, pinned by version + size + SHA256, plus a
-# small Python venv that runs the tour client (scripts/tour.py drives
-# the engine over CDP with Playwright's client library — no browser
+# small Python venv that runs the tour client (scripts/setup/tour.py
+# drives the engine over CDP with Playwright's client library — no browser
 # download, Lightpanda IS the browser). There is no resident server:
 # tour.py spawns one `lightpanda serve` per tour stop and tears it
 # down, so the engine costs ~380 MB only while a stop is held and zero
@@ -16,7 +16,9 @@
 #   venv/             the tour client's Python + playwright
 #   .env / cookies.json   operator config + the login jar (user data —
 #                     preserved by --clean, like camofox server state)
-#   logs/             per-stop server logs written by tour.py
+#   logs/             lane-created; tour.py's per-stop server logs
+#                     default to the machine log dir ($REPL_HOME/logs
+#                     here) — TOUR_LOG_DIR can point them back here
 #
 # The release publishes NO checksum asset (checked 1.0.3: binaries +
 # .debs only), so the SHA256 pins below were computed from the official
@@ -219,7 +221,7 @@ install_lightpanda() {
   record_tool_path_dirs "$XDG_BIN_HOME"
   wire_tool lightpanda LIGHTPANDA_HOME LIGHTPANDA_BIN -- "$XDG_BIN_HOME"
 
-  ok "lightpanda ready — tour: bash $REPL_SKILL_DIR/tour.sh (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: tour.sh --check)"
+  ok "lightpanda ready — tour: bash $SETUP_LIB_DIR/tour.sh --browser lightpanda --machine repl (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: tour.sh --check)"
 }
 
 clean_lightpanda() {

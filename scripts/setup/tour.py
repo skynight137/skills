@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """tour.py — the unified session keep-alive tour (fleet session keep-alive).
 
+A SHARED payload: it lives in scripts/setup/ next to the setup entry
+and serves both machine kinds, selected by `--machine muse|repl` (env
+TOUR_MACHINE fallback; default auto-detect, mirroring setup.sh:
+REPL_HOME set → repl, else muse). The machine picks the defaults that
+differ per VM kind — the XDG base the engine homes resolve under, the
+default cookie-jar location, the default log dir — while every
+explicit env var still wins over a machine default.
+
 ONE tour program, engine chosen by flag: `--browser lightpanda|camofox`
 (env TOUR_BROWSER fallback, default lightpanda). It supersedes lp-tour.py
 (the Lightpanda-only tour) — the Lightpanda engine below is that proven
@@ -49,7 +57,12 @@ Lightpanda engine (proven shape, fleet trial 2026-11-06):
 
 Camofox engine (the fallback engine):
   * drives the camofox SERVER's HTTP API via camofox.py's client
-    (req/convert/dismiss_dialogs/diagnose) — reuse, not reinvention;
+    (req/convert/dismiss_dialogs/diagnose) — reuse, not reinvention.
+    camofox.py itself stays a repl-tree payload (scripts/replit/): the
+    adapter resolves it cross-tree at ../replit/camofox.py relative to
+    this file, with a copy next to tour.py as the second candidate;
+    when it is absent — e.g. a muse box that never fetched the replit
+    tree — the camofox engine reports a clean ERROR, never a traceback;
   * the server is a resident service the CALLER runs (its own workflow);
     the tour NEVER spawns it — an unreachable server is an ERROR verdict
     (and a --check failure), surfaced, not papered over;
@@ -75,6 +88,11 @@ source of every var is logged at startup, name + source only):
                       (fallback: LP_LINKS — the lp-tour-era name, kept
                       for one release so captain .env files work as-is)
   TOUR_BROWSER        lightpanda|camofox (fallback for --browser)
+  TOUR_MACHINE        muse|repl (fallback for --machine; default
+                      auto-detect: REPL_HOME set → repl, else muse —
+                      the same rule setup.sh uses. Like TOUR_BROWSER
+                      it is NOT read from the .env file: the file's
+                      own location depends on the machine's homes)
   TOUR_COOKIES        cookie jar, browser-export or Playwright format
                       (fallback LP_COOKIES; default lightpanda:
                       $LIGHTPANDA_HOME/cookies.json, camofox:
@@ -95,17 +113,21 @@ source of every var is logged at startup, name + source only):
   TOUR_BASE_PORT      lightpanda: first CDP port; stop i uses +i
                       (default 19401; fallback LP_BASE_PORT)
   TOUR_LOG_DIR        lightpanda: per-stop server logs   (fallback
-                      LP_LOG_DIR; default $LIGHTPANDA_HOME/logs)
+                      LP_LOG_DIR; default is machine-chosen: repl
+                      $REPL_HOME/logs, muse ~/workspace/logs)
   TOUR_CAMOFOX_USER   camofox: server user id holding the session
                       (default "tour")
   TOUR_CAMOFOX_SESSION  camofox: session-key prefix; stop i uses
                       "<prefix>-<i>"                     (default "tour")
   CAMOFOX_BASE_URL    camofox: server URL (default http://127.0.0.1:9377)
-  LIGHTPANDA_HOME     install/state root (default $XDG_CONFIG_HOME/lightpanda)
+  LIGHTPANDA_HOME     install/state root (default <machine XDG config
+                      base>/lightpanda: $XDG_CONFIG_HOME when set, else
+                      repl $REPL_HOME/.config, muse ~/.config)
   LIGHTPANDA_BIN      engine binary (default $LIGHTPANDA_HOME/lightpanda,
                       then `lightpanda` on PATH)
 
-Run via tour.sh (it assembles LD_LIBRARY_PATH + the venv python).
+Run via tour.sh (it assembles LD_LIBRARY_PATH on nix boxes + the
+venv python, and passes --browser/--machine straight through).
 `tour.py --check` resolves and prints the config, probes the engine
 (binary + jar for lightpanda, server health + jar for camofox), and
 exits without opening anything.
@@ -133,7 +155,46 @@ BROWSER = (_cli_browser(sys.argv[1:])
            or os.environ.get("TOUR_BROWSER") or "lightpanda").strip().lower()
 _COLOUR_FLAG = "--colour" in sys.argv or "--color" in sys.argv
 
-_XDG = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+
+def _cli_machine(argv):
+    for i, a in enumerate(argv):
+        if a == "--machine" and i + 1 < len(argv):
+            return argv[i + 1]
+        if a.startswith("--machine="):
+            return a.split("=", 1)[1]
+    return None
+
+
+# ── machine selection ──────────────────────────────────────────────────
+# Mirrors setup.sh exactly: --machine wins, then TOUR_MACHINE from the
+# SYSTEM env (not the .env file — the file lives in the machine's
+# engine home, so it cannot choose its own machine), then auto-detect:
+# REPL_HOME set (a Replit workspace) → repl, otherwise muse. The
+# machine selects the defaults that differ per VM kind (the XDG base
+# below, the jar and log-dir defaults); every explicit env var still
+# wins over a machine default.
+_cli_m = _cli_machine(sys.argv[1:])
+if _cli_m:
+    MACHINE, MACHINE_SOURCE = _cli_m.strip().lower(), "--machine flag"
+elif os.environ.get("TOUR_MACHINE"):
+    MACHINE = os.environ["TOUR_MACHINE"].strip().lower()
+    MACHINE_SOURCE = "TOUR_MACHINE env"
+elif os.environ.get("REPL_HOME"):
+    MACHINE, MACHINE_SOURCE = "repl", "auto-detect (REPL_HOME set)"
+else:
+    MACHINE, MACHINE_SOURCE = "muse", "auto-detect (default)"
+
+# XDG config base: a set XDG_CONFIG_HOME wins on both machines (it IS
+# the system env); the fallback is machine-shaped — repl anchors app
+# config in the workspace (.config under REPL_HOME), muse uses the
+# platform home (~/.config, which guest.env also exports).
+if os.environ.get("XDG_CONFIG_HOME"):
+    _XDG = os.environ["XDG_CONFIG_HOME"]
+elif MACHINE == "repl":
+    _XDG = os.path.join(os.environ.get("REPL_HOME")
+                        or os.path.expanduser("~"), ".config")
+else:
+    _XDG = os.path.expanduser("~/.config")
 _LP_HOME_AMBIENT = os.environ.get("LIGHTPANDA_HOME") or os.path.join(
     _XDG, "lightpanda")
 _CF_CONFIG_HOME = os.path.join(_XDG, "camofox")
@@ -225,8 +286,14 @@ _JAR_DEFAULT = (os.path.join(HOME, "cookies.json") if BROWSER != "camofox"
                 else os.path.join(_CF_CONFIG_HOME, "cookies.json"))
 JAR = cfg_chain(["TOUR_COOKIES", "LP_COOKIES"], _JAR_DEFAULT)
 ARRAY = os.path.join(HOME, ".jar-array.json")
-LOG_DIR = cfg_chain(["TOUR_LOG_DIR", "LP_LOG_DIR"],
-                    os.path.join(HOME, "logs"))
+# Default log dir is machine-chosen (the workspace log hub on both
+# kinds); TOUR_LOG_DIR/LP_LOG_DIR still override it.
+_LOG_DIR_DEFAULT = (os.path.join(os.environ.get("REPL_HOME")
+                                 or os.path.expanduser("~"), "logs")
+                    if MACHINE == "repl"
+                    else os.path.join(os.path.expanduser("~"),
+                                      "workspace", "logs"))
+LOG_DIR = cfg_chain(["TOUR_LOG_DIR", "LP_LOG_DIR"], _LOG_DIR_DEFAULT)
 
 DWELL = cfg_int("TOUR_DWELL_S", 60)
 GAP = cfg_int("TOUR_GAP_S", 0)
@@ -566,8 +633,12 @@ async def run_stop_lightpanda(idx, url):
 # ══ Camofox engine ════════════════════════════════════════════════════
 # Drives the camofox server's HTTP API through camofox.py's own client
 # machinery (req / convert / dismiss_dialogs / diagnose_timeout),
-# imported lazily from this same payload directory — camofox.py is
-# import-safe (its import only resolves its env-file config, the
+# imported lazily. camofox.py is a REPL-tree payload: it is resolved
+# cross-tree at ../replit/camofox.py relative to this file, with a
+# copy next to tour.py as the second candidate; when neither exists
+# (a muse box that never fetched the replit tree) the engine raises
+# CamofoxUnavailable — a clean ERROR, never a traceback. camofox.py
+# is import-safe (its import only resolves its env-file config, the
 # documented big-env merge). The server is a resident service owned by
 # the caller: the tour checks its health and reports ERROR, it NEVER
 # spawns it. Every request carries an explicit timeout — the sync
@@ -576,13 +647,33 @@ _CF = None        # the imported camofox module
 CURRENT_CF = None  # (key, session) of the live stop, for signal cleanup
 
 
+class CamofoxUnavailable(Exception):
+    """camofox.py could not be located or imported on this machine."""
+
+
 def _camofox():
     global _CF
     if _CF is None:
         here = os.path.dirname(os.path.abspath(__file__))
-        if here not in sys.path:
-            sys.path.insert(0, here)
-        import camofox
+        cands = [os.path.normpath(os.path.join(here, "..", "replit")),
+                 here]
+        found = next((d for d in cands
+                      if os.path.isfile(os.path.join(d, "camofox.py"))),
+                     None)
+        if found is None:
+            raise CamofoxUnavailable(
+                "camofox.py not found (looked in "
+                + ", ".join(cands) + ") — the camofox engine needs "
+                "the replit payload tree (scripts/replit/camofox.py); "
+                "fetch it, or use --browser lightpanda on this machine")
+        if found not in sys.path:
+            sys.path.insert(0, found)
+        try:
+            import camofox
+        except Exception as e:
+            raise CamofoxUnavailable(
+                f"camofox.py in {found} failed to import: "
+                f"{type(e).__name__}: {str(e)[:120]}")
         _CF = camofox
     return _CF
 
@@ -658,8 +749,12 @@ def run_stop_camofox(idx, url):
     Returns (verdict, time_to_shell_s, None) — no per-stop RSS on this
     engine: the server is a resident service, not a per-stop process."""
     global CURRENT_CF
-    cf = _camofox()
     name = url.rsplit("/", 1)[-1]
+    try:
+        cf = _camofox()
+    except CamofoxUnavailable as e:
+        log(f"stop {name}: {e}", "ERROR")
+        return "ERROR", None, None
     key = cf_key()
     session = f"{CF_SESSION}-{idx}"
     t0 = time.time()
@@ -747,6 +842,8 @@ async def run_stop(idx, url):
 
 # ── preflight + main loop (shared) ─────────────────────────────────────
 def print_config():
+    print(f"config: machine={MACHINE} (source: {MACHINE_SOURCE})",
+          flush=True)
     for line in CONFIG_SOURCES:
         print(f"config: {line}", flush=True)
     print(f"config: resolved: browser={BROWSER} links={len(LINKS)} "
@@ -771,13 +868,22 @@ def check():
         print(f"check: unknown browser {BROWSER!r} — "
               "use --browser lightpanda|camofox", flush=True)
         return 2
+    if MACHINE not in ("muse", "repl"):
+        print(f"check: unknown machine {MACHINE!r} — "
+              "use --machine muse|repl", flush=True)
+        return 2
     if not LINKS:
         print("check: TOUR_LINKS (fallback LP_LINKS) is empty — set it "
               f"in the system env or in {ENV_FILE} (see .env.example "
               "next to it)", flush=True)
         rc = 1
     if BROWSER == "camofox":
-        key = cf_key()
+        try:
+            key = cf_key()
+        except CamofoxUnavailable as e:
+            print(f"check: camofox client UNAVAILABLE: {e}", flush=True)
+            print("check: FAILED", flush=True)
+            return 1
         h = cf_health(key)
         if h is not None:
             print(f"check: camofox server ok: {CF_URL} "
@@ -839,13 +945,21 @@ async def main():
         log(f"FATAL: unknown browser {BROWSER!r} — "
             "use --browser lightpanda|camofox", "ERROR")
         sys.exit(2)
+    if MACHINE not in ("muse", "repl"):
+        log(f"FATAL: unknown machine {MACHINE!r} — "
+            "use --machine muse|repl", "ERROR")
+        sys.exit(2)
     if not LINKS:
         log("FATAL: TOUR_LINKS (fallback LP_LINKS) is empty — "
             "nothing to tour", "ERROR")
         sys.exit(2)
     cookies_note = ""
     if BROWSER == "camofox":
-        key = cf_key()
+        try:
+            key = cf_key()
+        except CamofoxUnavailable as e:
+            log(f"FATAL: {e}", "ERROR")
+            sys.exit(2)
         if cf_health(key) is None:
             log(f"FATAL: camofox server unreachable at {CF_URL} — "
                 "the tour never spawns it; start the camofox service "
