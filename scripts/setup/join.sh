@@ -6,8 +6,9 @@
 # binary paths). Profile-specific wiring (workflow entries, reverse
 # loop, session-env content) stays in the profiles.
 #
-# S3a: sshd render + validate + start. The repl profile adopts it
-# here; the muse profile adopts it when its profile is built (S4).
+# S3a: sshd render + validate + start. S3b: tailscaled start +
+# identity + tailnet join. The repl profile adopts them here; the
+# muse profile adopts them when its profile is built (S4).
 
 # engine_banner <host> <port> — read one banner line over raw TCP.
 engine_banner() {
@@ -70,4 +71,68 @@ engine_sshd_start() {
   engine_banner 127.0.0.1 "$port" | grep -q '^SSH-2.0-' || {
     warn "sshd tidak menjawab di $port"; tail -8 "$dir/sshd.log" 2>/dev/null; return 1; }
   ok "sshd hidup di $port (key-only)"
+}
+
+# engine_tailscaled_start <tailscaled> <tailscale> <state-dir>
+#                         <socket> <log-file> <data-dir>
+# Identity-safe daemon start. Liveness is the socket answering, not
+# a pid guess: a SECOND daemon on another socket would otherwise
+# suppress the start and leave this socket dead. An EMPTY state file
+# means the node key is gone and starting from it registers a
+# brand-new node — the last good copy (<data-dir>/tailscaled.state.bak)
+# is restored first and refreshed once the daemon answers. A legacy
+# daemon on the pre-XDG statedir (<data-dir>/state) is stopped first:
+# never two daemons on one identity.
+engine_tailscaled_start() {
+  local td="$1" tsc="$2" state="$3" sock="$4" TS_LOG="$5" TS_DATA="$6"
+  local state_bak="$TS_DATA/tailscaled.state.bak"
+  if [[ ! -s "$state/tailscaled.state" ]] && [[ -s "$state_bak" ]]; then
+    cp -p "$state_bak" "$state/tailscaled.state"
+    ok "identity tailnet dipulihkan dari backup ($state_bak) — tidak ada node baru"
+  fi
+  local legacy_state="$TS_DATA/state"
+  if [[ "$legacy_state" != "$state" && -S "$legacy_state/tailscaled.sock" ]]; then
+    echo "  migrasi: menghentikan tailscaled lama (statedir $legacy_state)"
+    pkill -f "tailscaled.*--statedir=$legacy_state" 2>/dev/null || true
+    sleep 2
+  fi
+  if ! "$tsc" --socket="$sock" status >/dev/null 2>&1; then
+    mkdir -p "$(dirname "$TS_LOG")"
+    setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
+      --outbound-http-proxy-listen=localhost:1055 \
+      --state="$state/tailscaled.state" --statedir="$state" --socket="$sock" \
+      </dev/null >>"$TS_LOG" 2>&1 &
+    local w=0
+    for w in $(seq 1 10); do [ -S "$sock" ] && break; sleep 1; done
+  fi
+  [ -S "$sock" ] || { warn "tailscaled tidak siap (log: $TS_LOG)"; return 1; }
+  if [[ -s "$state/tailscaled.state" ]] && ! cmp -s "$state/tailscaled.state" "$state_bak"; then
+    cp -p "$state/tailscaled.state" "$state_bak" 2>/dev/null || true
+  fi
+}
+
+# engine_tailnet_join <tailscale> <socket> — brings the node up and
+# reports its IPv4 in ENGINE_TS_IP. --hostname is asserted only where
+# it must be: the first join (auth key present), or when the operator
+# pins TAILSCALE_NODE_NAME. A later start that kept re-sending
+# $(hostname) would undo a console rename, so it stays quiet.
+engine_tailnet_join() {
+  local tsc="$1" sock="$2"
+  local hn=()
+  if [ -n "${TAILSCALE_AUTH_KEY:-}" ]; then
+    hn=(--hostname="${TAILSCALE_NODE_NAME:-$(hostname)}")
+    # The key itself never needs printing twice; mask it in the echoed command line.
+    "$tsc" --socket="$sock" up --authkey="$TAILSCALE_AUTH_KEY" "${hn[@]}" --accept-routes=false 2>&1 \
+      | sed -E 's/(tskey-)[A-Za-z0-9_-]+/\1***/g' | tail -2
+  else
+    # Normal boots already carry an identity, and `up` refuses to change one pref
+    # without every non-default being restated; `set` takes them one at a time.
+    # It still fails on a box that was never logged in, so keep `up` as the fallback.
+    [ -n "${TAILSCALE_NODE_NAME:-}" ] && hn=(--hostname="$TAILSCALE_NODE_NAME")
+    "$tsc" --socket="$sock" set --accept-routes=false "${hn[@]}" 2>&1 | tail -2 \
+      || "$tsc" --socket="$sock" up --accept-routes=false 2>&1 | tail -2 \
+      || warn "login tailnet perlu auth key: TAILSCALE_AUTH_KEY=tskey-... setup.sh --tailscale --join"
+  fi
+  ENGINE_TS_IP="$("$tsc" --socket="$sock" ip -4 2>/dev/null | head -1)"
+  [ -n "$ENGINE_TS_IP" ] && ok "tailnet: $ENGINE_TS_IP" || warn "node belum punya alamat tailnet"
 }
