@@ -48,6 +48,12 @@ var is logged at startup, name + source only):
   LP_BASE_PORT        first CDP port; stop i uses +i     (default 19401)
   LP_MAX_ROUNDS       0 = tour forever                   (default 0)
   LP_ONLY             run only the stop with this last path segment
+  LP_JAR_WRITEBACK    1 = after each SHELL stop, merge the live
+                      session's cookies back into the jar file, so the
+                      session keeps what it earns (notably a
+                      cf_clearance) across stops and rounds instead of
+                      re-facing the challenge from a static jar
+                      (default off; merge-only, fail-open)
   LIGHTPANDA_HOME     install/state root (default $XDG_CONFIG_HOME/lightpanda)
   LIGHTPANDA_BIN      engine binary (default $LIGHTPANDA_HOME/lightpanda,
                       then `lightpanda` on PATH)
@@ -129,6 +135,7 @@ BREAKER = cfg_int("TOUR_MAX_EARLY_FAILURES", 3)
 POLL = cfg_int("LP_POLL_S", 150)
 BASE_PORT = cfg_int("LP_BASE_PORT", 19401)
 MAX_ROUNDS = cfg_int("LP_MAX_ROUNDS", 0)
+WRITEBACK = cfg("LP_JAR_WRITEBACK", "") in ("1", "true", "yes")
 ONLY = cfg("LP_ONLY", "")
 
 LINKS = [u for u in cfg("LP_LINKS", "").replace(",", " ").split() if u]
@@ -177,6 +184,78 @@ def convert_jar():
     with os.fdopen(fd, "w") as f:
         json.dump(out, f)
     return len(out)
+
+
+_WB_DISABLED = False  # set when the engine refuses cookie read-back
+
+
+def writeback_jar(cookies, name):
+    """Merge cookies read back from a live session into the on-disk jar:
+    freshest per (name, domain, path) wins, nothing is ever deleted, the
+    write is atomic (tmp + replace, mode 600), and any error leaves the
+    jar untouched. Paired with convert_jar() re-running every round,
+    this turns the static jar into an evolving one — the session keeps
+    what it earns (notably a cf_clearance) across stops, rounds and
+    restarts, like a living browser profile does."""
+    if not cookies:
+        return
+    try:
+        raw = json.load(open(JAR))
+        container = raw.get("cookies", raw) if isinstance(raw, dict) \
+            else raw
+        by_key = {}
+        for c in container:
+            if "name" in c:
+                by_key[(c["name"], c.get("domain", ""),
+                        c.get("path", "/"))] = c
+        changed = 0
+        for c in cookies:
+            if "name" not in c or "value" not in c:
+                continue
+            key = (c["name"], c.get("domain", ""), c.get("path", "/"))
+            new = {"name": c["name"], "value": c["value"],
+                   "domain": c.get("domain", ".replit.com"),
+                   "path": c.get("path", "/")}
+            if c.get("expires") and float(c["expires"]) > 0:
+                new["expires"] = float(c["expires"])
+            for f in ("secure", "httpOnly", "sameSite"):
+                if c.get(f) is not None:
+                    new[f] = c[f]
+            if by_key.get(key, {}).get("value") != new["value"]:
+                changed += 1
+            by_key[key] = new
+        merged = list(by_key.values())
+        out = dict(raw, cookies=merged) if isinstance(raw, dict) \
+            and "cookies" in raw else merged
+        tmp = JAR + ".wb-tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(out, f)
+        os.replace(tmp, JAR)
+        log(f"stop {name}: jar write-back: {len(merged)} cookies "
+            f"({changed} changed)", C_DIM)
+    except Exception as e:
+        log(f"stop {name}: jar write-back failed ({type(e).__name__}: "
+            f"{str(e)[:100]}); jar untouched", C_WARN)
+
+
+async def writeback_ctx(ctx, name):
+    """Read the live context's cookies and merge them into the jar.
+    If the engine refuses the read (Lightpanda's CDP surface is
+    partial — Storage.setCookies already fails), disable write-back
+    for this process and carry on: it must never break a tour."""
+    global _WB_DISABLED
+    if _WB_DISABLED:
+        return
+    try:
+        cookies = await asyncio.wait_for(ctx.cookies(), 15)
+    except Exception as e:
+        _WB_DISABLED = True
+        log(f"stop {name}: cookie read-back unsupported "
+            f"({type(e).__name__}: {str(e)[:100]}); write-back "
+            "disabled for this process", C_WARN)
+        return
+    writeback_jar(cookies, name)
 
 
 def rss_mb(pid):
@@ -325,6 +404,8 @@ async def run_stop(idx, url):
                 log(f"stop {name}: post-hold still-shell={still} "
                     f"textlen={len(text)} rss_peak={rss_peak}MB",
                     C_OK if still else C_WARN)
+                if WRITEBACK:
+                    await writeback_ctx(ctx, name)
             try:
                 await asyncio.wait_for(browser.close(), 15)
             except Exception as e:
@@ -351,7 +432,8 @@ def print_config():
         print(f"config: {line}", flush=True)
     print(f"config: resolved: home={HOME} bin={BIN} jar={JAR} "
           f"links={len(LINKS)} dwell={DWELL}s gap={GAP}s "
-          f"breaker={BREAKER} poll={POLL}s base_port={BASE_PORT}",
+          f"breaker={BREAKER} poll={POLL}s base_port={BASE_PORT} "
+          f"writeback={WRITEBACK}",
           flush=True)
 
 
