@@ -64,7 +64,7 @@ scripts/                     executable payloads, referenced by the skills by pa
                              generate-closure.sh, libpool.sh), dot_replit.py (.replit editor),
                              probe-tailnet-peers.sh, start-replit-chromium.sh, join-lifecycle-test.sh
 docs/                        lab results & studies — cross-machine findings (detection
-                             studies, lane comparisons), NOT box operating guidance
+                             studies, lane comparisons), NOT box operating guidance; fleet build guide
 tests/                       CI tool-setup driver (tool-setup.sh) + test scripts
 .github/workflows/ci.yml     CI: payload checks + one isolated setup lane per tool
 ```
