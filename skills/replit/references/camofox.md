@@ -420,7 +420,7 @@ ${REPL_HOME:-$HOME}/camofox/
    top-level lib dirs of the declared packages (24 on this box); Firefox's X11 closure
    (libX11-xcb, libxcb, pango, cairo, … ~100+ dirs) is transitive and
    lives in stores the Replit loader never searches. That's what
-   `scripts/setup/generate-closure.sh` builds into `LD_LIBRARY_PATH.txt` — the engine
+   `scripts/replit/generate-closure.sh` builds into `LD_LIBRARY_PATH.txt` — the engine
    loading fine and then dying on `libX11-xcb.so.1: cannot open shared
    object file` is the exact signature of using only those top-level dirs.
 3. **`$HOME` is wiped on container recreate; the workspace is not.**
@@ -446,7 +446,7 @@ CAMOFOX_ROOT="${REPL_HOME:-$HOME}/camofox"
 git clone https://github.com/jo-inc/camofox-browser "$CAMOFOX_ROOT/camofox-browser"
 uv venv "$CAMOFOX_ROOT/venv"
 (cd "$CAMOFOX_ROOT/camofox-browser" && CAMOFOX_SKIP_DOWNLOAD=1 npm i --registry=https://registry.npmjs.org/ && npm run fetch-bin)
-bash scripts/setup/generate-closure.sh "$CAMOFOX_ROOT/camofox-browser/LD_LIBRARY_PATH.txt"
+bash scripts/replit/generate-closure.sh "$CAMOFOX_ROOT/camofox-browser/LD_LIBRARY_PATH.txt"
 camofox   # fast self-verification pass, then launches :9377
 ```
 
@@ -570,7 +570,7 @@ Useful greps:
 | Symptom | Cause | Fix |
 |---------|-------|-----|
 | `browserConnected:false` after start | lazy launch — normal | POST `/tabs` with `-m 90`; first launch ~60-90s |
-| `POST /tabs` → 500 `new page timed out after 60000ms` ×2, engine log shows `signal 11` in content processes | engine cannot init a page in time (or at all) on this host — check `LD_LIBRARY_PATH` first: a closure containing the nix **glibc/libgcc** dirs stack-smashes node AND a *missing* one (pool-only) dies at `XPCOMGlueLoad: libgtk-3.so.0` | regenerate the closure with `scripts/setup/generate-closure.sh` (its glibc/gcc exclusion list is load-bearing); `newPageTimeoutMs` floor is 60000 in `setup.sh --camofox` step 4b — verify with `grep newPageTimeoutMs camofox.config.json` inside the repo clone (an old 10000 there = the script never ran for this server) |
+| `POST /tabs` → 500 `new page timed out after 60000ms` ×2, engine log shows `signal 11` in content processes | engine cannot init a page in time (or at all) on this host — check `LD_LIBRARY_PATH` first: a closure containing the nix **glibc/libgcc** dirs stack-smashes node AND a *missing* one (pool-only) dies at `XPCOMGlueLoad: libgtk-3.so.0` | regenerate the closure with `scripts/replit/generate-closure.sh` (its glibc/gcc exclusion list is load-bearing); `newPageTimeoutMs` floor is 60000 in `setup.sh --camofox` step 4b — verify with `grep newPageTimeoutMs camofox.config.json` inside the repo clone (an old 10000 there = the script never ran for this server) |
 | `Tab no longer exists (browser was restarted)` | **not** the browser-idle timer (it only fires at zero sessions) — the 60s active health probe failed and called `restartBrowser` → `closeAllSessions` + `closeBrowserFully`, killing in-flight work | re-create the tab; see *Frozen vs dead browser* |
 | `POST /sessions/<u>/cookies` never returns (client dies at its own 300s timeout) | browser is **frozen**, not dead — the route awaits `getSession`/`addCookies` (`server.js:473-474`) with no server-side timeout | `pkill -9 -f camoufox-bin` (a *dead* browser 500s instantly), then re-import; see *Frozen vs dead browser* |
 | a failed run's log just **stops** at `listening on :9377`, error missing | client `print()`s are block-buffered when stdout is a pipe (no TTY); and `session:created` (`plugins/persistence/index.js:120`) awaits the state restore, so a wedged browser never reaches the route's `req` log line | run the CLI as `python3 -u` (or `PYTHONUNBUFFERED=1`) |
@@ -1140,7 +1140,7 @@ Use a freshly generated key for each test run, store it in a file under the scra
   the repo: `$CAMOFOX_STATE_DIR/env.sh` (runtime closure env) and
   `$XDG_BIN_HOME/launch-camofox-browser` (the shim for shells that cannot source
   it).
-- `scripts/setup/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
+- `scripts/replit/generate-closure.sh` — the LD_LIBRARY_PATH closure builder
   (called by the camofox installer; usable standalone with an output path).
   **Not a slow step:** measured 14s / 109 lib dirs on a warm store and
   byte-identical on re-run (the timeout some agents hit is the terminal tool's
@@ -1148,7 +1148,7 @@ Use a freshly generated key for each test run, store it in a file under the scra
   It is a *per-package* `nix path-info --recursive`, so it never touches the
   700k-entry store glob that legitimately costs minutes.
 - `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
-- `scripts/setup/libpool.sh` — heals the host-wide pool `$REPL_HOME/.local/lib`
+- `scripts/replit/libpool.sh` — heals the host-wide pool `$REPL_HOME/.local/lib`
   (the dir the setup.sh rc block prepends to `LD_LIBRARY_PATH`; commonly
   *also* pinned by hand in `.replit [userenv.shared]` — setup.sh does not
   write that key). Since v4.6.0 it NO LONGER materializes the closure there:

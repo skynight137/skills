@@ -25,7 +25,7 @@ operator's own script, which holds their runtime config — make that script pre
 the managed path and keep their copy as a fallback. Skip this and the installer
 reports success while the old copy keeps serving.
 
-## 1. Version / URL constants — `scripts/setup.sh`
+## 1. Version / URL constants — `scripts/setup/profile-repl.sh`
 
 Add the `*_RELEASE_BASE` next to the other download bases. Check the real
 artifact before writing the URL: `curl -fsSL https://api.github.com/repos/<o>/<r>/releases/latest`
@@ -41,7 +41,7 @@ download is a decision, not an accident.
 line in `seed_tool_wiring`. Ownership is what `--clean` uses to decide which
 block lines belong to the tool; without it the tool is un-cleanable by design.
 
-## 3. Installer — a module in `scripts/setup/` plus one `source` line in setup.sh
+## 3. Installer — a module in `scripts/setup/` plus one `source` line in `scripts/setup/profile-repl.sh`
 
 `install_<tool>()`: `step`, `need_cmd`, download into `$XDG_DATA_HOME/_<tool>.*`,
 verify, extract, place in `$XDG_BIN_HOME`, `ok` with the version, then

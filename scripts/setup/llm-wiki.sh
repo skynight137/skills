@@ -65,9 +65,10 @@ _llm_wiki_provision_display() {
   for p in $outs; do
     case "$p" in *xkeyboard-config*) xkb="$st/nix/store/${p##*/}/share/X11/xkb" ;; esac
   done
-  # nixenv sits next to this module (scripts/setup/), not in scripts/ where setup.sh lives.
-  cp -f "$REPL_SKILL_DIR/setup/nixenv" "$XDG_BIN_HOME/nixenv" \
-    || { warn "llm-wiki: nixenv tidak ada di $REPL_SKILL_DIR/setup — Xvfb hasil build tak bisa jalan"; return 1; }
+  # nixenv is a repl-only payload: it lives in scripts/replit/ (reached
+  # via $REPL_SKILL_DIR), NOT beside this lane in scripts/setup/.
+  cp -f "$REPL_SKILL_DIR/nixenv" "$XDG_BIN_HOME/nixenv" \
+    || { warn "llm-wiki: nixenv tidak ada di $REPL_SKILL_DIR — Xvfb hasil build tak bisa jalan"; return 1; }
   chmod +x "$XDG_BIN_HOME/nixenv"
   for p in $outs; do
     up="$st/nix/store/${p##*/}"
