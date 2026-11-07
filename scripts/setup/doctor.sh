@@ -179,7 +179,7 @@ doctor() {
   # (every .replit workflow task, the Run button, MCP/cron children) never
   # sources env.sh, so a bare `camofox-browser` there launches Firefox with no
   # GTK closure and dies with `libmozgtk.so: libgtk-3.so.0: cannot open shared
-  # object file` — surfacing to camofox.py as an opaque 500 on cookie import
+  # object file` — surfacing to the client as an opaque 500 on cookie import
   # (six logged "rp" runs hit this). Gate on the wiring, not just the binary.
   if [[ -x "$XDG_BIN_HOME/camofox-browser" || -x "$NODE_DIR/bin/camofox-browser" ]]; then
     if [[ -s "$CAMOFOX_CLOSURE_FILE" ]]; then

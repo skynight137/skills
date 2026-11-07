@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# tour.sh — launcher for tour.py, the SHARED tour (scripts/setup/,
-# --machine muse|repl). It exists ONLY to do the env assembly the
+# tour.sh — launcher for tour.py, the SHARED tour (scripts/ root —
+# a ready-to-run script, NOT part of setup; --machine muse|repl).
+# It exists ONLY to do the env assembly the
 # program cannot do for itself:
 #   1. (nix boxes only — repl) the tour venv's greenlet needs
 #      libstdc++.so.6, which on a Replit box lives in the nix store,
@@ -32,7 +33,7 @@ if [ -x "$LIGHTPANDA_HOME/venv/bin/python" ]; then
 elif command -v python3 >/dev/null 2>&1; then
   PY="$(command -v python3)"
 else
-  echo "tour: no python found — run: bash $D/../setup.sh --lightpanda" >&2
+  echo "tour: no python found — run: bash $D/setup.sh --lightpanda" >&2
   exit 1
 fi
 exec "$PY" -u "$D/tour.py" "$@"

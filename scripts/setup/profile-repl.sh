@@ -19,12 +19,16 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # kind is --machine, not a directory):
 SETUP_LIB_DIR="$SCRIPT_DIR"               # scripts/setup — core.sh, join.sh (engine), profiles, every lane
 # scripts/replit — REPL-ONLY payloads: the runtime files a repl box
-# executes (dot_replit.py, camofox.py, the probes, the chromium
+# executes (dot_replit.py, the probes, the chromium
 # launcher) plus the nix machinery the lanes invoke (nixenv,
 # resolve-libs.sh, generate-closure.sh, libpool.sh). Lanes reach them
 # ONLY through this var — never a spelled-out ../replit path.
 REPL_SKILL_DIR="$SCRIPT_DIR/../replit"
 SETUP_ENTRY="$SCRIPT_DIR/../setup.sh"     # the one entry (scripts/setup.sh)
+# scripts/ root — the shared READY-TO-RUN scripts (tour.py/tour.sh,
+# socks5-probe.py). They are not setup (setup prepares; these run);
+# lanes only ever CITE them (e.g. a lane's ready line), never source.
+SCRIPTS_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 
 # Install root (resolved once — no flag, one env override) ──────────────────
 # Set BEFORE the XDG defaults below because every path root depends on it.

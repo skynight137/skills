@@ -2,8 +2,8 @@
 
 Lightpanda is a single static headless-browser binary that speaks CDP
 (`lightpanda serve`). In this skill it exists for ONE job: the
-session keep-alive tour — the unified `scripts/setup/tour.py`, a
-SHARED payload serving both machine kinds (`--machine muse|repl`,
+session keep-alive tour — the unified `scripts/tour.py`, a
+SHARED ready-to-run script serving both machine kinds (`--machine muse|repl`,
 pinned at the call site; default auto-detect), with
 `--browser lightpanda` (the default engine; `--browser camofox` runs
 the same tour, same verdicts, against the camofox server) — where a
@@ -106,8 +106,8 @@ margin (see the staged dwell ladder in session-keepalive.md).
 ## Running it
 
 ```bash
-bash scripts/setup/tour.sh --browser lightpanda --machine repl --check   # preflight: config sources, binary, jar
-bash scripts/setup/tour.sh --browser lightpanda --machine repl           # the tour (stdout = the tour log)
+bash scripts/tour.sh --browser lightpanda --machine repl --check   # preflight: config sources, binary, jar
+bash scripts/tour.sh --browser lightpanda --machine repl           # the tour (stdout = the tour log)
 ```
 
 `tour.sh` is a justified shim, not a wrapper: it assembles the
@@ -117,7 +117,7 @@ needs `libstdc++.so.6` from the nix store on `LD_LIBRARY_PATH`
 store exists), and it resolves the venv python. All
 logic lives in `tour.py`.
 
-For a `.replit` workflow, point the task at `scripts/setup/tour.sh`
+For a `.replit` workflow, point the task at `scripts/tour.sh`
 with `--browser`/`--machine` pinned in the args, and
 redirect stdout to a file under `$REPL_HOME/logs/` (workflow
 consoles never stream runtime logs — references/exposing-ports.md);

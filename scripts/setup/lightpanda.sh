@@ -3,7 +3,7 @@
 # keep-alive tours. Sourced by setup.sh.
 #
 # Design: one static binary, pinned by version + size + SHA256, plus a
-# small Python venv that runs the tour client (scripts/setup/tour.py
+# small Python venv that runs the tour client (scripts/tour.py
 # drives the engine over CDP with Playwright's client library — no browser
 # download, Lightpanda IS the browser). There is no resident server:
 # tour.py spawns one `lightpanda serve` per tour stop and tears it
@@ -221,7 +221,7 @@ install_lightpanda() {
   record_tool_path_dirs "$XDG_BIN_HOME"
   wire_tool lightpanda LIGHTPANDA_HOME LIGHTPANDA_BIN -- "$XDG_BIN_HOME"
 
-  ok "lightpanda ready — tour: bash $SETUP_LIB_DIR/tour.sh --browser lightpanda --machine repl (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: tour.sh --check)"
+  ok "lightpanda ready — tour: bash $SCRIPTS_DIR/tour.sh --browser lightpanda --machine repl (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: tour.sh --check)"
 }
 
 clean_lightpanda() {

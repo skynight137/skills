@@ -50,9 +50,10 @@ CAMOUFOX_INSTALL_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/camoufox"
 # under $REPL_HOME) and export them so the server picks them up.
 #
 # The server has NO single "state dir" variable: it reads four SEPARATE env
-# vars, each with its own ~/.camofox default. CAMOFOX_STATE_DIR is a
-# camofox.py-only convenience (its --state/listing fallback) and is NOT read
-# by the server — setting it alone moves nothing.
+# vars, each with its own ~/.camofox default. CAMOFOX_STATE_DIR was a
+# camofox.py-only convenience (the deleted CLI's --state/listing
+# fallback; the CLI was removed in S5d) and is NOT read by the server
+# or the tour — setting it alone moves nothing.
 #
 # closure.txt and env.sh live in this SAME dir (not $XDG_DATA_HOME): one
 # state root for the whole camofox install, so a wipe/move touches one path.
@@ -270,9 +271,10 @@ camofox_write_env_example() {
 # and fill in the values. Only the vars you set are used.
 #
 # Precedence ("big env" rule): a var already set in the system environment
-# WINS; this file only fills gaps. camofox.py logs at startup which source
-# each var came from ("from system env (.env file skipped)" /
-# "from .env file"), so a run's config is auditable, never silent.
+# WINS; this file only fills gaps. The tour's built-in camofox client
+# logs at startup which source each var came from ("from system env
+# (.env file skipped)" / "from .env file"), so a run's config is
+# auditable, never silent.
 #
 # Template written by setup.sh --camofox; safe to regenerate, never read
 # by the client itself.
@@ -306,7 +308,8 @@ EOF
 # then died on every launch with
 #   XPCOMGlueLoad error for .../libmozgtk.so: libgtk-3.so.0: cannot open shared
 #   object file: No such file or directory
-# and, because `camofox.py` imports cookies FIRST, the client only ever showed
+# and, because the client imports cookies FIRST (camofox.py then, the
+# tour's camofox engine now), the client only ever showed
 #   import failed: {'_http_error': 500, '_body': '{"error":"browserType.launch:
 #   Failed to launch the browser process..."}'}
 # — i.e. the "refresh page" workflow failed while the browser was dead. 6 logged

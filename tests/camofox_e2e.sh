@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # camofox_e2e.sh — end-to-end check for the npm-global Camofox lane
 # (`bash setup.sh --camofox`). Exercises the REST API the MCP adapter and
-# camofox.py speak, on a private port with a throwaway key.
+# the tour's camofox engine speak, on a private port with a throwaway key.
 #
 # Runs against whatever is installed: `camofox-browser` on PATH (required),
 # started directly — no wrapper. The GTK/X11 closure (if generated at
