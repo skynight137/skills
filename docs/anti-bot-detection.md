@@ -5,8 +5,8 @@ which test sites to use, how to read them, and how Camofox's WebGL spoof is
 handled on this GPU-less Replit host.
 
 Scope: this file is about **detection**. The lane-selection playbook (which
-tool to reach for, cheapest first) lives in `web-content-lanes.md`; the
-Camofox install/server detail is in `camofox.md`. Read those for *how to run*
+tool to reach for, cheapest first) lives in `../skills/replit/references/web-content-lanes.md`; the
+Camofox install/server detail is in `../skills/replit/references/camofox.md`. Read those for *how to run*
 a lane; read this for *how to tell whether it's being caught*.
 
 > Every URL below was fetched and confirmed live at time of writing. Anything
@@ -106,7 +106,7 @@ number is opaque; the fields behind it are actionable.
   hCaptcha escalates to an image challenge. PerimeterX/HUMAN runs a JS
   sensor that scores behaviour and may silently soft-block (200 page with no
   content) rather than challenge. Treat "HTTP 200 but empty body / placeholder
-  title" as a block (see `web-content-lanes.md` §"Block detection").
+  title" as a block (see `../skills/replit/references/web-content-lanes.md` §"Block detection").
 
 ## 3. Camofox WebGL spoof on this box (GPU-less, no `/dev/dri`)
 
@@ -162,7 +162,7 @@ is the real-world confirmation.
    lane, ignore the Chrome-object rows.
    - *Camofox:* `POST /tabs` to the URL, then read the page via
      `GET /tabs/<id>/snapshot?userId=<u>` or
-     `POST /tabs/<id>/evaluate` (see `web-content-lanes.md` §"Reading content").
+     `POST /tabs/<id>/evaluate` (see `../skills/replit/references/web-content-lanes.md` §"Reading content").
 2. **Contradictions.** Open `https://abrahamjuliot.github.io/creepjs/`, wait
    for "FP ID: Computing…" to finish, and check the **lies** tab. **Zero
    lies** is the goal. Any lie is a visible inconsistency.
@@ -188,7 +188,7 @@ is the real-world confirmation.
    widget resolving **without an interactive challenge**. Then hit a real
    Cloudflare-fronted site and look for `httpStatus: 200, navigationOk: true`;
    a `403` with a `__cf_chl_rt_tk` token is a challenge (retry the same
-   `sessionKey` so the clearance cookie is reused — `web-content-lanes.md`).
+   `sessionKey` so the clearance cookie is reused — `../skills/replit/references/web-content-lanes.md`).
 8. **Vendor-grade check.** Open `https://demo.fingerprint.com/` — this is how
    a paid vendor (FingerprintJS) sees the session. Useful as the "expensive"
    end of the spectrum.
