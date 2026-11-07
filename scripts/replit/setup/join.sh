@@ -241,64 +241,9 @@ RCEOF
 
   __rs_workflow
 
-  # Liveness is the socket answering, not a pid guess: a SECOND daemon on another
-  # socket (a test node, a second tailnet) matches the pattern and would otherwise
-  # suppress the start and leave this socket dead.
-  #
-  # Identity safety: an EMPTY state file means the node key is gone, and starting
-  # the daemon from it registers a brand-new node (hostname-1) while the old one
-  # lingers offline in the console. Restore the last good copy first; refresh that
-  # copy once the daemon answers.
-  local state_bak="$TAILSCALE_DATA_DIR/tailscaled.state.bak"
-  if [[ ! -s "$state/tailscaled.state" ]] && [[ -s "$state_bak" ]]; then
-    cp -p "$state_bak" "$state/tailscaled.state"
-    ok "identity tailnet dipulihkan dari backup ($state_bak) — tidak ada node baru"
-  fi
-  # Pre-relocation daemons (statedir $TAILSCALE_DATA_DIR/state, log beside
-  # it) hold the SAME state file: never run two daemons on one identity.
-  # Stop the legacy one before starting on the new XDG state dir.
-  local legacy_state="$TAILSCALE_DATA_DIR/state"
-  if [[ "$legacy_state" != "$state" && -S "$legacy_state/tailscaled.sock" ]]; then
-    echo "  migrasi: menghentikan tailscaled lama (statedir $legacy_state)"
-    pkill -f "tailscaled.*--statedir=$legacy_state" 2>/dev/null || true
-    sleep 2
-  fi
-  if ! "$tsc" --socket="$sock" status >/dev/null 2>&1; then
-    mkdir -p "$(dirname "$TAILSCALE_LOG")"
-    setsid "$td" --tun=userspace-networking --socks5-server=localhost:1055 \
-      --outbound-http-proxy-listen=localhost:1055 \
-      --state="$state/tailscaled.state" --statedir="$state" --socket="$sock" \
-      </dev/null >>"$TAILSCALE_LOG" 2>&1 &
-    local w=0
-    for w in $(seq 1 10); do [ -S "$sock" ] && break; sleep 1; done
-  fi
-  [ -S "$sock" ] || { warn "tailscaled tidak siap (log: $TAILSCALE_LOG)"; return 1; }
-  if [[ -s "$state/tailscaled.state" ]] && ! cmp -s "$state/tailscaled.state" "$state_bak"; then
-    cp -p "$state/tailscaled.state" "$state_bak" 2>/dev/null || true
-  fi
-
-  # --hostname is asserted only where it must be: the first join, or when the operator
-  # pins TAILSCALE_NODE_NAME. A later start that kept re-sending $(hostname) would undo any
-  # rename made on the admin console, so it stays quiet and lets the console win.
-  local hn=()
-  if [ -n "${TAILSCALE_AUTH_KEY:-}" ]; then
-    hn=(--hostname="${TAILSCALE_NODE_NAME:-$(hostname)}")
-    # The key itself never needs printing twice; mask it in the echoed command line.
-    "$tsc" --socket="$sock" up --authkey="$TAILSCALE_AUTH_KEY" "${hn[@]}" --accept-routes=false 2>&1 \
-      | sed -E 's/(tskey-)[A-Za-z0-9_-]+/\1***/g' | tail -2
-  else
-    # Normal boots already carry an identity, and `up` refuses to change one pref
-    # without every non-default being restated; `set` takes them one at a time.
-    # It still fails on a box that was never logged in, so keep `up` as the fallback.
-    [ -n "${TAILSCALE_NODE_NAME:-}" ] && hn=(--hostname="$TAILSCALE_NODE_NAME")
-    "$tsc" --socket="$sock" set --accept-routes=false "${hn[@]}" 2>&1 | tail -2 \
-      || "$tsc" --socket="$sock" up --accept-routes=false 2>&1 | tail -2 \
-      || warn "login tailnet perlu auth key: TAILSCALE_AUTH_KEY=tskey-... setup.sh --tailscale --join"
-  fi
-  local ip
-  ip="$("$tsc" --socket="$sock" ip -4 2>/dev/null | head -1)"
-  [ -n "$ip" ] && ok "tailnet: $ip" || warn "node belum punya alamat tailnet"
-  __rs_ssh_hint "$user" "$ip"
+  engine_tailscaled_start "$td" "$tsc" "$state" "$sock" "$TAILSCALE_LOG" "$TAILSCALE_DATA_DIR" || return 1
+  engine_tailnet_join "$tsc" "$sock"
+  __rs_ssh_hint "$user" "$ENGINE_TS_IP"
 
 
   # Workflow mode: a task whose command exits counts as DONE and the job is
