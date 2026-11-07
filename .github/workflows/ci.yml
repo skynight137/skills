@@ -122,7 +122,7 @@ jobs:
       #    ambient XDG homes.
       - name: No unguarded XDG reads in standalone shell entry points
         run: |
-          files="scripts/muse/setup.sh scripts/replit/lp-tour.sh scripts/replit/join-lifecycle-test.sh"
+          files="scripts/muse/setup.sh scripts/replit/tour.sh scripts/replit/join-lifecycle-test.sh"
           if grep -nE '\\$XDG_(DATA|STATE|CONFIG|CACHE)_HOME' $files \
                | grep -vE ':[0-9]+:\\s*#' \
                | grep -vE '\\$\\{XDG_[A-Z_]+:-' \

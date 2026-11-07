@@ -2,11 +2,14 @@
 
 Lightpanda is a single static headless-browser binary that speaks CDP
 (`lightpanda serve`). In this skill it exists for ONE job: the
-session keep-alive tour (`scripts/lp-tour.py`), where a fleet of
-Replit workspaces is held inside its idle tolerance by an open
-cadence — open a project logged-in, hold the tab for the dwell,
+session keep-alive tour — the unified `scripts/tour.py` with
+`--browser lightpanda` (the default engine; `--browser camofox` runs
+the same tour, same verdicts, against the camofox server) — where a
+fleet of Replit workspaces is held inside its idle tolerance by an
+open cadence — open a project logged-in, hold the tab for the dwell,
 close, next (the mechanism is the cadence, not the engine; see
 references/session-keepalive.md for the measured engine comparison).
+This reference covers the Lightpanda engine of that tour.
 
 Pick it over Camofox when the job is open-and-hold only: ~380 MB
 per stop and **zero idle cost** (no resident server), against
@@ -61,7 +64,7 @@ venv actually has pip.
 | `venv/` | tour client venv: python + playwright **client library only** (`connect_over_cdp`; no browser download — the engine is the browser), pinned to `LIGHTPANDA_PLAYWRIGHT_VERSION` |
 | `.env` | operator tour config (never written by setup) |
 | `.env.example` | fill-in template, refreshed by every `--lightpanda` run |
-| `cookies.json` | default login jar (`LP_COOKIES` overrides) |
+| `cookies.json` | default login jar (`TOUR_COOKIES` overrides; fallback `LP_COOKIES`) |
 | `logs/` | per-stop server logs (`lp-server-<project>.log`) |
 
 `--clean lightpanda` removes the binary, the symlink and the venv.
@@ -72,42 +75,45 @@ Camofox server state.
 ## Tour config
 
 Fleet "big env" rule: a var already set in the **system environment
-wins**; `$LIGHTPANDA_HOME/.env` only fills gaps. `lp-tour.py` logs
+wins**; `$LIGHTPANDA_HOME/.env` only fills gaps. `tour.py` logs
 one `config: <VAR>: from …` line per var at startup — name + source
-only — so a run's config is auditable, never silent.
+only — so a run's config is auditable, never silent. The tour's vars
+are `TOUR_*`; the lp-tour-era `LP_*` names are honoured as fallbacks
+for one release, so existing captain `.env` files keep working
+untouched.
 
 | var | default | meaning |
 |---|---|---|
-| `LP_LINKS` | — (required) | comma/whitespace-separated project URLs, in stop order. Put the tour's own host FIRST: a pilot that opens itself first heals itself before touring the others |
-| `LP_COOKIES` | `$LIGHTPANDA_HOME/cookies.json` | login jar (browser-export or Playwright JSON) for an account that can open every link |
+| `TOUR_LINKS` (fallback `LP_LINKS`) | — (required) | comma/whitespace-separated project URLs, in stop order. Put the tour's own host FIRST: a pilot that opens itself first heals itself before touring the others |
+| `TOUR_COOKIES` (fallback `LP_COOKIES`) | `$LIGHTPANDA_HOME/cookies.json` | login jar (browser-export or Playwright JSON) for an account that can open every link |
 | `TOUR_DWELL_S` | 60 | seconds the tab is held per stop |
 | `TOUR_GAP_S` | 0 | sleep between stops (tab closed) |
 | `TOUR_MAX_EARLY_FAILURES` | 3 | consecutive non-SHELL stops before `*** tour ABORTED` + exit 1; a SHELL stop resets the count; 0 = never |
-| `LP_POLL_S` | 150 | budget for the shell marker to appear |
-| `LP_BASE_PORT` | 19401 | first CDP port; stop *i* uses base+*i* |
-| `LP_MAX_ROUNDS` | 0 | 0 = tour forever |
-| `LP_ONLY` | — | run only the stop whose last path segment matches |
-| `LP_JAR_WRITEBACK` | off | `1` = after each SHELL stop, merge the live session's cookies back into the jar (atomic, merge-only, fail-open), so the session keeps what it earns — notably a `cf_clearance` — across stops and rounds instead of re-facing Cloudflare from a static jar. If the engine refuses cookie read-back, it disables itself for that process and the tour carries on |
+| `TOUR_POLL_S` (fallback `LP_POLL_S`) | 150 | budget for the shell marker to appear |
+| `TOUR_BASE_PORT` (fallback `LP_BASE_PORT`) | 19401 | first CDP port; stop *i* uses base+*i* |
+| `TOUR_MAX_ROUNDS` (fallback `LP_MAX_ROUNDS`) | 0 | 0 = tour forever |
+| `TOUR_ONLY` (fallback `LP_ONLY`) | — | run only the stop whose last path segment matches |
+| `TOUR_JAR_WRITEBACK` (fallback `LP_JAR_WRITEBACK`) | off | `1` = after each SHELL stop, merge the live session's cookies back into the jar (atomic, merge-only, fail-open), so the session keeps what it earns — notably a `cf_clearance` — across stops and rounds instead of re-facing Cloudflare from a static jar. If the engine refuses cookie read-back, it disables itself for that process and the tour carries on |
 | `LIGHTPANDA_BIN` | `$LIGHTPANDA_HOME/lightpanda`, then PATH | engine override |
 
-Round time is `len(LP_LINKS) × (TOUR_DWELL_S + TOUR_GAP_S)` — the
+Round time is `len(TOUR_LINKS) × (TOUR_DWELL_S + TOUR_GAP_S)` — the
 round must fit inside the target platform's idle tolerance with
 margin (see the staged dwell ladder in session-keepalive.md).
 
 ## Running it
 
 ```bash
-bash scripts/lp-tour.sh --check   # preflight: config sources, binary, jar
-bash scripts/lp-tour.sh           # the tour (stdout = the tour log)
+bash scripts/tour.sh --check   # preflight: config sources, binary, jar
+bash scripts/tour.sh           # the tour (stdout = the tour log)
 ```
 
-`lp-tour.sh` is a justified shim, not a wrapper: it assembles the
+`tour.sh` is a justified shim, not a wrapper: it assembles the
 env the program cannot assemble for itself — the venv's greenlet
 needs `libstdc++.so.6` from the nix store on `LD_LIBRARY_PATH`
 **before** python starts, and it resolves the venv python. All
-logic lives in `lp-tour.py`.
+logic lives in `tour.py`.
 
-For a `.replit` workflow, point the task at `lp-tour.sh` and
+For a `.replit` workflow, point the task at `tour.sh` and
 redirect stdout to a file under `$REPL_HOME/logs/` (workflow
 consoles never stream runtime logs — references/exposing-ports.md);
 workflow names and wiring stay the operator's, as with every other
@@ -174,10 +180,10 @@ same way it did — by running.
 | `BrowserContextNotLoaded` on cookie work | you planted cookies over CDP — use the native `--cookie` loader (mechanic 3) |
 | server starts but never answers, no error | its stdout is an undrained pipe — redirect to a per-stop log file (mechanic 2) |
 | navigation silently does nothing | you navigated the default CDP page — `ctx.new_page()` first (mechanic 4) |
-| every stop is `LOGGED-OUT-WALL` | the jar is stale/expired — re-export it from the account's browser session and drop it at `LP_COOKIES`; the tour picks it up next round |
-| `CF-STALL` on one stop | Cloudflare did not clear inside `LP_POLL_S` this time; transient stalls happen — the breaker only aborts on *consecutive* failures |
+| every stop is `LOGGED-OUT-WALL` | the jar is stale/expired — re-export it from the account's browser session and drop it at `TOUR_COOKIES`; the tour picks it up next round |
+| `CF-STALL` on one stop | Cloudflare did not clear inside `TOUR_POLL_S` this time; transient stalls happen — the breaker only aborts on *consecutive* failures |
 | tour dies at start: `lightpanda binary missing` | run `bash setup.sh --lightpanda` (or `--fix` to restore the symlink) |
 | `--lightpanda` dies at start: `neither uv nor a venv-capable python3` | fresh join shell — run `bash setup.sh --uv` first, then re-run `--lightpanda` |
 | `No module named pip` inside the tour venv | the venv was created by uv (uv venvs ship no pip) — reinstall via `uv pip install --python <venv>/bin/python playwright==…`, or just re-run `bash setup.sh --lightpanda` (4.34.1+ picks the installer by the venv) |
-| venv python dies on `libstdc++.so.6` | you ran `lp-tour.py` directly — run it via `lp-tour.sh`, which assembles `LD_LIBRARY_PATH` |
+| venv python dies on `libstdc++.so.6` | you ran `tour.py` directly — run it via `tour.sh`, which assembles `LD_LIBRARY_PATH` |
 | `lightpanda --version` exits 1 | by design — the probe is `lightpanda version` |

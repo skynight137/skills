@@ -3,10 +3,10 @@
 # keep-alive tours. Sourced by setup.sh.
 #
 # Design: one static binary, pinned by version + size + SHA256, plus a
-# small Python venv that runs the tour client (scripts/lp-tour.py drives
+# small Python venv that runs the tour client (scripts/tour.py drives
 # the engine over CDP with Playwright's client library — no browser
 # download, Lightpanda IS the browser). There is no resident server:
-# lp-tour.py spawns one `lightpanda serve` per tour stop and tears it
+# tour.py spawns one `lightpanda serve` per tour stop and tears it
 # down, so the engine costs ~380 MB only while a stop is held and zero
 # at idle. See references/lightpanda.md.
 #
@@ -16,7 +16,7 @@
 #   venv/             the tour client's Python + playwright
 #   .env / cookies.json   operator config + the login jar (user data —
 #                     preserved by --clean, like camofox server state)
-#   logs/             per-stop server logs written by lp-tour.py
+#   logs/             per-stop server logs written by tour.py
 #
 # The release publishes NO checksum asset (checked 1.0.3: binaries +
 # .debs only), so the SHA256 pins below were computed from the official
@@ -59,11 +59,11 @@ lightpanda_write_env_example() {
   local f="$LIGHTPANDA_HOME/.env.example"
   mkdir -p "$(dirname "$f")" || return 0
   cat > "$f" <<'EOF'
-# lp-tour config — copy this file to ".env" in this same directory and
+# tour config — copy this file to ".env" in this same directory and
 # fill in the values. Only the vars you set are used.
 #
 # Precedence ("big env" rule): a var already set in the system
-# environment WINS; this file only fills gaps. lp-tour.py logs at
+# environment WINS; this file only fills gaps. tour.py logs at
 # startup which source each var came from ("from system env (.env
 # file skipped)" / "from .env file"), so a run's config is auditable,
 # never silent.
@@ -74,11 +74,12 @@ lightpanda_write_env_example() {
 # REQUIRED: the projects the tour keeps alive, comma-separated, in
 # stop order. Put the tour's own host FIRST — a pilot that opens
 # itself first heals itself before it tours the others.
-LP_LINKS=https://replit.com/@you/this-project,https://replit.com/@you/other-project
+# (The lp-tour-era name LP_LINKS is still honoured as a fallback.)
+TOUR_LINKS=https://replit.com/@you/this-project,https://replit.com/@you/other-project
 
 # The login jar (browser-export or Playwright JSON) for the account
-# that can open every project in LP_LINKS.
-# LP_COOKIES=/path/to/cookies.json
+# that can open every project in TOUR_LINKS.
+# TOUR_COOKIES=/path/to/cookies.json
 
 # Tour shape (defaults shown — the proven fleet config):
 # TOUR_DWELL_S=60            seconds the tab is held per stop
@@ -218,7 +219,7 @@ install_lightpanda() {
   record_tool_path_dirs "$XDG_BIN_HOME"
   wire_tool lightpanda LIGHTPANDA_HOME LIGHTPANDA_BIN -- "$XDG_BIN_HOME"
 
-  ok "lightpanda ready — tour: bash $REPL_SKILL_DIR/lp-tour.sh (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: lp-tour.sh --check)"
+  ok "lightpanda ready — tour: bash $REPL_SKILL_DIR/tour.sh (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: tour.sh --check)"
 }
 
 clean_lightpanda() {
