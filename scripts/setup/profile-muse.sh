@@ -278,7 +278,16 @@ start_sshd() {
   getent passwd sshd >/dev/null 2>&1 || useradd -r -d /run/sshd -s /usr/sbin/nologin sshd
   mkdir -p /run/sshd && chmod 755 /run/sshd
   mkdir -p "$LOGDIR"
-  chmod 777 "$SSHDIR/join-tailnet"
+  # join-tailnet is pinned SHUT: owned by the service user, 700. sshd
+  # (service user) keeps everything it needs — pid write, host key,
+  # config, authorized_keys — as owner; setup runs as root and is
+  # unaffected; nobody else can read, write or traverse. Replaces the
+  # 777 of the 2026-11-02 idmapped-mount workaround: since the host-key
+  # fix every file inside is service-user-owned 600, so the loose dir
+  # mode is no longer load-bearing — it only left the dir's CONTENTS
+  # replaceable by any local user (integrity hole, found 2026-11-07).
+  chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet" 2>/dev/null || true
+  chmod 700 "$SSHDIR/join-tailnet"
   if [[ "$SSH_USER" != root ]]; then
     chown "$SSH_USER:$SSH_USER" "$SVC_HOME" 2>/dev/null || true; chmod 755 "$SVC_HOME"
     if [[ -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" ]]; then
@@ -352,6 +361,12 @@ start_tailscale() {
     id "$SSH_USER" >/dev/null 2>&1 || useradd -d "$SVC_HOME" -s /bin/bash "$SSH_USER"
   fi
   mkdir -p "$TSDIR/state" "$LOGDIR"
+  # The state tree holds the node identity: pin it shut like
+  # join-tailnet — service-user-owned, 700. tailscaled runs as the
+  # service user (owner keeps full access); the ancestor walk above
+  # only adds traverse (o+x) and runs BEFORE this pin, so 700 stands.
+  chown "$SSH_USER:$SSH_USER" "$TSDIR" "$TSDIR/state" 2>/dev/null || true
+  chmod 700 "$TSDIR" "$TSDIR/state"
   if [[ -f "$SSHDIR/.env" ]]; then set -a; source "$SSHDIR/.env"; set +a; fi
   # dig's anycast answers rotate, and most endpoints are unreachable
   # through this gateway at any given time (observed: one of four
@@ -502,6 +517,10 @@ chmod o+x "$WS/.local" "$WS/.local/share" "$SSHDIR"
 # Same traverse walk as start_tailscale: the daemon's ancestors of
 # the resolved state dir must be walkable by the service user.
 _anc="$TSDIR"; while [[ "$_anc" == "$HOME"/* ]]; do [ -d "$_anc" ] && chmod o+x "$_anc" || true; _anc="$(dirname "$_anc")"; done; unset _anc
+# The walk just gave TSDIR itself o+x; re-pin it shut (700,
+# service-user-owned — see start_tailscale) so phase order cannot
+# leave the state dir traverse-open.
+if [[ -d "$TSDIR" ]]; then chown "$SSH_USER:$SSH_USER" "$TSDIR" 2>/dev/null || true; chmod 700 "$TSDIR"; fi
 [[ -d "$WS/tools" ]] && chmod o+x "$WS/tools"
 chmod o+x "$BINDIR"
 # sshd runs as the service user and must write its pid inside
@@ -514,7 +533,10 @@ chmod o+x "$BINDIR"
 # caller's umask made it, and the service user must traverse the root
 # to reach join-tailnet/ and rootfs/ below it.
 chmod o+x "$SSHDIR"
-chmod 777 "$SSHDIR/join-tailnet"
+# join-tailnet itself is pinned 700, service-user-owned (see the note
+# in start_sshd) — NOT the old 777 idmapped workaround.
+chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet" 2>/dev/null || true
+chmod 700 "$SSHDIR/join-tailnet"
 if [[ "$SSH_USER" != root ]]; then
   mkdir -p "$SVC_HOME"
   chown "$SSH_USER:$SSH_USER" "$SVC_HOME" 2>/dev/null || true; chmod 755 "$SVC_HOME"
