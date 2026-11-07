@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # setup.sh
 
-set -e 
+set -e
+
+# The payloads use bash 4+ features (associative arrays). Fail loudly
+# here instead of dying mid-run with a cryptic declare error — stock
+# macOS ships bash 3.2 (on a Mac: brew install bash, then re-run).
+if (( BASH_VERSINFO[0] < 4 )); then
+  printf 'setup: bash >= 4 required (this is %s)\n' "$BASH_VERSION" >&2
+  exit 1
+fi
 
 # Absolute path of this script's directory — the tomlkit .replit writer
 # (dot_replit.py) lives next to setup.sh.
@@ -161,7 +169,7 @@ fi
 # matter, not names: our own previous managed block comes back through the
 # inherited env on re-runs (userenv feeds every repl) and must be re-emitted,
 # not mistaken for operator choices.
-declare -A -A _PRESET_ENV=()
+declare -A _PRESET_ENV=()
 # compgen prints BARE variable names (one per line, no value) — read each
 # name and capture its VALUE via ${!name}. (The old "read line, split on ="
 # form broke on '=' in input, storing name→name so no-shadowing never
