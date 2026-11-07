@@ -28,6 +28,10 @@ at the repo root: `scripts/muse/` in `skynight137/skills` (public).
 payload tree. **When a task needs the payload, ask the operator first**, then
 fetch: clone `https://github.com/skynight137/skills` (recommended), or one
 file via `curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/muse/<path> -o <dest>`.
+Note: `setup.sh` sources the shared library `scripts/setup/core.sh`
+(one copy for both setups) and refuses to run without it — the clone
+route always has it; a single-file fetch must also fetch
+`scripts/setup/core.sh` to `../setup/core.sh` relative to setup.sh.
 On a Muse VM the canonical working copy is the clone
 (`~/skynight137/skills/scripts/muse/setup.sh`); `~/workspace/custom-skills/muse`
 symlinks to this slim bundle and no longer carries the payload.
