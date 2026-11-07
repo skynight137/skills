@@ -244,7 +244,7 @@ of this from `scripts/setup.sh` in this skill.
 Restore after a redeploy is one command — the same self-heal backstop (every 6 h)
 runs it when its probes fail:
 
-1. `bash <clone>/scripts/muse/setup.sh --user <user> --join` — starts sshd,
+1. `bash <clone>/scripts/setup.sh --user <user> --join` — starts sshd,
    then the node, then the hop's reverse loop (detached, under `flock`).
    The node start wants **a foreground agent turn**; its direct dials
    may need a fresh egress approval that background runs cannot get.

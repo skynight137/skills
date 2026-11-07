@@ -92,10 +92,12 @@ done
 # setup refactor, S2). This script runs from a clone of the repo;
 # the SKILL.md payload flow fetches this file's sibling with it.
 _SETUP_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "$_SETUP_DIR/../setup/core.sh" ]]; then
-  source "$_SETUP_DIR/../setup/core.sh"
+MUSE_PAYLOAD_DIR="$(cd -- "$_SETUP_DIR/../muse" 2>/dev/null && pwd)"  # ts_proxy_connect.py stayed with the muse payloads
+SETUP_ENTRY="$(cd -- "$_SETUP_DIR/.." 2>/dev/null && pwd)/setup.sh"  # the unified entry (scripts/setup.sh); _SETUP_DIR is unset below, this stays
+if [[ -f "$_SETUP_DIR/core.sh" ]]; then
+  source "$_SETUP_DIR/core.sh"
 else
-  echo "setup: missing shared library $_SETUP_DIR/../setup/core.sh — run from a full clone of skynight137/skills" >&2
+  echo "setup: missing shared library $_SETUP_DIR/core.sh — run from a full clone of skynight137/skills" >&2
   exit 2
 fi
 unset _SETUP_DIR
@@ -487,7 +489,7 @@ if [[ $VERIFY -eq 1 ]]; then
   NODE_STATUS="$(svc_run "${CLEANENV[@]}" "$BINDIR/tailscale" --socket="$TSDIR/tailscaled.sock" status 2>&1 | head -2)"
   [[ -n "$NODE_STATUS" ]] && printf '%s
 ' "$NODE_STATUS" || echo "node: DOWN"
-  echo "reverse forwards (probe runs from the peer): bash $SELF --user $SSH_USER --check-reverse"
+  echo "reverse forwards (probe runs from the peer): bash $SETUP_ENTRY --machine muse --user $SSH_USER --check-reverse"
   exit 0
 fi
 
@@ -719,7 +721,7 @@ Host repl-test
   User runner
   IdentityFile $SSHDIR/id_ed25519
   IdentitiesOnly yes
-  ProxyCommand python3 $SELF_DIR/ts_proxy_connect.py %h %p
+  ProxyCommand python3 $MUSE_PAYLOAD_DIR/ts_proxy_connect.py %h %p
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
 EOF
@@ -730,7 +732,7 @@ Host repl-test
   User runner
   IdentityFile $SSHDIR/id_ed25519
   IdentitiesOnly yes
-  ProxyCommand python3 $SELF_DIR/ts_proxy_connect.py %h %p
+  ProxyCommand python3 $MUSE_PAYLOAD_DIR/ts_proxy_connect.py %h %p
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
 EOF
@@ -785,7 +787,7 @@ say "handoff"
 echo "client pubkey (register it ONLY at the fleet hop, and only if this box must initiate ssh to the hop):"
 cat "$SSHDIR/id_ed25519.pub"
 echo "authorized_keys already trusts the muse-hop key (seeded above) — nothing else belongs there by default"
-echo "redeploy restore: bash $SELF --user $SSH_USER --join (starts sshd, the node, and the hop's loop — the skill script is the only code; there are no launcher scripts)"
+echo "redeploy restore: bash $SETUP_ENTRY --machine muse --user $SSH_USER --join (starts sshd, the node, and the hop's loop — the skill script is the only code; there are no launcher scripts)"
 
 }
 

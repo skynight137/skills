@@ -21,19 +21,23 @@ when they disagree — re-run the probes instead of trusting stale text.
 ## Payloads live outside this bundle
 
 This bundle is curated memory only (`SKILL.md` + `references/`). The executable
-payload — `setup.sh` + `ts_proxy_connect.py` — is NOT in the bundle. It lives
-at the repo root: `scripts/muse/` in `skynight137/skills` (public).
+payloads are NOT in the bundle. They live at the repo root in
+`skynight137/skills` (public): `ts_proxy_connect.py` under `scripts/muse/`,
+and the setup itself under `scripts/setup/` — the ONE entry is
+`scripts/setup.sh` (`--machine muse` selects this machine kind; the
+profile is `scripts/setup/profile-muse.sh`, sharing `scripts/setup/core.sh`
+with the repl profile).
 
-**Path rule.** `scripts/…` in this file and its references denotes that
-payload tree. **When a task needs the payload, ask the operator first**, then
-fetch: clone `https://github.com/skynight137/skills` (recommended), or one
-file via `curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/muse/<path> -o <dest>`.
-Note: `setup.sh` sources the shared library `scripts/setup/core.sh`
-(one copy for both setups) and refuses to run without it — the clone
-route always has it; a single-file fetch must also fetch
-`scripts/setup/core.sh` to `../setup/core.sh` relative to setup.sh.
+**Path rule.** `scripts/…` in this file and its references denotes a file
+in those payload locations. **When a task needs the payload, ask the
+operator first**, then fetch: clone `https://github.com/skynight137/skills`
+(recommended — the setup needs its sibling files: the entry, the
+profile and core.sh all live in `scripts/setup/`).
+Note: `profile-muse.sh` sources the shared library `core.sh` from its
+own directory and refuses to run without it — the clone route always
+has it.
 On a Muse VM the canonical working copy is the clone
-(`~/skynight137/skills/scripts/muse/setup.sh`); `~/workspace/custom-skills/muse`
+(`~/skynight137/skills/scripts/setup.sh`); `~/workspace/custom-skills/muse`
 symlinks to this slim bundle and no longer carries the payload.
 
 | You want to… | Read |

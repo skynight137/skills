@@ -12,7 +12,7 @@ hop differences are marked.
 ```sh
 cd ~/workspace && git clone https://github.com/skynight137/skills ~/skynight137/skills
 # bundle-only alternative: npx -y skills add skynight137/skills -s muse
-SETUP=~/skynight137/skills/scripts/muse/setup.sh   # payload tree in the clone; path varies by install route
+SETUP=~/skynight137/skills/scripts/setup.sh   # payload tree in the clone; path varies by install route
 ```
 
 ## 1. Fill the vars (the only hands-on part)
