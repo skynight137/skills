@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.39.2
+version: 4.39.3
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -308,7 +308,12 @@ without ripgrep.
   since S5d — the same adapter pattern as the Lightpanda engine, so a
   future `--browser chromium` is just another adapter) — cookie import
   path, session per stop, health surfaced as ERROR — the tour never
-  spawns the server. Config from the system env / the engine home's `.env`
+  spawns the server, but at tour start its prepare waits for it:
+  Project starts `launch-camofox` and the tour in parallel, so
+  prepare polls the health check every ~3s up to
+  `TOUR_CAMOFOX_WAIT_S` (default 180) before the unreachable FATAL
+  (`--check` stays one-shot — it diagnoses current state).
+  Config from the system env / the engine home's `.env`
   with the resolution logged per var; log lines are
   `[YYYY-MM-DD HH:MM:SS] [LEVEL] msg`, colour opt-in via `--colour`.
   The `.sh` is a justified shim — it only assembles `LD_LIBRARY_PATH`
