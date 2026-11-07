@@ -46,10 +46,7 @@ __rs_find() {
   return 1
 }
 
-__rs_banner() {
-  local h="$1" p="$2"
-  timeout 3 bash -c "exec 3<>/dev/tcp/$h/$p; IFS= read -r -t 2 l <&3 && printf '%s' \"\$l\"" 2>/dev/null
-}
+# Banner probe: engine_banner in scripts/setup/join.sh (shared engine, S3a).
 
 # Client-side hop. `nc` is not portable: netcat-openbsd has -X/-x, but
 # netcat-traditional and busybox nc reject -X ("invalid option -- 'X'"). Print
@@ -188,33 +185,8 @@ install_join() {
   touch "$home/.ssh/authorized_keys" && chmod 600 "$home/.ssh/authorized_keys"
   grep -qF "repl-hop" "$home/.ssh/authorized_keys" || tail -n 1 "$RS_DIR/authorized_keys" >>"$home/.ssh/authorized_keys"
 
-  cat >"$RS_DIR/sshd_config" <<EOF
-Port $RS_PORT
-ListenAddress 0.0.0.0
-AddressFamily inet
-HostKey $RS_DIR/host_ed25519
-PidFile $RS_DIR/sshd.pid
-AuthorizedKeysFile $RS_DIR/authorized_keys
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-PubkeyAuthentication yes
-PermitRootLogin no
-PermitEmptyPasswords no
-UsePAM no
-# Environment sesi disuntik sshd sendiri (~/.ssh/environment), bukan
-# lewat rc: sesi login/non-login/`ssh host cmd` membaca rc yang
-# berbeda-beda, dan [userenv.shared] hanya sampai ke proses platform.
-PermitUserEnvironment yes
-StrictModes no
-PrintMotd no
-X11Forwarding no
-AllowTcpForwarding yes
-AllowUsers $user
-ClientAliveInterval 30
-ClientAliveCountMax 3
-LogLevel VERBOSE
-EOF
-  "$sshd" -t -f "$RS_DIR/sshd_config" || { warn "config sshd tidak valid"; return 1; }
+  engine_sshd_render "$RS_DIR" "$RS_PORT" "$user"
+  engine_sshd_validate "$sshd" "$RS_DIR" || return 1
 
   # File environment untuk PermitUserEnvironment di atas: statis,
   # dirender dari nilai yang sama dengan yang dipakai stack ini.
@@ -265,18 +237,7 @@ RCEOF
   wire_tool tailscale -- "$bin"
 
   # ── start ───────────────────────────────────────────────────────────────────
-  if __rs_banner 127.0.0.1 "$RS_PORT" | grep -q '^SSH-2.0-'; then
-    ok "sshd sudah hidup di $RS_PORT (tidak dibunuh, sesi berjalan aman)"
-  else
-    : >"$RS_DIR/sshd.log"
-    setsid "$sshd" -f "$RS_DIR/sshd_config" -E "$RS_DIR/sshd.log" </dev/null >/dev/null 2>&1 || \
-      nohup "$sshd" -f "$RS_DIR/sshd_config" -E "$RS_DIR/sshd.log" </dev/null >/dev/null 2>&1 &
-    local i=0
-    for i in $(seq 1 10); do __rs_banner 127.0.0.1 "$RS_PORT" | grep -q '^SSH-2.0-' && break; sleep 1; done
-    __rs_banner 127.0.0.1 "$RS_PORT" | grep -q '^SSH-2.0-' || {
-      warn "sshd tidak menjawab di $RS_PORT"; tail -8 "$RS_DIR/sshd.log" 2>/dev/null; return 1; }
-    ok "sshd hidup di $RS_PORT (key-only)"
-  fi
+  engine_sshd_start "$sshd" "$RS_DIR" "$RS_PORT" || return 1
 
   __rs_workflow
 

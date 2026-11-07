@@ -181,6 +181,7 @@ done < <(compgen -e)
 # Source order matters only for the top-level setup each module runs at
 # source time (common initialises env/paths first; cli runs main last).
 source "$SCRIPT_DIR/../setup/core.sh"
+source "$SCRIPT_DIR/../setup/join.sh"  # shared join engine (S3)
 source "$SCRIPT_DIR/setup/common.sh"
 source "$SCRIPT_DIR/setup/ui_menu.sh"
 source "$SCRIPT_DIR/setup/bin.sh"
