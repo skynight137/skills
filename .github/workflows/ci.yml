@@ -1,7 +1,21 @@
 # CI for skynight137/skills — modeled on the user-provided matrix example:
 # OS matrix, fail-fast: false, concurrency cancel-in-progress, artifacts
-# uploaded even on failure. There is no app to build here — the payload
-# checks ARE the tests. Node is pinned to 26 (the fleet's major).
+# uploaded even on failure. Node is pinned to 26 (the fleet's major).
+#
+# Jobs:
+#   payload-checks  syntax + discovery + cited-path audit, 3 OSes.
+#   xdg-absent      setup.sh --help with every XDG var unset — the
+#                   "terkadang XDG tidak ada dan menyebabkan bugs" class.
+#   tool-setups     per-tool install tests: each setup.sh lane installs
+#                   into an isolated root and must pass setup's own
+#                   --doctor line for that tool ("installed AND runs").
+#                   Ubuntu covers every lane; macOS covers the lanes
+#                   whose upstreams are cross-platform. Windows gets
+#                   no install legs — the lanes target unix layout and
+#                   binaries; its coverage is the payload checks.
+#                   Excluded: --join (needs a live tailnet auth key; its
+#                   install half is the tailscale leg), --zsh (Nix
+#                   profile lane, not a direct-binary install).
 
 name: CI
 
@@ -41,7 +55,7 @@ jobs:
         run: |
           fail=0
           while IFS= read -r f; do bash -n "$f" || { echo "SYNTAX FAIL: $f"; fail=1; }; done \
-            < <(find scripts -name '*.sh' -type f)
+            < <(find scripts tests -name '*.sh' -type f)
           exit $fail
 
       - name: Python compile (cache outside the tree)
@@ -114,3 +128,55 @@ jobs:
             echo "Unguarded XDG reads found (see above)"; exit 1
           fi
           echo "standalone XDG reads guarded"
+
+  tool-setups:
+    name: Tool setup (${{ matrix.tool }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false # one tool failing must not stop the others
+      matrix:
+        include:
+          # --- every lane, ubuntu ---
+          - {tool: uv, flag: --uv, label: "uv:", os: ubuntu-latest}
+          - {tool: node, flag: --node, label: "Node:", os: ubuntu-latest}
+          - {tool: opencode, flag: --opencode, label: "OpenCode:", os: ubuntu-latest}
+          - {tool: ollama, flag: --ollama, label: "Ollama:", os: ubuntu-latest}
+          - {tool: claude, flag: --claude, label: "Claude:", os: ubuntu-latest}
+          - {tool: hermes, flag: --hermes, label: "Hermes:", os: ubuntu-latest}
+          - {tool: ori, flag: --openrouterai, label: "ORI:", os: ubuntu-latest}
+          - {tool: rclone, flag: --rclone, label: "rclone:", os: ubuntu-latest}
+          - {tool: qbt, flag: --qbt, label: "qBittorrent-nox:", os: ubuntu-latest}
+          - {tool: aria2, flag: --aria2, label: "aria2c:", os: ubuntu-latest}
+          - {tool: ffmpeg, flag: --ffmpeg, label: "FFmpeg:", os: ubuntu-latest}
+          - {tool: cloudflared, flag: --cloudflared, label: "cloudflared:", os: ubuntu-latest}
+          - {tool: tailscale, flag: --tailscale, label: "tailscale:", os: ubuntu-latest}
+          - {tool: sshx, flag: --sshx, label: "sshx:", os: ubuntu-latest}
+          - {tool: lightpanda, flag: --lightpanda, label: "Lightpanda:", os: ubuntu-latest}
+          - {tool: llm-wiki, flag: --llm-wiki, label: "llm-wiki:", os: ubuntu-latest}
+          - {tool: camofox, flag: --camofox, label: "Camofox:", os: ubuntu-latest}
+          - {tool: android, flag: --android-tools, label: "Android SDK (adb):", os: ubuntu-latest}
+          # --- cross-platform upstreams also run on macOS ---
+          - {tool: uv, flag: --uv, label: "uv:", os: macos-latest}
+          - {tool: node, flag: --node, label: "Node:", os: macos-latest}
+          - {tool: rclone, flag: --rclone, label: "rclone:", os: macos-latest}
+          - {tool: cloudflared, flag: --cloudflared, label: "cloudflared:", os: macos-latest}
+          - {tool: tailscale, flag: --tailscale, label: "tailscale:", os: macos-latest}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ${{ matrix.tool }} into an isolated root and verify
+        env:
+          SETUP_ROOT: ${{ runner.temp }}/ws-${{ matrix.tool }}
+        run: bash tests/tool-setup.sh "${{ matrix.flag }}" "${{ matrix.label }}"
