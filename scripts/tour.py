@@ -150,6 +150,10 @@ source of every var is logged at startup, name + source only):
                       (default "tour")
   TOUR_CAMOFOX_SESSION  camofox: session-key prefix; stop i uses
                       "<prefix>-<i>"                     (default "tour")
+  TOUR_CAMOFOX_WAIT_S  camofox: seconds the run-path prepare waits
+                      for the server at tour start (Project starts
+                      the launcher and the tour in parallel; the
+                      --check probe stays one-shot)    (default 180)
   CAMOFOX_BASE_URL    camofox: server URL (default http://127.0.0.1:9377)
   LIGHTPANDA_HOME     install/state root (default <machine XDG config
                       base>/lightpanda: $XDG_CONFIG_HOME when set, else
@@ -418,10 +422,37 @@ class _CamofoxEngine(_Engine):
 
     def prepare(self):
         key = cf_key()
-        if cf_health(key) is None:
+        h = cf_health(key)
+        waited = 0.0
+        if h is None and CF_WAIT > 0:
+            # Project starts launch-camofox and this tour in the
+            # same second: the server needs seconds to bind and
+            # pre-warm its browser that a one-shot probe does not
+            # give it (proven live on repl-10 2026-11-07 — FATAL at
+            # T+0, server answering T+2, pre-warm done T+10). Poll
+            # the same health check until it answers or the budget
+            # expires; --check stays one-shot (it diagnoses the
+            # current state, it does not wait for a future one).
+            log(f"camofox: server not answering at {CF_URL} yet — "
+                f"waiting up to {CF_WAIT}s for it "
+                "(TOUR_CAMOFOX_WAIT_S)")
+            t0 = time.time()
+            nxt = 30.0
+            while h is None and waited < CF_WAIT:
+                time.sleep(min(3.0, CF_WAIT - waited))
+                h = cf_health(key)
+                waited = time.time() - t0
+                if h is None and waited >= nxt:
+                    log(f"camofox: still waiting for the server "
+                        f"({waited:.0f}s of {CF_WAIT}s)", "SKIP")
+                    nxt += 30.0
+            if h is not None:
+                log(f"camofox: server up after {waited:.0f}s of "
+                    "waiting", "OK")
+        if h is None:
             log(f"FATAL: camofox server unreachable at {CF_URL} — "
                 "the tour never spawns it; start the camofox service "
-                "first", "ERROR")
+                f"first (waited {waited:.0f}s)", "ERROR")
             sys.exit(2)
         if os.path.exists(JAR):
             ok, detail = cf_import_cookies(key)
@@ -561,6 +592,10 @@ CF_URL = cfg("CAMOFOX_BASE_URL", "http://127.0.0.1:9377").rstrip("/")
 # import route accepts, so it is resolved separately too.
 CF_KEY = cfg_chain(["CAMOFOX_ACCESS_KEY", "CAMOFOX_API_KEY"], "") or None
 CF_API_KEY = cfg("CAMOFOX_API_KEY", "") or None
+# Startup wait budget for the camofox prepare below: Project starts
+# launch-camofox and the tour in parallel, so the server is routinely
+# still starting when the tour first probes it.
+CF_WAIT = cfg_int("TOUR_CAMOFOX_WAIT_S", 180)
 
 LINKS = [u for u in cfg_chain(["TOUR_LINKS", "LP_LINKS"], "")
          .replace(",", " ").split() if u]
