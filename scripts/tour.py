@@ -18,8 +18,16 @@ camofox server API through its own built-in client (below) and reaches
 the same diagnosis grade. See references/lightpanda.md and
 references/session-keepalive.md for the engine comparison and mechanics.
 
-Both engines implement ONE adapter pattern, so a future engine (say
---browser chromium) is just another adapter following it:
+Both engines implement ONE adapter pattern, and engine selection is
+a REGISTRY, not a branch: the ENGINES dict (engine registry section,
+above the config block) maps each --browser value to one adapter, and
+every dispatch site — --check, tour-start prepare, the per-round and
+per-stop calls, signal teardown — goes through it. Adding an engine
+(say --browser chromium) is exactly two steps: write one adapter
+implementing the interface (env_file, jar_default, config_line,
+check, prepare, prepare_round, run_stop, teardown — see the _Engine
+base class) and add one line to ENGINES. No dispatch site changes.
+The stop lifecycle every adapter follows:
   prepare (resolve config + credentials, probe the engine's runtime)
   → plant cookies → open one session/tab on the target URL → poll and
   sample until the shared verdict engine decides → optional cookie
@@ -149,7 +157,9 @@ import asyncio, json, os, shutil, signal, socket, subprocess, sys, time, urllib.
 # the chosen engine's home, so the engine must be known first. CLI
 # --browser wins, then TOUR_BROWSER from the SYSTEM env (the .env file
 # cannot move its own home, so it is not consulted for this one var),
-# then the lightpanda default.
+# then DEFAULT_BROWSER. The name is only a KEY: the ENGINES registry
+# (below, after machine selection — env discovery needs the machine's
+# homes) maps it to the adapter that actually runs.
 
 
 def _cli_browser(argv):
@@ -161,8 +171,10 @@ def _cli_browser(argv):
     return None
 
 
+DEFAULT_BROWSER = "lightpanda"
 BROWSER = (_cli_browser(sys.argv[1:])
-           or os.environ.get("TOUR_BROWSER") or "lightpanda").strip().lower()
+           or os.environ.get("TOUR_BROWSER")
+           or DEFAULT_BROWSER).strip().lower()
 _COLOUR_FLAG = "--colour" in sys.argv or "--color" in sys.argv
 
 
@@ -210,24 +222,234 @@ _LP_HOME_AMBIENT = os.environ.get("LIGHTPANDA_HOME") or os.path.join(
 _CF_CONFIG_HOME = os.path.join(_XDG, "camofox")
 
 
-def _env_file_for(browser):
-    """The .env fallback for the chosen engine — the same discovery the
-    engine's own tooling uses (the lightpanda home for Lightpanda; the
-    camofox lane's documented candidate order for camofox)."""
-    if browser == "camofox":
+# ══ engine registry ═══════════════════════════════════════════════════
+# --browser selects an ADAPTER from this registry — there are no
+# engine-name branches anywhere else in the file. An adapter owns
+# everything that differs per engine:
+#   env_file()    -> the .env fallback file for this engine (its home
+#                    must be discoverable before config loads, so this
+#                    one may only use the ambient homes above)
+#   jar_default() -> default cookie-jar path when TOUR_COOKIES is unset
+#   config_line() -> the engine's `config: resolved: ...` line
+#   check()       -> the engine's --check probe block; returns 0 or 1
+#   prepare()     -> tour-start work (probe the runtime, plant the
+#                    cookies); returns the cookies note for the start
+#                    log line; FATAL problems log + sys.exit(2) here,
+#                    exactly as the inline blocks did
+#   prepare_round(rnd) -> per-round work before the stops (default:
+#                    none — Lightpanda re-converts its jar)
+#   run_stop(idx, url) -> async; one stop, returning
+#                    (verdict, time_to_shell_s, rss_peak_mb)
+#   teardown()    -> signal-time cleanup of a live stop (default:
+#                    none); _cleanup calls it on EVERY registered
+#                    engine, so the inactive engine's no-op keeps the
+#                    old both-globals-checked semantics
+# The engine bodies themselves (run_stop_lightpanda, the cf_* client,
+# run_stop_camofox) live in the engine sections below and are called
+# from these adapters at runtime. Adding an engine = one more adapter
+# class + one more ENGINES line.
+
+
+class _Engine:
+    """The adapter interface. Methods an engine does not need keep
+    the base no-op; the rest raise until implemented."""
+
+    def env_file(self):
+        raise NotImplementedError
+
+    def jar_default(self):
+        raise NotImplementedError
+
+    def config_line(self):
+        raise NotImplementedError
+
+    def check(self):
+        raise NotImplementedError
+
+    def prepare(self):
+        raise NotImplementedError
+
+    def prepare_round(self, rnd):
+        pass
+
+    async def run_stop(self, idx, url):
+        raise NotImplementedError
+
+    def teardown(self):
+        pass
+
+
+class _LightpandaEngine(_Engine):
+    def env_file(self):
+        # The lightpanda home — the same discovery the engine's own
+        # tooling uses.
+        return (os.environ.get("LIGHTPANDA_ENV_FILE")
+                or os.path.join(_LP_HOME_AMBIENT, ".env"))
+
+    def jar_default(self):
+        return os.path.join(HOME, "cookies.json")
+
+    def config_line(self):
+        return (f"config: resolved: home={HOME} bin={BIN} jar={JAR} "
+                f"base_port={BASE_PORT} writeback={WRITEBACK}")
+
+    def check(self):
+        rc = 0
+        if os.path.isfile(BIN) and os.access(BIN, os.X_OK):
+            ver = subprocess.run([BIN, "version"], capture_output=True,
+                                 text=True, timeout=10)
+            print(f"check: binary ok: {BIN} (version "
+                  f"{ver.stdout.strip() or '?'})", flush=True)
+        else:
+            print(f"check: binary MISSING or not executable: {BIN} — "
+                  "run: bash setup.sh --lightpanda", flush=True)
+            rc = 1
+        if os.path.exists(JAR):
+            try:
+                n = convert_jar()
+                print(f"check: jar ok: {JAR} ({n} cookies)", flush=True)
+            except Exception as e:
+                print(f"check: jar UNREADABLE: {JAR}: {e}", flush=True)
+                rc = 1
+        else:
+            print(f"check: jar missing: {JAR} — a tour would FATAL on "
+                  "it; export a fresh jar from the account's browser "
+                  "session", flush=True)
+            rc = 1
+        return rc
+
+    def prepare(self):
+        if not os.path.exists(JAR):
+            log(f"FATAL: jar missing at {JAR}", "ERROR")
+            sys.exit(2)
+        if not (os.path.isfile(BIN) and os.access(BIN, os.X_OK)):
+            log(f"FATAL: lightpanda binary missing at {BIN} — "
+                "run: bash setup.sh --lightpanda", "ERROR")
+            sys.exit(2)
+        n = convert_jar()
+        return f" cookies={n}"
+
+    def prepare_round(self, rnd):
+        try:
+            n = convert_jar()
+            log(f"round {rnd}: jar reconverted, cookies={n}", "SKIP")
+        except Exception as e:
+            log(f"round {rnd}: jar reconvert failed ({e}); "
+                "reusing previous", "WARN")
+
+    async def run_stop(self, idx, url):
+        return await run_stop_lightpanda(idx, url)
+
+    def teardown(self):
+        if CURRENT_SRV is not None:
+            try:
+                CURRENT_SRV.kill()
+            except Exception:
+                pass
+
+
+class _CamofoxEngine(_Engine):
+    def env_file(self):
+        # The camofox lane's documented candidate order.
         root = os.environ.get("CAMOFOX_ROOT") or os.path.join(
-            os.environ.get("REPL_HOME") or os.path.expanduser("~"), "camofox")
+            os.environ.get("REPL_HOME") or os.path.expanduser("~"),
+            "camofox")
         for p in (os.environ.get("CAMOFOX_ENV_FILE"),
                   os.path.join(_CF_CONFIG_HOME, ".env"),
                   os.path.join(root, ".env")):
             if p and os.path.exists(p):
                 return p
         return os.path.join(_CF_CONFIG_HOME, ".env")
-    return (os.environ.get("LIGHTPANDA_ENV_FILE")
-            or os.path.join(_LP_HOME_AMBIENT, ".env"))
+
+    def jar_default(self):
+        return os.path.join(_CF_CONFIG_HOME, "cookies.json")
+
+    def config_line(self):
+        return (f"config: resolved: camofox url={CF_URL} "
+                f"user={CF_USER} session={CF_SESSION}-<i> jar={JAR}")
+
+    def check(self):
+        rc = 0
+        key = cf_key()
+        h = cf_health(key)
+        if h is not None:
+            print(f"check: camofox server ok: {CF_URL} "
+                  f"(browserRunning={h.get('browserRunning')}, "
+                  f"activeSessions={h.get('activeSessions')})",
+                  flush=True)
+        else:
+            print(f"check: camofox server UNREACHABLE at {CF_URL} — "
+                  "the tour never spawns it; start the camofox service "
+                  "(camofox launcher / its workflow) first",
+                  flush=True)
+            print(cf_diagnose_timeout(), flush=True)
+            rc = 1
+        if os.path.exists(JAR):
+            try:
+                raw = json.load(open(JAR))
+                items = raw.get("cookies", raw) \
+                    if isinstance(raw, dict) else raw
+                print(f"check: jar ok: {JAR} ({len(items)} cookies, "
+                      f"imported for user {CF_USER} at tour start)",
+                      flush=True)
+            except Exception as e:
+                print(f"check: jar UNREADABLE: {JAR}: {e}", flush=True)
+                rc = 1
+        else:
+            print(f"check: jar missing: {JAR} — not fatal for camofox: "
+                  f"the server's persisted cookies for user {CF_USER} "
+                  "will be used; import a jar to refresh them",
+                  flush=True)
+        return rc
+
+    def prepare(self):
+        key = cf_key()
+        if cf_health(key) is None:
+            log(f"FATAL: camofox server unreachable at {CF_URL} — "
+                "the tour never spawns it; start the camofox service "
+                "first", "ERROR")
+            sys.exit(2)
+        if os.path.exists(JAR):
+            ok, detail = cf_import_cookies(key)
+            if not ok:
+                log(f"FATAL: cookie import failed: {detail}", "ERROR")
+                sys.exit(2)
+            log(f"camofox: imported {detail} cookies for user {CF_USER}")
+            return f" cookies={detail} (imported, user={CF_USER})"
+        log(f"camofox: no jar at {JAR} — using the server's "
+            f"persisted cookies for user {CF_USER}", "WARN")
+        return f" cookies=persisted (user={CF_USER})"
+
+    async def run_stop(self, idx, url):
+        # The camofox stop is sync HTTP; run it in a thread so the
+        # event loop stays free (the pre-registry dispatch did the
+        # same via asyncio.to_thread).
+        return await asyncio.to_thread(run_stop_camofox, idx, url)
+
+    def teardown(self):
+        if CURRENT_CF is not None:
+            try:
+                key, session = CURRENT_CF
+                cf_req(key, "DELETE",
+                       f"/tabs/group/{session}?userId={CF_USER}",
+                       timeout=5)
+            except Exception:
+                pass
 
 
-ENV_FILE = _env_file_for(BROWSER)
+ENGINES = {
+    "lightpanda": _LightpandaEngine(),
+    "camofox": _CamofoxEngine(),
+}
+# The resolved adapter for this run (None when --browser names no
+# registered engine — check()/main() reject that before anything
+# runs). _CFG_ENGINE is the config-time view: for an unknown name it
+# falls back to the default engine, exactly as the old else-branches
+# resolved an unknown name's env file and jar default.
+ENGINE = ENGINES.get(BROWSER)
+_CFG_ENGINE = ENGINE if ENGINE is not None else ENGINES[DEFAULT_BROWSER]
+
+ENV_FILE = _CFG_ENGINE.env_file()
 
 
 # ── config ─────────────────────────────────────────────────────────────
@@ -293,8 +515,7 @@ HOME = cfg("LIGHTPANDA_HOME", _LP_HOME_AMBIENT)
 BIN = cfg("LIGHTPANDA_BIN") or os.path.join(HOME, "lightpanda")
 if not os.path.exists(BIN):
     BIN = shutil.which("lightpanda") or BIN
-_JAR_DEFAULT = (os.path.join(HOME, "cookies.json") if BROWSER != "camofox"
-                else os.path.join(_CF_CONFIG_HOME, "cookies.json"))
+_JAR_DEFAULT = _CFG_ENGINE.jar_default()
 JAR = cfg_chain(["TOUR_COOKIES", "LP_COOKIES"], _JAR_DEFAULT)
 ARRAY = os.path.join(HOME, ".jar-array.json")
 # Default log dir is machine-chosen (the workspace log hub on both
@@ -368,6 +589,8 @@ def marker_hit(markers, text):
 
 
 # ══ Lightpanda engine ═════════════════════════════════════════════════
+# Registered as _LightpandaEngine in ENGINES (engine registry, above
+# the config block); dispatched only through the registry.
 CURRENT_SRV = None  # live lightpanda Popen, for signal cleanup
 
 
@@ -661,6 +884,8 @@ async def run_stop_lightpanda(idx, url):
 # caller: the tour checks its health and reports ERROR, it NEVER
 # spawns it. Every request carries an explicit timeout — the sync
 # equivalent of the Lightpanda side's asyncio.wait_for discipline.
+# Registered as _CamofoxEngine in ENGINES (engine registry, above the
+# config block); dispatched only through the registry.
 CURRENT_CF = None  # (key, session) of the live stop, for signal cleanup
 
 # Python's default trust path (capath only on Replit) does not include
@@ -950,9 +1175,9 @@ def run_stop_camofox(idx, url):
 
 
 async def run_stop(idx, url):
-    if BROWSER == "camofox":
-        return await asyncio.to_thread(run_stop_camofox, idx, url)
-    return await run_stop_lightpanda(idx, url)
+    # Registry dispatch — main() has already rejected an unknown
+    # --browser, so ENGINE is the resolved adapter here.
+    return await ENGINE.run_stop(idx, url)
 
 
 # ── preflight + main loop (shared) ─────────────────────────────────────
@@ -964,13 +1189,8 @@ def print_config():
     print(f"config: resolved: browser={BROWSER} links={len(LINKS)} "
           f"dwell={DWELL}s gap={GAP}s breaker={BREAKER} poll={POLL}s "
           f"colour={COLOUR}", flush=True)
-    if BROWSER == "camofox":
-        print(f"config: resolved: camofox url={CF_URL} user={CF_USER} "
-              f"session={CF_SESSION}-<i> jar={JAR}", flush=True)
-    else:
-        print(f"config: resolved: home={HOME} bin={BIN} jar={JAR} "
-              f"base_port={BASE_PORT} writeback={WRITEBACK}",
-              flush=True)
+    if ENGINE is not None:
+        print(ENGINE.config_line(), flush=True)
 
 
 def check():
@@ -979,9 +1199,9 @@ def check():
     no tour. Exit code says whether a tour could run."""
     print_config()
     rc = 0
-    if BROWSER not in ("lightpanda", "camofox"):
+    if ENGINE is None:
         print(f"check: unknown browser {BROWSER!r} — "
-              "use --browser lightpanda|camofox", flush=True)
+              f"use --browser {'|'.join(ENGINES)}", flush=True)
         return 2
     if MACHINE not in ("muse", "repl"):
         print(f"check: unknown machine {MACHINE!r} — "
@@ -992,68 +1212,17 @@ def check():
               f"in the system env or in {ENV_FILE} (see .env.example "
               "next to it)", flush=True)
         rc = 1
-    if BROWSER == "camofox":
-        key = cf_key()
-        h = cf_health(key)
-        if h is not None:
-            print(f"check: camofox server ok: {CF_URL} "
-                  f"(browserRunning={h.get('browserRunning')}, "
-                  f"activeSessions={h.get('activeSessions')})",
-                  flush=True)
-        else:
-            print(f"check: camofox server UNREACHABLE at {CF_URL} — "
-                  "the tour never spawns it; start the camofox service "
-                  "(camofox launcher / its workflow) first",
-                  flush=True)
-            print(cf_diagnose_timeout(), flush=True)
-            rc = 1
-        if os.path.exists(JAR):
-            try:
-                raw = json.load(open(JAR))
-                items = raw.get("cookies", raw) \
-                    if isinstance(raw, dict) else raw
-                print(f"check: jar ok: {JAR} ({len(items)} cookies, "
-                      f"imported for user {CF_USER} at tour start)",
-                      flush=True)
-            except Exception as e:
-                print(f"check: jar UNREADABLE: {JAR}: {e}", flush=True)
-                rc = 1
-        else:
-            print(f"check: jar missing: {JAR} — not fatal for camofox: "
-                  f"the server's persisted cookies for user {CF_USER} "
-                  "will be used; import a jar to refresh them",
-                  flush=True)
-    else:
-        if os.path.isfile(BIN) and os.access(BIN, os.X_OK):
-            ver = subprocess.run([BIN, "version"], capture_output=True,
-                                 text=True, timeout=10)
-            print(f"check: binary ok: {BIN} (version "
-                  f"{ver.stdout.strip() or '?'})", flush=True)
-        else:
-            print(f"check: binary MISSING or not executable: {BIN} — "
-                  "run: bash setup.sh --lightpanda", flush=True)
-            rc = 1
-        if os.path.exists(JAR):
-            try:
-                n = convert_jar()
-                print(f"check: jar ok: {JAR} ({n} cookies)", flush=True)
-            except Exception as e:
-                print(f"check: jar UNREADABLE: {JAR}: {e}", flush=True)
-                rc = 1
-        else:
-            print(f"check: jar missing: {JAR} — a tour would FATAL on "
-                  "it; export a fresh jar from the account's browser "
-                  "session", flush=True)
-            rc = 1
+    if ENGINE.check():
+        rc = 1
     print(f"check: {'OK' if rc == 0 else 'FAILED'}", flush=True)
     return rc
 
 
 async def main():
     print_config()
-    if BROWSER not in ("lightpanda", "camofox"):
+    if ENGINE is None:
         log(f"FATAL: unknown browser {BROWSER!r} — "
-            "use --browser lightpanda|camofox", "ERROR")
+            f"use --browser {'|'.join(ENGINES)}", "ERROR")
         sys.exit(2)
     if MACHINE not in ("muse", "repl"):
         log(f"FATAL: unknown machine {MACHINE!r} — "
@@ -1063,35 +1232,7 @@ async def main():
         log("FATAL: TOUR_LINKS (fallback LP_LINKS) is empty — "
             "nothing to tour", "ERROR")
         sys.exit(2)
-    cookies_note = ""
-    if BROWSER == "camofox":
-        key = cf_key()
-        if cf_health(key) is None:
-            log(f"FATAL: camofox server unreachable at {CF_URL} — "
-                "the tour never spawns it; start the camofox service "
-                "first", "ERROR")
-            sys.exit(2)
-        if os.path.exists(JAR):
-            ok, detail = cf_import_cookies(key)
-            if not ok:
-                log(f"FATAL: cookie import failed: {detail}", "ERROR")
-                sys.exit(2)
-            cookies_note = f" cookies={detail} (imported, user={CF_USER})"
-            log(f"camofox: imported {detail} cookies for user {CF_USER}")
-        else:
-            log(f"camofox: no jar at {JAR} — using the server's "
-                f"persisted cookies for user {CF_USER}", "WARN")
-            cookies_note = f" cookies=persisted (user={CF_USER})"
-    else:
-        if not os.path.exists(JAR):
-            log(f"FATAL: jar missing at {JAR}", "ERROR")
-            sys.exit(2)
-        if not (os.path.isfile(BIN) and os.access(BIN, os.X_OK)):
-            log(f"FATAL: lightpanda binary missing at {BIN} — "
-                "run: bash setup.sh --lightpanda", "ERROR")
-            sys.exit(2)
-        n = convert_jar()
-        cookies_note = f" cookies={n}"
+    cookies_note = ENGINE.prepare()
     log(f"tour start: browser={BROWSER} {len(LINKS)} stops "
         f"dwell={DWELL}s gap={GAP}s poll={POLL}s breaker={BREAKER}"
         f"{cookies_note}")
@@ -1101,13 +1242,7 @@ async def main():
         rnd += 1
         r0 = time.time()
         log(f"=== round {rnd} start ===")
-        if BROWSER != "camofox":
-            try:
-                n = convert_jar()
-                log(f"round {rnd}: jar reconverted, cookies={n}", "SKIP")
-            except Exception as e:
-                log(f"round {rnd}: jar reconvert failed ({e}); "
-                    "reusing previous", "WARN")
+        ENGINE.prepare_round(rnd)
         for idx, url in enumerate(LINKS):
             name = url.rsplit("/", 1)[-1]
             verdict, tts, rss_peak = await run_stop(idx, url)
@@ -1132,17 +1267,12 @@ async def main():
 
 
 def _cleanup(signum, frame):
-    if CURRENT_SRV is not None:
+    # Every registered engine tears down its live stop (the inactive
+    # engines' state is empty, so this is the old both-globals check,
+    # generalised: a future engine gets signal cleanup for free).
+    for eng in ENGINES.values():
         try:
-            CURRENT_SRV.kill()
-        except Exception:
-            pass
-    if CURRENT_CF is not None:
-        try:
-            key, session = CURRENT_CF
-            cf_req(key, "DELETE",
-                   f"/tabs/group/{session}?userId={CF_USER}",
-                   timeout=5)
+            eng.teardown()
         except Exception:
             pass
     sys.exit(128 + signum)
