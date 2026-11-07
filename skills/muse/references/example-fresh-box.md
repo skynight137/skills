@@ -78,7 +78,7 @@ Logs for everything live in `~/workspace/logs/`
 ## 4. After a redeploy
 
 Processes and `/etc` users are wiped; files survive. Either re-run
-step 2 by hand, or let the hourly self-heal do it (it probes first,
+step 2 by hand, or let the self-heal backstop (every 6 h) do it (it probes first,
 joins only on failure). Expect ~0 approval prompts: the tailnet
 `derpMap` keeps 2 DERP regions (blr + lax) and the node start pins an
 already-approved control-plane IP (see `derp-map.md` in the muse-hop

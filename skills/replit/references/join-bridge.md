@@ -59,7 +59,7 @@ symlink `~/.ssh`), menyalakan sshd + tailscaled dan join tailnet. Tanpa `--join`
 `--tailscale` cuma memasang dan tak menyalakan apa pun:
 
 ```bash
-TAILSCALE_AUTH_KEY=tskey-auth-... bash <skill>/scripts/setup.sh --tailscale --join
+TAILSCALE_AUTH_KEY=tskey-auth-... bash skills/scripts/replit/setup.sh --tailscale --join
 ```
 
 The auth key is read from the **environment only** (never baked into the script, so
@@ -346,7 +346,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
   Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
   `--join` asserts it, so pin it in the workflow `args`
-  (`TAILSCALE_NODE_NAME=hermes-agent bash <skill>/scripts/setup.sh --join --workflow`) rather than trusting
+  (`TAILSCALE_NODE_NAME=hermes-agent bash skills/scripts/replit/setup.sh --join --workflow`) rather than trusting
   the OS hostname — and not in an rc, which re-fires per terminal. A retired name can linger
   in `tailscale status` until removed in the console; the live node is the one under `self`.
   `tailscale set --hostname=` returns before the control plane has applied it, so POLL the
