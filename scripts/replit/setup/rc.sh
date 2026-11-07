@@ -677,7 +677,8 @@ write_bashrc() {
 # else would otherwise lose the pin silently.
 write_replit_bashrc() {
   if [[ "$REPLIT_MODE" != true ]]; then
-    skip "workflow bashrc shim not written in default mode (interactive rc only)"
+    # Default mode has no workflow shops to wire — silence, not a skip
+    # line: output must match the system it runs on (user, 2026-11-07).
     return 0
   fi
 
@@ -717,8 +718,13 @@ EOF
   #    precisely because it only takes effect where nothing else does:
   #    interactive consoles keep sourcing $BASHRC.
   local replit_file="$REPL_HOME/.replit"
-  if [[ ! -f "$replit_file" || ! -w "$replit_file" ]]; then
-    skip ".replit missing or not writable — workflow shops keep the platform env"
+  if [[ ! -f "$replit_file" ]]; then
+    # No project file, no pin — a workspace without .replit (CI stand-in
+    # roots, scratch installs) has nothing to pin into; not a finding.
+    return 0
+  fi
+  if [[ ! -w "$replit_file" ]]; then
+    skip ".replit not writable — workflow shops keep the platform env"
     return 0
   fi
 
@@ -989,7 +995,7 @@ strip_userenv_keys() {
 
 write_replit_env() {
   if [[ "$REPLIT_MODE" != true ]]; then
-    skip ".replit userenv not written in default mode (shell rc is the only env path)"
+    # Default mode is shell-rc-only by design — silence, not a skip line.
     return 0
   fi
   # Nothing registered this run (e.g. --doctor alone) — keep the existing
@@ -999,8 +1005,12 @@ write_replit_env() {
     return 0
   fi
   local replit_file="$REPL_HOME/.replit"
-  if [[ ! -f "$replit_file" || ! -w "$replit_file" ]]; then
-    skip ".replit missing or not writable — shell rc remains the only env path"
+  if [[ ! -f "$replit_file" ]]; then
+    # No project file in this root — nothing to write userenv into.
+    return 0
+  fi
+  if [[ ! -w "$replit_file" ]]; then
+    skip ".replit not writable — shell rc remains the only env path"
     return 0
   fi
   step "Configuring .replit userenv: $replit_file"
