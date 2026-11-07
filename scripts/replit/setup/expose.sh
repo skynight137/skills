@@ -31,9 +31,11 @@ _bin_replace_note() {
 # latest/download; the release publishes no checksum asset (only the binary and
 # the .deb/.rpm packages), so this download is unverified like rclone/qbt/aria2c.
 cloudflared_asset_name() {
+  local os=linux
+  [[ "$(uname -s)" == Darwin ]] && os=darwin
   case "$(uname -m)" in
-    x86_64|amd64)   echo "cloudflared-linux-amd64" ;;
-    aarch64|arm64)  echo "cloudflared-linux-arm64" ;;
+    x86_64|amd64)   echo "cloudflared-$os-amd64$([[ $os == darwin ]] && echo .tgz)" ;;
+    aarch64|arm64)  echo "cloudflared-$os-arm64$([[ $os == darwin ]] && echo .tgz)" ;;
     *)              die "cloudflared: unsupported arch $(uname -m)" ;;
   esac
 }
@@ -50,6 +52,16 @@ install_cloudflared() {
 
   echo "  Downloading $asset"
   curl -fsSL "$url" -o "$tmp" || die "cloudflared download failed: $url"
+  if [[ "$asset" == *.tgz ]]; then
+    # darwin assets ship as a tarball wrapping the bare binary
+    local exdir="$XDG_DATA_HOME/_cloudflared-extract"
+    rm -rf "$exdir"; mkdir -p "$exdir"
+    tar -xzf "$tmp" -C "$exdir" || die "cloudflared archive extract failed"
+    local inner
+    inner="$(find "$exdir" -type f -name cloudflared -print -quit)"
+    [[ -n "$inner" ]] || die "cloudflared archive is missing the 'cloudflared' binary"
+    mv -f "$inner" "$tmp"; rm -rf "$exdir"
+  fi
   chmod +x "$tmp"
   _bin_replace_note "$XDG_BIN_HOME/cloudflared"
   rm -f "$XDG_BIN_HOME/cloudflared"

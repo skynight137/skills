@@ -45,7 +45,7 @@ if [[ -z "$line" ]]; then
   exit 1
 fi
 echo "$line"
-if printf '%s' "$line" | grep -qE "NOT FOUND|not installed"; then
+if printf '%s' "$line" | grep -qE "NOT FOUND|not installed|FAILED to run"; then
   echo "FAIL: doctor still reports $label missing after install"
   exit 1
 fi
