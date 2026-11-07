@@ -157,6 +157,7 @@ jobs:
           - {tool: lightpanda, flag: --lightpanda, label: "Lightpanda:", os: ubuntu-latest}
           - {tool: llm-wiki, flag: --llm-wiki, label: "llm-wiki:", os: ubuntu-latest}
           - {tool: camofox, flag: --camofox, label: "Camofox:", os: ubuntu-latest}
+          - {tool: omniroute, flag: --omniroute, label: "OmniRoute:", os: ubuntu-latest}
           - {tool: android, flag: --android-tools, label: "Android SDK (adb):", os: ubuntu-latest}
           # --- cross-platform upstreams also run on macOS ---
           - {tool: uv, flag: --uv, label: "uv:", os: macos-latest}

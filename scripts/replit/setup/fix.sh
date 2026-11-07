@@ -94,6 +94,14 @@ fix_derive_wiring() {
     ln -sfn "$LIGHTPANDA_BIN" "$XDG_BIN_HOME/lightpanda"
     lightpanda_write_env_example
   fi
+  # OmniRoute: the npm bin is the marker. Re-assert OMNIROUTE_HOME and
+  # the config template so --fix repairs a lost .env.example without a
+  # reinstall. The real .env and the server data in $OMNIROUTE_HOME are
+  # operator data — never touched here.
+  if [[ -x "$NODE_DIR/bin/omniroute" || -x "$XDG_BIN_HOME/omniroute" ]]; then
+    record_tool_env_vars OMNIROUTE_HOME; record_tool_path_dirs "$XDG_BIN_HOME"
+    omniroute_write_env_example
+  fi
   local b
   # Direct-binary tools own nothing but their file in $XDG_BIN_HOME, so one
   # presence check per tool is the whole wiring.

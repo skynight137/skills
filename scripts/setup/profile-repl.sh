@@ -93,6 +93,12 @@ LIGHTPANDA_RELEASE_BASE="https://github.com/lightpanda-io/browser/releases/downl
 # Lightpanda 1.0.3's CDP in the fleet trial (references/lightpanda.md).
 LIGHTPANDA_PLAYWRIGHT_VERSION="1.64.1"
 
+# OmniRoute: OpenAI-compatible AI router server (npm-global). Pinned —
+# the npm registry is the only artifact source (no checksum to verify
+# against beyond npm's own integrity); bump deliberately, the install
+# verifies the bin + the installed package version.
+OMNIROUTE_VERSION="3.8.53"
+
 # AI agent
 HERMES_INSTALL_URL="https://hermes-agent.nousresearch.com/install.sh"
 
@@ -202,6 +208,7 @@ source "$SCRIPT_DIR/../replit/setup/expose.sh"
 source "$SCRIPT_DIR/../replit/setup/join.sh"
 source "$SCRIPT_DIR/../replit/setup/camofox.sh"
 source "$SCRIPT_DIR/../replit/setup/lightpanda.sh"
+source "$SCRIPT_DIR/../replit/setup/omniroute.sh"
 source "$SCRIPT_DIR/../replit/setup/hermes_chromium.sh"
 source "$SCRIPT_DIR/../replit/setup/llm-wiki.sh"
 source "$SCRIPT_DIR/../replit/setup/cleanup.sh"
