@@ -105,17 +105,6 @@ doctor() {
     warn "Camofox: NOT FOUND (camofox-browser) — install with --camofox, or ignore if not used"
     fail=1
   fi
-  # OmniRoute: a server, not a CLI — never exec the bin to probe it (it
-  # would START the gateway); the version comes from the installed
-  # package.json under the npm prefix ($NODE_DIR).
-  local _or_pj="$NODE_DIR/lib/node_modules/omniroute/package.json"
-  if [[ -f "$_or_pj" ]]; then
-    local _or_ver; _or_ver="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$_or_pj" | head -1)"
-    ok "OmniRoute: omniroute ${_or_ver:-unknown} (config + data: $OMNIROUTE_HOME)"
-  else
-    warn "OmniRoute: NOT FOUND (omniroute) — install with --omniroute, or ignore if not used"
-    fail=1
-  fi
   case ":$_ENTRY_PATH:" in
     *":$XDG_BIN_HOME:"*) ok "XDG_BIN_HOME on PATH" ;;
     *) warn "XDG_BIN_HOME NOT on PATH (open a new shell)"; fail=1 ;;

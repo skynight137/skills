@@ -64,15 +64,6 @@ Options:
                         (~380 MB per stop, zero idle). Not part of --all;
                         install it explicitly where a fleet tour runs.
                         See references/lightpanda.md
-  -or, --omniroute          Install OmniRoute (npm-global omniroute, pinned
-                        3.8.53: OpenAI-compatible AI router server
-                        — provider account pool + rotation behind one
-                        gateway). Requires the managed Node.js (installed
-                        first when missing). Config + data live in
-                        \$OMNIROUTE_HOME (\$XDG_CONFIG_HOME/omniroute): put the
-                        real config in .env there (see .env.example), then
-                        run: omniroute (gateway on PORT from .env, default
-                        9000). The installer never starts the server.
   -lw, --llm-wiki           Install the llm-wiki server (knowledge base for agents):
                         scripts/setup/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
                         AppImage + shared token (.env, chmod 600). Start with
@@ -104,7 +95,7 @@ Options:
                         tools to remove). An explicit target skips the menu:
                         \`--clean all\` (or \`--clean --all\`) removes everything;
                         --clean node|uv|android-tools|zsh|oc|opencode|ollama|
-                        claude|hermes|ori|camofox|lightpanda|omniroute|hermes-chromium|llm-wiki|
+                        claude|hermes|ori|camofox|lightpanda|hermes-chromium|llm-wiki|
                         rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx
                         removes one tool
                         (tailscale = biner + sshd join + state + wiring ssh).
@@ -116,9 +107,8 @@ Options:
                         to $XDG_CONFIG_HOME/hermes/hermes-backup.zip BEFORE its
                         dir is removed (left intact if the backup fails);
                         ollama models,
-                        camofox server state, the lightpanda tour config +
-                        cookie jar and the omniroute config + data
-                        (\$OMNIROUTE_HOME) are preserved.
+                        camofox server state and the lightpanda tour config +
+                        cookie jar are preserved.
                         NON-INTERACTIVE: a bare \`--clean\` with no target is
                         REFUSED (it would wipe everything, Hermes included).
                         Use \`--clean all -y\` to confirm a full wipe.
@@ -169,7 +159,6 @@ parse_args() {
       -w|--workflow)             INSTALL_JOIN=true; INSTALL_TAILSCALE=true; WF=true ;;
       -cm|--camofox)             INSTALL_CAMOFOX=true ;;
       -lp|--lightpanda)          INSTALL_LIGHTPANDA=true ;;
-      -or|--omniroute)           INSTALL_OMNIROUTE=true ;;
       -hb|--hermes-browser|--hermes-chromium) INSTALL_HERMES_CHROMIUM=true ;;
       -lw|--llm-wiki)            INSTALL_LLM_WIKI=true ;;
       -d|--doctor)               DOCTOR=true ;;
@@ -217,7 +206,6 @@ parse_args() {
      && ! $INSTALL_CAMOFOX && ! $INSTALL_CLOUDFLARED \
      && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN \
      && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI && ! $INSTALL_LIGHTPANDA \
-     && ! $INSTALL_OMNIROUTE \
      && ! $DOCTOR && ! $FIX && ! $LIST_STATE; then
     INSTALL_ALL=true
   fi
@@ -241,7 +229,6 @@ parse_args() {
     INSTALL_SSHX=true
     INSTALL_JOIN=true
     INSTALL_CAMOFOX=true
-    INSTALL_OMNIROUTE=true
     INSTALL_HERMES_CHROMIUM=true
   fi
 }
