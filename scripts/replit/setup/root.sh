@@ -33,7 +33,12 @@ __setup_platform_home() {
 
 __setup_discovery_file() {
   local ph; ph="$(__setup_platform_home)"
+  # Always succeed: with no platform home there is simply no discovery
+  # file, and callers test the (empty) result. Returning 1 here killed
+  # the whole setup under `set -e` when a caller captured the output —
+  # record_setup_root died before its own empty-check could skip.
   [[ -n "$ph" ]] && printf '%s/.config/%s/root' "$ph" "$SETUP_STATE_DIRNAME"
+  return 0
 }
 
 resolve_setup_root() {
