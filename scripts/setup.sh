@@ -30,6 +30,6 @@ fi
 HERE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 case "$MACHINE" in
   repl) exec bash "$HERE/setup/profile-repl.sh" "${ARGS[@]}" ;;
-  muse) exec bash "$HERE/muse/setup.sh" "${ARGS[@]}" ;;
+  muse) exec bash "$HERE/setup/profile-muse.sh" "${ARGS[@]}" ;;
   *)    echo "setup: unknown --machine '$MACHINE' (want muse|repl)" >&2; exit 2 ;;
 esac
