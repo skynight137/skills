@@ -25,8 +25,8 @@ root: `scripts/replit/` in `skynight137/skills` (public).
 a file inside that payload tree (on a box: inside the landed tree below).
 Two exceptions, both at the repo root and shared with the muse skill:
 `scripts/setup.sh` is THE setup entry for both machine kinds
-(`--machine repl` selects this profile; the old `scripts/replit/setup.sh`
-is gone), and `scripts/setup/…` holds the shared modules it dispatches
+(`--machine repl` selects this profile; the old per-skill entry file
+that used to live in the replit payload tree is gone), and `scripts/setup/…` holds the shared modules it dispatches
 to (core.sh, the join engine, the profiles).
 
 **When a task needs a payload, ask the operator first**, then fetch:
