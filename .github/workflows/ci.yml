@@ -80,7 +80,15 @@ jobs:
       # 1. Behavioral: replit setup --help with every XDG var unset must
       #    still work (its preamble re-derives them itself).
       - name: replit setup --help with XDG unset
+        # SETUP_ROOT stands in for the platform workspace a real box
+        # provides (REPL_HOME); without it setup cannot determine its
+        # install root and exits before the XDG derivation even runs —
+        # that is what the first CI run proved. The XDG vars stay unset:
+        # re-deriving them is the behaviour under test.
+        env:
+          SETUP_ROOT: ${{ runner.temp }}/ws
         run: |
+          mkdir -p "$SETUP_ROOT"
           env -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
               -u XDG_CACHE_HOME -u XDG_BIN_HOME \
             timeout 60 bash scripts/replit/setup.sh --help </dev/null >/dev/null
