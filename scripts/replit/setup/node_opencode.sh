@@ -7,9 +7,24 @@ install_node() {
 
   # wget is not on every box (the Ubuntu-based Replit container ships curl only)
   need_cmd curl
+  # Platform/arch in nodejs.org naming — the sibling lanes in this file
+  # (OpenCode, Claude, ORI) all map uname explicitly; this lane used to
+  # hardcode linux-x64, so on macOS it staged an ELF binary that could
+  # not load (caught by the probe below, and by the CI macOS leg).
+  local os arch
+  case "$(uname -s)" in
+    Linux)  os="linux" ;;
+    Darwin) os="darwin" ;;
+    *)      die "Node: unsupported OS $(uname -s)" ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64)   arch="x64" ;;
+    aarch64|arm64)  arch="arm64" ;;
+    *)              die "Node: unsupported arch $(uname -m)" ;;
+  esac
   local idx="https://nodejs.org/dist/latest-v${NODE_MAJOR}.x/"
   local tar
-  tar=$(curl -fsSL "$idx" | grep -oE "node-v[0-9]+\.[0-9]+\.[0-9]+-linux-x64\.tar\.xz" | head -1)
+  tar=$(curl -fsSL "$idx" | grep -oE "node-v[0-9]+\.[0-9]+\.[0-9]+-${os}-${arch}\.tar\.xz" | head -1)
   [[ -n "$tar" ]] || die "Could not resolve Node.js tarball from $idx"
   local url="$idx$tar"
   local tmp="$XDG_DATA_HOME/_node.tar.xz"
