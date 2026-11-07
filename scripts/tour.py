@@ -73,6 +73,19 @@ Lightpanda engine (proven shape, fleet trial 2026-11-06):
     earns — notably a cf_clearance — across stops and rounds instead of
     re-facing the challenge from a static jar.
 
+Popup dismissal (BOTH engines): a rendered shell is not a booted
+workspace — Replit parks blocking dialogs on the project page (the
+"Keep using Replit?" session dialog, the Starter-limit upsell) and
+the workspace does not start until they are closed (fleet finding,
+user-verified 2026-11-07: SHELL in the log, node offline in the
+netmap). Each stop therefore dismisses popups — once the shell is
+reached, before the dwell, and again before the post-hold sample —
+clicking ONLY whitelisted dismiss controls (see POPUP_SAFE_TEXTS /
+POPUP_NEVER_RE above the Lightpanda engine). The stop summary counts
+them (`popups_dismissed=<n>`); a limit/upsell dialog still standing
+afterwards is logged as `popup-wall:` (observability only — SHELL
+alone never proved a boot; the netmap is the judge).
+
 Camofox engine (the fallback engine):
   * drives the camofox SERVER's HTTP API via its own built-in client
     (cf_req/cf_convert/cf_dismiss_dialogs/cf_diagnose_timeout, in the
@@ -239,7 +252,8 @@ _CF_CONFIG_HOME = os.path.join(_XDG, "camofox")
 #   prepare_round(rnd) -> per-round work before the stops (default:
 #                    none — Lightpanda re-converts its jar)
 #   run_stop(idx, url) -> async; one stop, returning
-#                    (verdict, time_to_shell_s, rss_peak_mb)
+#                    (verdict, time_to_shell_s, rss_peak_mb,
+#                    popups_dismissed)
 #   teardown()    -> signal-time cleanup of a live stop (default:
 #                    none); _cleanup calls it on EVERY registered
 #                    engine, so the inactive engine's no-op keeps the
@@ -588,6 +602,31 @@ def marker_hit(markers, text):
     return next((m for m in markers if m in text), None)
 
 
+# ── shared popup dismissal (both engines) ─────────────────────────────
+# A rendered shell is NOT a booted workspace: Replit parks blocking
+# dialogs on the project page (the "Keep using Replit?" session dialog,
+# the Starter-limit / upgrade upsell), and the workspace does not start
+# until they are closed (fleet finding, user-verified 2026-11-07: the
+# tour logged SHELL while the node stayed offline in the netmap,
+# because nothing ever closed the popup). Both engines therefore run a
+# dismissal pass during a stop. The SELECTION is a whitelist — a
+# control is clickable only when it is provably a dismiss control:
+POPUP_SAFE_TEXTS = ["×", "✕", "x", "X", "Close", "Dismiss",
+                    "No thanks", "Not now", "Maybe later"]
+# ...and a control is vetoed outright when its visible text names an
+# affirmative action (an aria-label veto applies too, unless the label
+# itself says close/dismiss — "Close upgrade dialog" stays clickable).
+POPUP_NEVER_RE = "keep using|upgrade|subscribe|buy|pay|run|delete|confirm"
+# A visible dialog still matching this after every dismissal attempt
+# is a wall the tour cannot clear — logged as `popup-wall:` (WARN),
+# observability only; it does not change the verdict.
+POPUP_WALL_RE = "limit|upgrade|subscription|starter"
+# Dialog containers both engines look inside — nothing outside a
+# dialog is ever clicked.
+POPUP_BOXES = ('[role="dialog"], [aria-modal="true"], dialog, '
+               '[class*="modal" i]')
+
+
 # ══ Lightpanda engine ═════════════════════════════════════════════════
 # Registered as _LightpandaEngine in ENGINES (engine registry, above
 # the config block); dispatched only through the registry.
@@ -742,14 +781,100 @@ async def body_text(page):
         return ""
 
 
+# One click per evaluation: find the first visible dialog holding a
+# SAFE dismiss control and click it. Priority: an aria-label/title
+# matching close|dismiss, then a control whose exact trimmed text is
+# in the safe list (× / No thanks / ...). The never-regex vetoes a
+# candidate whose visible text names an affirmative action, so an
+# upsell's "Upgrade"/"Keep using" button can never be the click —
+# when a dialog offers ONLY affirmative actions, nothing is clicked.
+_LP_DISMISS_JS = """(() => {
+  const safe = %s;
+  const never = new RegExp(%s, 'i');
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight ||
+                             el.getClientRects().length);
+  const boxes = [...document.querySelectorAll(%s)];
+  for (const box of boxes) {
+    if (!visible(box)) continue;
+    const btns = [...box.querySelectorAll('button, [role="button"]')];
+    const label = (b) => (b.getAttribute('aria-label') ||
+                          b.getAttribute('title') || '');
+    const text = (b) => (b.textContent || '').trim();
+    const ok = (b) => {
+      if (b.disabled || !visible(b)) return false;
+      if (never.test(text(b))) return false;
+      const lab = label(b);
+      if (never.test(lab) && !/close|dismiss/i.test(lab)) return false;
+      return true;
+    };
+    let ctl = btns.find((b) => ok(b) && /close|dismiss/i.test(label(b)));
+    if (!ctl) ctl = btns.find((b) => ok(b) && safe.includes(text(b)));
+    if (ctl) {
+      const dlg = (box.innerText || '').replace(/\\s+/g, ' ')
+                    .trim().slice(0, 60);
+      const via = label(ctl) || text(ctl);
+      ctl.click();
+      return {clicked: via, dialog: dlg};
+    }
+  }
+  return {clicked: null};
+})()""" % (json.dumps(POPUP_SAFE_TEXTS),
+           json.dumps(POPUP_NEVER_RE),
+           json.dumps(POPUP_BOXES))
+
+# A wall the tour cannot clear: a still-visible dialog whose text
+# names the limit/upsell family. Returns its first 60 chars or null.
+_LP_WALL_JS = """(() => {
+  const wall = new RegExp(%s, 'i');
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight ||
+                             el.getClientRects().length);
+  const boxes = [...document.querySelectorAll(%s)];
+  for (const box of boxes) {
+    if (!visible(box)) continue;
+    const t = (box.innerText || '').replace(/\\s+/g, ' ').trim();
+    if (wall.test(t)) return t.slice(0, 60);
+  }
+  return null;
+})()""" % (json.dumps(POPUP_WALL_RE), json.dumps(POPUP_BOXES))
+
+
+async def lp_dismiss_popups(page, name):
+    """Dismiss blocking popups on the stop's page (the shared
+    whitelist above): up to 3 clicks per invocation — stacked dialogs
+    are real — with a short settle after each. Logs every dismissal,
+    and a `popup-wall:` WARN when a limit/upsell dialog is still
+    standing afterwards. Never raises: a failed dismissal must not
+    kill a tour. Returns the number of dialogs dismissed."""
+    dismissed = 0
+    for _ in range(3):
+        try:
+            r = await asyncio.wait_for(page.evaluate(_LP_DISMISS_JS), 10)
+        except Exception:
+            break
+        if not isinstance(r, dict) or not r.get("clicked"):
+            break
+        dismissed += 1
+        log(f"stop {name}: popup dismissed via {r['clicked']!r}: "
+            f"{r.get('dialog', '')!r}", "SKIP")
+        await asyncio.sleep(0.7)
+    try:
+        wall = await asyncio.wait_for(page.evaluate(_LP_WALL_JS), 10)
+    except Exception:
+        wall = None
+    if wall:
+        log(f"stop {name}: popup-wall: {wall}", "WARN")
+    return dismissed
+
+
 async def run_stop_lightpanda(idx, url):
     """One Lightpanda tour stop.
-    Returns (verdict, time_to_shell_s, rss_peak_mb)."""
+    Returns (verdict, time_to_shell_s, rss_peak_mb, popups_dismissed)."""
     global CURRENT_SRV
     name = url.rsplit("/", 1)[-1]
     port = BASE_PORT + idx
     t0 = time.time()
     rss_peak = 0
+    popups = 0
     verdict, shell_at = "UNKNOWN", None
 
     kill_leftovers(f"pre-stop {name}")
@@ -780,7 +905,7 @@ async def run_stop_lightpanda(idx, url):
                 await asyncio.sleep(0.5)
         if not up:
             log(f"stop {name}: server HTTP never came up", "ERROR")
-            return "ERROR", None, rss_peak
+            return "ERROR", None, rss_peak, popups
 
         from playwright.async_api import async_playwright
         async with async_playwright() as p:
@@ -833,6 +958,12 @@ async def run_stop_lightpanda(idx, url):
                     f"last_title={last_title!r}", "WARN")
 
             if verdict == "SHELL":
+                # Clear blocking popups BEFORE the dwell: the
+                # workspace boots only once they are gone, so the
+                # dwell should be spent booted, not walled. A second
+                # pass runs before the post-hold sample — a popup can
+                # also appear late.
+                popups += await lp_dismiss_popups(page, name)
                 log(f"stop {name}: holding dwell={DWELL}s", "SKIP")
                 held = 0
                 while held < DWELL:
@@ -840,6 +971,7 @@ async def run_stop_lightpanda(idx, url):
                     await asyncio.sleep(step)
                     held += step
                     rss_peak = max(rss_peak, rss_mb(srv.pid))
+                popups += await lp_dismiss_popups(page, name)
                 text = await body_text(page)
                 still = any(m in text for m in markers) \
                     and not is_wall(text)
@@ -867,7 +999,7 @@ async def run_stop_lightpanda(idx, url):
         srvlog.close()
         kill_leftovers(f"post-stop {name}")
     tts = round(shell_at, 1) if shell_at else None
-    return verdict, tts, rss_peak
+    return verdict, tts, rss_peak, popups
 
 
 # ══ Camofox engine ════════════════════════════════════════════════════
@@ -983,24 +1115,35 @@ def cf_diagnose_timeout():
 
 # Generic modal dismissal. The MECHANISM is site-agnostic — find a
 # visible dialog whose text mentions a caller-given needle, click ITS
-# close control — while the needle itself is caller data, so no
-# site-specific strings live in this client. Deliberately
-# conservative: only dialog-ish containers, only a plausible close
-# control (aria-label close/dismiss, or a bare × / ✕ label) — never a
-# CTA like "Upgrade" or "Subscribe".
+# dismiss control — while the needle itself is caller data, so no
+# site-specific strings live in this client. The dismiss control is
+# the shared whitelist (see the popup-dismissal block above the
+# Lightpanda engine): an aria-label/title matching close|dismiss, or
+# an exact safe text (× / ✕ / "No thanks" / ...) — never a CTA like
+# "Upgrade" or "Keep using", which the never-regex vetoes outright.
 _CF_DISMISS_JS = """(() => {
   const needle = %s;
+  const safe = %s;
+  const never = new RegExp(%s, 'i');
   const visible = (el) => !!(el.offsetWidth || el.offsetHeight ||
                              el.getClientRects().length);
-  const boxes = [...document.querySelectorAll(
-    '[role="dialog"], dialog, [class*="modal" i]')];
+  const boxes = [...document.querySelectorAll(%s)];
   for (const box of boxes) {
     if (!visible(box)) continue;
     if (!(box.innerText || '').toLowerCase().includes(needle)) continue;
     const btns = [...box.querySelectorAll('button, [role="button"]')];
-    const close = btns.find((b) =>
-      /close|dismiss/i.test(b.getAttribute('aria-label') || '') ||
-      ['\\u00d7', '\\u2715'].includes((b.textContent || '').trim()));
+    const label = (b) => (b.getAttribute('aria-label') ||
+                          b.getAttribute('title') || '');
+    const text = (b) => (b.textContent || '').trim();
+    const ok = (b) => {
+      if (b.disabled || !visible(b)) return false;
+      if (never.test(text(b))) return false;
+      const lab = label(b);
+      if (never.test(lab) && !/close|dismiss/i.test(lab)) return false;
+      return true;
+    };
+    let close = btns.find((b) => ok(b) && /close|dismiss/i.test(label(b)));
+    if (!close) close = btns.find((b) => ok(b) && safe.includes(text(b)));
     if (close) { close.click(); return 'dismissed'; }
     return 'found-no-close';
   }
@@ -1011,22 +1154,30 @@ _CF_DISMISS_JS = """(() => {
 def cf_dismiss_dialogs(key, user, tab, needles):
     """Best-effort: close dialogs matching each needle text. Never
     raises — a failed dismissal must not kill a tour; outcomes are
-    logged so the log shows whether the box was actually closed."""
+    logged so the log shows whether the box was actually closed.
+    Returns the number of dialogs dismissed."""
+    dismissed = 0
     for needle in needles:
         try:
             r = cf_req(key, "POST", f"/tabs/{tab}/evaluate",
                        {"userId": user,
-                        "expression":
-                            _CF_DISMISS_JS % json.dumps(needle.lower())},
+                        "expression": _CF_DISMISS_JS % (
+                            json.dumps(needle.lower()),
+                            json.dumps(POPUP_SAFE_TEXTS),
+                            json.dumps(POPUP_NEVER_RE),
+                            json.dumps(POPUP_BOXES))},
                        timeout=30)
             outcome = r.get("result") if isinstance(r, dict) else None
             if outcome:
+                if outcome == "dismissed":
+                    dismissed += 1
                 log(f"dismiss '{needle}': {outcome}", "SKIP")
             elif isinstance(r, dict) \
                     and ("_http_error" in r or "_error" in r):
                 log(f"dismiss '{needle}': request failed {r}", "SKIP")
         except Exception as e:
             log(f"dismiss '{needle}': error {e}", "SKIP")
+    return dismissed
 
 
 def cf_health(key, timeout=5):
@@ -1089,36 +1240,47 @@ def cf_page_text(key, tab):
     return t if isinstance(t, str) else ""
 
 
+# Dialog-text needles for the camofox dismissal: the session dialog,
+# plus the Starter-limit upsell (its text, seen live on fleet
+# workspaces 2026-11-07 — an earlier list holding only the session
+# needle never even searched for the upsell, and its x-only click set
+# could not take the upsell's "No thanks" control).
+CF_POPUP_NEEDLES = ["Keep using Replit?", "Starter limit"]
+
+
 def run_stop_camofox(idx, url):
     """One camofox tour stop (sync; run in a thread by run_stop).
-    Returns (verdict, time_to_shell_s, None) — no per-stop RSS on this
-    engine: the server is a resident service, not a per-stop process."""
+    Returns (verdict, time_to_shell_s, None, popups_dismissed) — no
+    per-stop RSS on this engine: the server is a resident service,
+    not a per-stop process."""
     global CURRENT_CF
     name = url.rsplit("/", 1)[-1]
     key = cf_key()
     session = f"{CF_SESSION}-{idx}"
     t0 = time.time()
+    popups = 0
     verdict, shell_at = "UNKNOWN", None
 
     if cf_health(key) is None:
         log(f"stop {name}: camofox server unreachable at {CF_URL} "
             "— the tour never spawns it; start the camofox service",
             "ERROR")
-        return "ERROR", None, None
+        return "ERROR", None, None, popups
     r = cf_req(key, "POST", "/tabs",
                {"userId": CF_USER, "sessionKey": session, "url": url},
                timeout=60)
     if not isinstance(r, dict) or "_error" in r or "_http_error" in r \
             or not r.get("tabId"):
         log(f"stop {name}: open failed: {r}", "ERROR")
-        return "ERROR", None, None
+        return "ERROR", None, None, popups
     tab = r["tabId"]
     CURRENT_CF = (key, session)
     log(f"stop {name}: tab={tab[:8]} session={session} url={url}")
     try:
-        # The Replit upsell modal, when present — the generic
-        # dismissal (needle is caller data, mechanism is site-agnostic).
-        cf_dismiss_dialogs(key, CF_USER, tab, ["Keep using Replit?"])
+        # Blocking Replit dialogs, when present — the generic
+        # dismissal (needles are caller data, mechanism site-agnostic).
+        popups += cf_dismiss_dialogs(key, CF_USER, tab,
+                                     CF_POPUP_NEEDLES)
         markers = shell_markers(name)
         deadline = time.time() + POLL
         last_title = None
@@ -1152,8 +1314,16 @@ def run_stop_camofox(idx, url):
                 f"last_title={last_title!r}", "WARN")
 
         if verdict == "SHELL":
+            # Same timing as the lightpanda engine: dismiss again
+            # now that the shell is in (the workspace boots during
+            # the dwell only if the way is clear), and once more
+            # before the post-hold sample for late popups.
+            popups += cf_dismiss_dialogs(key, CF_USER, tab,
+                                         CF_POPUP_NEEDLES)
             log(f"stop {name}: holding dwell={DWELL}s", "SKIP")
             time.sleep(DWELL)
+            popups += cf_dismiss_dialogs(key, CF_USER, tab,
+                                         CF_POPUP_NEEDLES)
             text = cf_page_text(key, tab)
             still = any(m in text for m in markers) and not is_wall(text)
             log(f"stop {name}: post-hold still-shell={still} "
@@ -1171,7 +1341,7 @@ def run_stop_camofox(idx, url):
             log(f"stop {name}: session close failed: {r}", "WARN")
         CURRENT_CF = None
     tts = round(shell_at, 1) if shell_at else None
-    return verdict, tts, None
+    return verdict, tts, None, popups
 
 
 async def run_stop(idx, url):
@@ -1245,12 +1415,13 @@ async def main():
         ENGINE.prepare_round(rnd)
         for idx, url in enumerate(LINKS):
             name = url.rsplit("/", 1)[-1]
-            verdict, tts, rss_peak = await run_stop(idx, url)
+            verdict, tts, rss_peak, popups = await run_stop(idx, url)
             ok = verdict == "SHELL"
             fail_streak = 0 if ok else fail_streak + 1
             rss = f"{rss_peak}MB" if rss_peak is not None else "n/a"
             log(f"stop={name} verdict={verdict} "
                 f"time_to_shell={tts} dwell={DWELL}s rss_peak={rss} "
+                f"popups_dismissed={popups} "
                 f"fail_streak={fail_streak}",
                 "OK" if ok else "WARN")
             if BREAKER and fail_streak >= BREAKER:

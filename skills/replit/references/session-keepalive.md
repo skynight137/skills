@@ -26,6 +26,19 @@ plugin, the silent-reopen trap) is **Camofox-specific**: Lightpanda
 holds no session state between stops at all — each stop is a fresh
 server and a fresh page, kept alive only by the next round's open.
 
+**A rendered shell is not a booted workspace (2026-11-07).** A stop
+can log SHELL — page rendered, markers present, post-hold still
+shell — while the workspace never starts and the node stays
+offline in the netmap: Replit parks blocking dialogs on the page
+(the "Keep using Replit?" session dialog, the Starter-limit
+upsell), and the workspace boots only once they are closed
+(user-verified in a real browser: close the popup, the workspace
+boots). Both engines now dismiss popups during the stop (whitelist
+controls only — see references/lightpanda.md item 8); the signals
+are the stop summary's `popups_dismissed=<n>` and the `popup-wall:`
+WARN when a dialog survives every attempt. Judge a wake by the
+netmap, never by SHELL alone.
+
 ## Failure triage: opaque 500 on `POST /sessions/:userId/cookies`
 
 The client reports `import failed: {'_http_error': 500, '_body': '{"error":"Internal server error"}'}`

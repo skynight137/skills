@@ -156,6 +156,22 @@ tool in this skill.
 7. **Teardown is verified**: leftover `lightpanda serve` processes
    are killed before and after every stop, and a signal to the tour
    kills the live server with it.
+8. **Blocking popups are dismissed during the stop** (2026-11-07):
+   after the SHELL verdict, before the dwell, and again before the
+   post-hold sample, the engine clicks a blocking dialog away —
+   ONLY a whitelisted dismiss control (a close/dismiss aria-label
+   or title, or an exact `×` / `✕` / `Close` / `Dismiss` /
+   `No thanks` / `Not now` / `Maybe later` text); affirmative
+   controls (`Upgrade`, `Keep using`, …) are vetoed and never
+   clicked. This is load-bearing, not cosmetic: Replit parks the
+   "Keep using Replit?" dialog and the Starter-limit upsell on the
+   page, and **the workspace does not boot until they are closed**
+   — a stop that only opens the page logs SHELL while the node
+   stays offline in the netmap. SHELL alone therefore does NOT
+   prove a boot; read the stop summary's `popups_dismissed=<n>`,
+   and a `popup-wall:` WARN line when a limit/upsell dialog is
+   still standing after every dismissal attempt (the tour cannot
+   clear it — that is an account-side wall, not a tour failure).
 
 ## Evidence and caveats
 
