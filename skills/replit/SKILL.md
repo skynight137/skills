@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.40.1
+version: 4.40.2
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -301,11 +301,13 @@ without ripgrep.
   Playwright-shaped API, pip-installed into the tour venv). On nix
   boxes their Chromium is a foreign binary: it runs only with its
   interpreter patched to the store's matching glibc ld.so plus a
-  per-engine `closure.txt` of store lib dirs in the engine home
-  (tour.sh prepends it for these engines only — the system ld.so +
-  nix libc mix dies on GLIBC_PRIVATE symbols, and store libs from
-  mixed generations need version conflicts resolved by the loader
-  itself; proven on repl-30 2026-11-07). All
+  per-engine `closure.txt` of store lib dirs in the engine home,
+  which tour.py passes to the BROWSER PROCESS ONLY via Playwright's
+  launch env — never the tour's shared LD_LIBRARY_PATH: the driver
+  Node is a foreign-interp binary and the nix glibc kills it with
+  the same GLIBC_PRIVATE error (the generate-closure regression,
+  re-proven on repl-30 2026-11-07; store-lib version conflicts are
+  resolved by the loader itself when the closure is built). All
   engines produce the same per-stop verdicts
   (SHELL / LOGGED-OUT-WALL / CF-STALL / ERROR / UNKNOWN, time-to-shell,
   dwell hold, circuit breaker). Both dismiss blocking page popups

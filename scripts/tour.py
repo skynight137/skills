@@ -1193,11 +1193,37 @@ def pw_cookies():
     return out
 
 
+def _pw_browser_env(engine):
+    """The engine's nix lib closure (<engine home>/closure.txt,
+    colon-separated dirs, produced at engine setup) as a
+    browser-process env — or None when no closure file exists.
+
+    The closure includes the store's glibc dir and is ONLY safe in
+    the browser process: the browser's interpreter is patched to
+    the matching store ld.so, while everything else in this tree
+    (above all the Playwright driver Node, a foreign-interp binary)
+    dies on the nix glibc with GLIBC_PRIVATE lookup errors. Hence
+    Playwright's per-launch env, never the tour's own environment."""
+    try:
+        dirs = open(os.path.join(engine.HOME, "closure.txt")) \
+            .read().strip()
+    except Exception:
+        return None
+    if not dirs:
+        return None
+    cur = os.environ.get("LD_LIBRARY_PATH", "")
+    return {"LD_LIBRARY_PATH": dirs + (":" + cur if cur else "")}
+
+
 async def _pw_launch_patchright(engine):
     from patchright.async_api import async_playwright
     pw = await async_playwright().start()
+    kw = {"headless": PW_HEADLESS}
+    env = _pw_browser_env(engine)
+    if env is not None:
+        kw["env"] = env
     ctx = await pw.chromium.launch_persistent_context(
-        engine.profile_dir(), headless=PW_HEADLESS)
+        engine.profile_dir(), **kw)
     return pw, ctx
 
 
@@ -1208,12 +1234,17 @@ async def _pw_launch_cloak(engine):
         raise RuntimeError(
             "cloakbrowser exposes no launch_persistent_context_async "
             "in this version — the adapter needs its async API")
-    # Pass humanize only when this build's signature accepts it —
-    # the package's API surface moves between versions.
+    # Pass optional kwargs only when this build's signature
+    # accepts them — the package's API surface moves between
+    # versions.
     import inspect
+    params = inspect.signature(fn).parameters
     kw = {"headless": PW_HEADLESS}
-    if "humanize" in inspect.signature(fn).parameters:
+    if "humanize" in params:
         kw["humanize"] = CLOAK_HUMANIZE
+    env = _pw_browser_env(engine)
+    if env is not None and "env" in params:
+        kw["env"] = env
     ctx = await fn(engine.profile_dir(), **kw)
     return None, ctx
 
@@ -1227,8 +1258,11 @@ async def pw_ensure_session(engine):
     if cookies:
         await ctx.add_cookies(cookies)
     PW_SESSION = _PwSession(engine.KEY, ctx, pw, engine.profile_dir())
+    closure = _pw_browser_env(engine)
     log(f"{engine.KEY}: session up, injected {len(cookies)} cookies "
-        f"from {JAR}")
+        f"from {JAR}" + (f"; nix closure applied to the browser "
+        f"process ({len(closure['LD_LIBRARY_PATH'].split(':'))} "
+        "dirs)" if closure else ""))
     return PW_SESSION
 
 

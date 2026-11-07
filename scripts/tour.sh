@@ -13,9 +13,9 @@
 #      entry created under $LIGHTPANDA_HOME, falling back to a PATH
 #      python3) and the managed engine home, so a workflow/Run-button
 #      shell needs no sourcing first;
-#   3. (nix boxes, local Playwright engines only) it prepends the
-#      engine's closure.txt lib dirs — a foreign Chromium binary
-#      loads only under its matched nix ld.so/glibc + store libs.
+#   3. NOTHING for the local Playwright engines' lib closure —
+#      tour.py scopes that to the browser process alone (the
+#      driver Node in this tree must never see the nix glibc).
 # All tour logic lives in tour.py; this file adds no behaviour of its
 # own — --browser/--machine and every other arg pass straight through.
 # (Same justified-shim shape as the camofox-mcp wrapper: env assembly
@@ -32,30 +32,15 @@ if [ -d /nix/store ]; then
 fi
 
 # Local Playwright engines (patchright / cloakbrowser): their
-# Chromium is a foreign binary whose runtime libs live in the nix
-# store across ~18 package dirs, and it only loads under a matched
-# nix ld.so/glibc pair (the binary's interpreter is patched at
-# engine setup). When the engine's closure file exists (a
-# colon-separated dir list in its home, produced at setup), prepend
-# it — gated on the requested engine so the other engines' runs
-# keep the plain path above.
-_PW_ENGINE=""
-_prev=""
-for _a in "$@"; do
-  if [ "$_prev" = "--browser" ]; then _PW_ENGINE="$_a"; fi
-  case "$_a" in --browser=*) _PW_ENGINE="${_a#--browser=}" ;; esac
-  _prev="$_a"
-done
-[ -z "$_PW_ENGINE" ] && _PW_ENGINE="${TOUR_BROWSER:-}"
-case "$_PW_ENGINE" in
-  patchright|cloakbrowser)
-    _CFG_BASE="$(dirname "$LIGHTPANDA_HOME")"
-    _CLOSURE="$_CFG_BASE/$_PW_ENGINE/closure.txt"
-    if [ -f "$_CLOSURE" ]; then
-      export LD_LIBRARY_PATH="$(cat "$_CLOSURE")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-    fi
-    ;;
-esac
+# Chromium loads only under a matched nix ld.so/glibc pair plus a
+# closure of store lib dirs — but that closure must reach the
+# BROWSER PROCESS ONLY, never this process tree: the Playwright
+# driver is a foreign-interp Node binary, and the nix glibc in a
+# shared LD_LIBRARY_PATH kills it with the same GLIBC_PRIVATE
+# error (the generate-closure.sh regression, re-proven on repl-30
+# 2026-11-07). tour.py therefore reads <engine home>/closure.txt
+# itself and passes it via Playwright's per-launch env. Nothing
+# for this shell to do.
 
 if [ -x "$LIGHTPANDA_HOME/venv/bin/python" ]; then
   PY="$LIGHTPANDA_HOME/venv/bin/python"
