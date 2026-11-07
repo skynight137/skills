@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lp-tour.sh — launcher for lp-tour.py. It exists ONLY to do the env
+# tour.sh — launcher for tour.py. It exists ONLY to do the env
 # assembly the program cannot do for itself:
 #   1. the tour venv's greenlet needs libstdc++.so.6, which on a Replit
 #      box lives in the nix store, and LD_LIBRARY_PATH must be exported
@@ -9,9 +9,9 @@
 #      `setup.sh --lightpanda` created under $LIGHTPANDA_HOME, falling
 #      back to a PATH python3) and the managed engine home, so a
 #      workflow/Run-button shell needs no sourcing first.
-# All tour logic lives in lp-tour.py; this file adds no behaviour of
-# its own. (Same justified-shim shape as the trial launcher and the
-# camofox-mcp wrapper: env assembly for a caller that gets none.)
+# All tour logic lives in tour.py; this file adds no behaviour of its
+# own. (Same justified-shim shape as the camofox-mcp wrapper: env
+# assembly for a caller that gets none.)
 set -euo pipefail
 D="$(cd "$(dirname "$0")" && pwd)"
 
@@ -26,7 +26,7 @@ if [ -x "$LIGHTPANDA_HOME/venv/bin/python" ]; then
 elif command -v python3 >/dev/null 2>&1; then
   PY="$(command -v python3)"
 else
-  echo "lp-tour: no python found — run: bash $D/setup.sh --lightpanda" >&2
+  echo "tour: no python found — run: bash $D/setup.sh --lightpanda" >&2
   exit 1
 fi
-exec "$PY" -u "$D/lp-tour.py" "$@"
+exec "$PY" -u "$D/tour.py" "$@"

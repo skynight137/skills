@@ -77,7 +77,7 @@ doctor() {
        && "${LIGHTPANDA_HOME}/venv/bin/python" -c 'import playwright' 2>/dev/null; then
       ok "lightpanda tour venv: playwright importable (${LIGHTPANDA_HOME}/venv)"
     else
-      warn "lightpanda tour venv missing or playwright not importable (${LIGHTPANDA_HOME:-}/venv) — lp-tour cannot run; run: bash setup.sh --lightpanda"
+      warn "lightpanda tour venv missing or playwright not importable (${LIGHTPANDA_HOME:-}/venv) — the tour cannot run; run: bash setup.sh --lightpanda"
     fi
   fi
   # llm-wiki is a server, not a CLI: there is no --version to probe, so check the

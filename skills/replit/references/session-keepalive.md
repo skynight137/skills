@@ -17,7 +17,7 @@ per row:
 
 | engine | cost while a stop is held | idle cost | Cloudflare passage | verdict |
 |---|---|---|---|---|
-| **Lightpanda 1.0.3** (`scripts/lp-tour.py`, references/lightpanda.md) | ~370–391 MB total (one process, RSS≈PSS) | **zero** — one fresh `serve` per stop, torn down after | interstitial clears by itself in ~7–18 s; 4/4 SHELL in the live tour trial | **proven for the open-only job** — the cheap lane |
+| **Lightpanda 1.0.3** (`scripts/tour.py --browser lightpanda`, references/lightpanda.md) | ~370–391 MB total (one process, RSS≈PSS) | **zero** — one fresh `serve` per stop, torn down after | interstitial clears by itself in ~7–18 s; 4/4 SHELL in the live tour trial | **proven for the open-only job** — the cheap lane |
 | **Camofox** (`camofox.py --tools open-page`) | 550–650 MB per tab **plus** the resident server | ~174–200 MB resident server, always on | the anti-detection Firefox lane; passes what the others cannot | **production engine** — the proven, heavy one |
 | Playwright + bundled Chromium | ~1.9–2.1 GB RSS per tab (≈3× a camofox tab like-for-like) | zero | fresh profile 0/7 reached Replit; persistent profile passed once, then stalled repeatedly despite a stored `cf_clearance`; headless blocked outright | **falsified on both axes** — cost and edge; not a tour engine |
 

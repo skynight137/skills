@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.36.0
+version: 4.37.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -15,7 +15,7 @@ metadata:
 ## Payloads live outside this bundle
 
 This bundle is curated memory only (`SKILL.md` + `references/`). The executable
-payload tree — the `setup/` lane modules, `lp-tour.*`, `camofox.py`,
+payload tree — the `setup/` lane modules, `tour.*`, `camofox.py`,
 the probes, the llm-wiki bundle — is NOT in the bundle. (The setup
 ENTRY left this tree in the shared-setup refactor: it is the repo
 root's `scripts/setup.sh`, one entry for both machine kinds.) It lives at the repo
@@ -73,7 +73,7 @@ other lane assumes its persistence rules.
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `start-replit-chromium.sh` |
 | open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
-| run a session keep-alive tour at the cheapest footprint (Lightpanda CDP engine: ~380 MB per stop, zero idle, one fresh server per stop) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `lp-tour.sh`, `lp-tour.py` |
+| run a session keep-alive tour (one unified tour, engine by flag: Lightpanda CDP by default — ~380 MB per stop, zero idle, one fresh server per stop; camofox server API as the fallback engine, same verdicts) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `tour.sh`, `tour.py` |
 | pick the right browser lane (4 exist: Replit Playwright Chromium, Hermes Chrome 145, agent-browser CLI, Camofox) | `references/browser-lanes.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `.hermes/tools/chromium-1208`, `agent-browser`, `:9377` |
 | run a desktop GUI app (AppImage/Tauri/GTK) headless — Xvfb, window manager, software GL, EGL/loader traps | `headless-gui-linux` skill | `start.sh`-style launcher, `xwininfo -root -tree` gates |
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
@@ -267,15 +267,23 @@ without ripgrep.
   - Verify the pin after every `--fix`: `write_replit_bashrc` needs tomlkit (from `.venv`, `python3`, or `uv`). On a fresh box none of them has tomlkit, so the function prints `python tomlkit not found, write REPLIT_BASHRC manually` and still returns 0. That is a failure: workflow shells then lack the line and break silently. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`. Install tomlkit into `.venv` before running `setup.sh --fix` on a fresh machine, or add the line by hand under `[userenv.shared]`.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
-- `lp-tour.py` / `lp-tour.sh` — the Lightpanda keep-alive tour: sequential
-  stops over `LP_LINKS`, one fresh `lightpanda serve` per stop (native
-  `--cookie` jar planting, shell-marker verdicts, dwell hold, circuit
-  breaker), config from the system env / `$LIGHTPANDA_HOME/.env` with the
-  resolution logged per var. The `.sh` is a justified shim — it only
-  assembles `LD_LIBRARY_PATH` (the venv's greenlet needs the nix-store
-  `libstdc++.so.6` before python starts) and resolves the venv python.
-  `lp-tour.sh --check` is the no-open preflight. See
-  `references/lightpanda.md`.
+- `tour.py` / `tour.sh` — the unified keep-alive tour (supersedes
+  lp-tour): sequential stops over `TOUR_LINKS` (fallback `LP_LINKS`),
+  engine by `--browser lightpanda|camofox` (env `TOUR_BROWSER`,
+  default lightpanda). Both engines produce the same per-stop verdicts
+  (SHELL / LOGGED-OUT-WALL / CF-STALL / ERROR / UNKNOWN, time-to-shell,
+  dwell hold, circuit breaker). Lightpanda: one fresh `lightpanda
+  serve` per stop, native `--cookie` jar planting, optional jar
+  write-back (`TOUR_JAR_WRITEBACK`). Camofox: drives the resident
+  camofox server via `camofox.py`'s client (cookie import path,
+  session per stop, health surfaced as ERROR — the tour never spawns
+  the server). Config from the system env / the engine home's `.env`
+  with the resolution logged per var; log lines are
+  `[YYYY-MM-DD HH:MM:SS] [LEVEL] msg`, colour opt-in via `--colour`.
+  The `.sh` is a justified shim — it only assembles `LD_LIBRARY_PATH`
+  (the venv's greenlet needs the nix-store `libstdc++.so.6` before
+  python starts) and resolves the venv python. `tour.sh --check` is
+  the no-open preflight. See `references/lightpanda.md`.
 - `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
 - `$XDG_BIN_HOME/launch-camofox-browser` — **generated at install** (not a repo
   file): sources the closure `env.sh`, preflights the install, then starts
