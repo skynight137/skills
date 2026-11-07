@@ -155,7 +155,8 @@ the GTK closure must already be in the process env. A **non-interactive** shell
 toolchain rc only through the `REPLIT_BASHRC` shim, and Camofox's own `env.sh`
 is separate from that — so a bare `camofox-browser` there inherits only whatever
 `[userenv.shared]` pinned — `libgtk-3.so.0: cannot open shared object file`,
-Firefox never starts, and because `camofox.py` imports cookies **first** you only
+Firefox never starts, and because the client imports cookies **first** (the
+tour's camofox engine does; `camofox.py` did before it) you only
 ever see an opaque `import failed: {'_http_error': 500, ... 'browserType.launch:
 Failed to launch the browser process'}`. Measured 2026-10-06: 6 consecutive `rp`
 workflow runs failed exactly this way.
@@ -215,9 +216,10 @@ $XDG_CONFIG_HOME/camofox/          # CAMOFOX_STATE_DIR
 ```
 
 ⚠ **There is no single `CAMOFOX_STATE_DIR` on the server.** The server reads the
-four vars above, each with its own `~/.camofox` default; `CAMOFOX_STATE_DIR` is
-a **`camofox.py`-only** convenience (its `--state`/listing fallback) and is
-*not* read by the server — setting it alone moves nothing. Verified: a cookie
+four vars above, each with its own `~/.camofox` default; `CAMOFOX_STATE_DIR` was
+a **`camofox.py`-only** convenience (the deleted CLI's `--state`/listing
+fallback) and is *not* read by the server or the tour — setting it alone
+moves nothing. Verified: a cookie
 import with only `CAMOFOX_STATE_DIR` set still wrote to `~/.camofox`.
 
 The profile dir name is `sha256(userId)` truncated to 32 hex chars (verified for
@@ -454,8 +456,9 @@ The closure/loader mechanics *why* each step exists: `references/nix.md`. Env ov
 `CAMOUFOX_INSTALL_DIR`, the four **state dirs** (`CAMOFOX_PROFILE_DIR`,
 `CAMOFOX_COOKIES_DIR`, `CAMOFOX_UPLOADS_DIR`, `CAMOFOX_TRACES_DIR` — all default
 to `$HOME/.camofox/...`, and `setup.sh --camofox` re-anchors them under
-`$XDG_CONFIG_HOME`), `CAMOFOX_STATE_DIR` (⚠ **`camofox.py` only** — the server
-ignores it; see §"State dir"), `CAMOFOX_PORT` (default
+`$XDG_CONFIG_HOME`), `CAMOFOX_STATE_DIR` (⚠ **no current reader** — it was
+`camofox.py`-only and that CLI is gone (S5d); the server ignores it;
+see §"State dir"), `CAMOFOX_PORT` (default
 9377), `CAMOFOX_API_KEY` (cookie-import-only gate),
 **`CAMOFOX_ACCESS_KEY`** (global superkey — required on every route except
 `/health`, plus `/stop` and cookie/auth-session import when their dedicated
@@ -463,12 +466,12 @@ keys are set; `lib/config.js:137`, `accessKeyMiddleware`
 `server.js:188`), `CAMOFOX_BIND_HOST`, `CAMOFOX_USER_ID` /
 `CAMOFOX_SESSION_KEY` (MCP adapter only — `server.mjs:50`; the userId defaults
 to a random `mcp-<uuid>` per process, so MCP tabs/cookies live in their own
-partition and never see `camofox.py`'s `--user` jar), `CAMOFOX_ENV_FILE`
+partition and never see the tour's `TOUR_CAMOFOX_USER` jar), `CAMOFOX_ENV_FILE`
 (optional env file — see below).
 
 **No agent framework required.** The skill never hard-requires Hermes or any
 other tool. An env file is only *optional* convenience: both
-`setup.sh --camofox` and `camofox.py` load the first existing of
+`setup.sh --camofox` and the tour's built-in client load the first existing of
 `$CAMOFOX_ENV_FILE` → `$XDG_CONFIG_HOME/camofox/.env` → `$CAMOFOX_ROOT/.env`
 (legacy), then fall back to plain environment variables. The canonical
 home is `$XDG_CONFIG_HOME/camofox/.env` — the same directory as
@@ -497,7 +500,8 @@ template, `.env.example`, into that same directory (refreshed every run —
 a template, never read by the client, and the real `.env` is never
 touched): copy it to `.env` and fill in the values.
 
-For `camofox.py` the precedence is the "big env" rule, per var: **the
+For the tour's built-in client the precedence is the "big env" rule,
+per var: **the
 system environment wins; the .env file only fills gaps** — and the choice
 is logged at startup, one line per resolved var, e.g.
 `config: CAMOFOX_API_KEY: from system env (.env file skipped)` or
@@ -598,9 +602,12 @@ session `getSession` builds a context and restores the storage state (measured
 | SIGKILL'd (dead) | 500 immediately — `Target page, context or browser has been closed` |
 | SIGSTOP'd (frozen) | **pends forever** — verified still pending at 120s; only the client's own timeout ends it |
 
-Real-use consequence: `scripts/camofox.py:51` uses `urlopen(timeout=300)`, so the client
-blocks 5 minutes, `req()` returns `{"_error": ...}`, and `import_cookies()`
-(`camofox.py:102-104`) calls `sys.exit(1)` — **the keep-alive loop never starts**.
+Real-use consequence (camofox.py era): the old CLI's default
+`urlopen(timeout=300)` blocked the client 5 minutes, then its
+`import_cookies()` exited — **the keep-alive loop never started**. The
+tour's built-in client passes an explicit timeout on every call
+(import: 60s) and fails the tour start with the timeout diagnosis
+instead — the same hard stop, bounded and explained.
 In the server log this is a `POST /sessions/<u>/cookies` res with `"status":500` and
 `"ms"` in the ~316000 range (a 316s request, not a crash).
 
@@ -619,7 +626,7 @@ Ruled out — don't re-chase these: cookie payload validity (all cookies pass
 individually *and* as one batch; `__Host-` names are fine), concurrency (2 and 3
 simultaneous POSTs to the same user all return 200), and cold start (200 in 1.5s).
 If a hand-rolled payload 500s, check that `path` is present — the real client always
-sends it (`camofox.py:84-85`) and omitting it is what makes a payload look invalid.
+sends it (the tour's `cf_convert`) and omitting it is what makes a payload look invalid.
 
 Also: `session empty after tab reaper, closing` fires right after a cookie import
 because an import opens no tab — that is benign. Several runs also log
@@ -668,51 +675,49 @@ with `name, value, domain, path, expirationDate, httpOnly, secure,
 sameSite`), then import them into a Camofox session. All values stay on
 disk — never print cookie contents to the chat/terminal.
 
-**One CLI does everything** — `scripts/camofox.py`:
+**The standalone CLI is gone — the client lives in the tour.**
+`scripts/camofox.py` (the refresh-page-era cookie-import / list /
+keep-alive CLI) was **removed in S5d (2026-11-07)**: its purpose —
+open a page logged-in and hold the session alive — is the tour's job
+now, and its client machinery (request/convert/dismiss/diagnose) was
+carried into `scripts/tour.py`'s **built-in camofox engine**, which
+follows the same adapter pattern as the tour's Lightpanda engine.
+There is no separate camofox client to run any more:
 
 ```bash
-cd <skill-dir>   # the installed replit skill, e.g. $REPL_HOME/.agents/skills/replit after `npx skills add`
+# preflight: config sources, server health + timeout diagnosis, jar
+bash scripts/tour.sh --browser camofox --machine repl --check
 
-python3 scripts/camofox.py --user list        # list accounts (cookie jars)
-python3 scripts/camofox.py --session list      # list live sessions (open tabs)
-python3 scripts/camofox.py                     # bare = both summaries
-
-# import (or re-import) cookies into an account
-python3 scripts/camofox.py --cookies /path/cookies.json --user rl
-
-# open a page once and hold it, reusing persisted cookies (no --cookies
-# needed) — the open itself is what wakes the target workspace
-python3 scripts/camofox.py --tools open-page \
-  --url 'https://replit.com/@me/MyProject' --user rl \
-  --session live-session
-
-# same hold as a .replit workflow: --log-file keeps the workflow terminal
-# to the startup summary (detail goes to the workspace log file;
-# an unbounded console hangs the Replit UI — references/exposing-ports.md)
-python3 scripts/camofox.py --tools open-page \
-  --url 'https://replit.com/@me/MyProject' --user rl \
-  --session live-session --log-file logs/open-page.log
-
-# screenshot currently-open tab(s) to PNGs and exit (one-shot, no loop)
-python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
+# the tour: imports the jar (TOUR_COOKIES) into TOUR_CAMOFOX_USER once
+# at start when a jar file exists, then opens one session per stop
+# (TOUR_CAMOFOX_SESSION-<i>), holds the dwell, closes the session
+bash scripts/tour.sh --browser camofox --machine repl
 ```
 
-- `--wait-service-ready N` (default 180): polls `GET /health` until the server is up
-  before acting. **Required** — `setup.sh --camofox` can take minutes (npm
-  install + engine fetch + browser boot), and Replit `waitForPort` only
-  gates the *provision* task, not parallel consumers, so command-too-early
-  → `Errno 111 Connection refused`. Run it even on first shell entry.
-- `--env FILE` (optional): the env file to load. When omitted, the CLI picks
-  the first **existing** of `$CAMOFOX_ENV_FILE`, then
+The list modes went with the CLI — read users/sessions from the
+server's own JSON endpoints (`GET /tabs?userId=<u>`) or the MCP
+adapter's `camofox_list_tabs`.
+
+- **Server readiness is the tour's own probe now**: it checks
+  `GET /health` at start (and in `--check`) and fails fast with the
+  timeout diagnosis when the server is unreachable — the tour never
+  spawns the server. The old CLI's `--wait-service-ready` polling went
+  with it: `setup.sh --camofox` can take minutes (npm install + engine
+  fetch + browser boot) and Replit `waitForPort` only gates the
+  *provision* task, not parallel consumers, so start the tour only
+  once the server workflow is actually up.
+- **Env file discovery (unchanged)**: the tour's client loads the
+  first **existing** of `$CAMOFOX_ENV_FILE`, then
   `$XDG_CONFIG_HOME/camofox/.env`, then `$CAMOFOX_ROOT/.env` (legacy);
-  with neither it uses plain environment variables. No implicit home dirs, no
-  agent framework. No file and no key just means unauthenticated mode (fine
-  unless `NODE_ENV=production`, which then 403s).
-- ✅ **`camofox.py` falls back to the Replit-persistent root (v4.8.0):** with
-  `CAMOFOX_ROOT` unset it uses `${REPL_HOME:-$HOME}/camofox` — the exact rule
-  `setup.sh --camofox` uses — so a bare invocation finds the provisioned tree
-  (state, cookies, `.env`) with zero exports. The old "exit with a message,
-  no guessing" behaviour forced every consumer to export the var first.
+  with neither it uses plain environment variables. No implicit home
+  dirs, no agent framework. No file and no key just means
+  unauthenticated mode (fine unless `NODE_ENV=production`, which then
+  403s).
+- ✅ **The legacy-root fallback survives in that discovery:** with
+  `CAMOFOX_ROOT` unset the legacy candidate resolves as
+  `${REPL_HOME:-$HOME}/camofox` — the exact rule `setup.sh --camofox`
+  uses — so a box provisioned in the CLI era is still found with zero
+  exports.
 - ⚠️ **`CAMOFOX_PORT` (server listens) and `CAMOFOX_BASE_URL` (client dials) must
   agree** — both default to `9377`, but setting only one silently splits them
   and every request fails with a connection error. If you move the port, set
@@ -722,27 +727,20 @@ python3 scripts/camofox.py --screenshot shots/ --user rl --session live-session
   `CAMOFOX_STATE_DIR`, `CAMOFOX_API_KEY`, … not just the key.
   Python does not expand `$VAR` in strings — resolve with
   `os.environ.get("CAMOFOX_ENV_FILE")`, never a literal `$CAMOFOX_ENV_FILE`.
-- ⚠️ **Precedence differs between the two tools — verified, don't assume:**
-  - `camofox.py` — **ambient env wins** over the file (`setdefault` merge), so
-    an exported `CAMOFOX_BASE_URL` overrides the file's value.
+- ⚠️ **Precedence differs between the two readers — verified, don't assume:**
+  - the tour's client — **ambient env wins** over the file (per-var
+    fallback merge), so an exported `CAMOFOX_BASE_URL` overrides the
+    file's value.
   - `setup.sh --camofox` — **the file wins** over the ambient env: the script
     exports its own defaults *first* (`CAMOFOX_ROOT=…`, `CAMOFOX_PORT=…`,
     lines ~45-86), then sources the file with `set -a` (line ~97), which
     overwrites them.
   So the same `KEY=value` in the same file resolves differently depending on
   which tool reads it. Keep the file as the single source of truth and export
-  overrides in the shell only when you intend them for `camofox.py` alone.
-- `--state DIR` default `$CAMOFOX_ROOT/state`: on-disk data dir
-  (cookies/profiles/traces); only list modes read it. `$CAMOFOX_ROOT` resolves
-  from the environment, else the `${REPL_HOME:-$HOME}/camofox` fallback — never
-  a relative or guessed-wrong path.
-- Full flag set: `--cookies --user --session --tools --url` +
-  `--screenshot --full-page --wait-service-ready --env --state --close` +
-  `--log-file --max-failures --dismiss --fail-text`. `--user list` /
-  `--session list` are listing sentinels; a bare invocation prints both.
+  overrides in the shell only when you intend them for the tour alone.
 
-`--cookies` is optional and only needed to (re)import; **cookies persist
-per `--user` on disk** (`state/profiles/<sha256(userId)>/storage-state.json`,
+The jar is optional and only needed to (re)import; **cookies persist
+per user on disk** (`state/profiles/<sha256(userId)>/storage-state.json`,
 real userId recorded in the sibling `meta.json`) and auto-reload across
 restarts, so one import per account is enough.
 
@@ -805,11 +803,12 @@ in-flight requests. A restart under a live loop is always the probe.
 
 With the tab threshold at its 300s default, a HELD tab that nobody
 touches is reaped after ~300s — but that reaper is not what keeps a
-target alive. `open-page` has no refresh period (the `--interval` flag
-was removed 2026-11-06, with the tool's rename from `refresh-page`):
-it opens once and holds, and keep-alive cadence belongs to the
-caller — re-open each target on a round shorter than the TARGET
-platform's idle tolerance. For the Replit fleet the binding clock
+target alive. The tour's camofox engine has no refresh period
+(the refresh-page-era `--interval` flag was removed 2026-11-06, with
+that tool's rename to open-page, and the engine inherited the shape):
+a stop opens once and holds for the dwell, and keep-alive cadence
+belongs to the caller — the tour re-opens each target on a round
+shorter than the TARGET platform's idle tolerance. For the Replit fleet the binding clock
 proved to be Replit's own idle recycle, not this reaper: a 5-minute
 round of 30s opens, tabs closed per stop, holds 10 nodes up.
 
@@ -818,66 +817,39 @@ keep updating even while the tab is being reaped and reopened. Sample
 `GET /tabs?userId=U` and confirm `tabId` is unchanged across several cycles —
 a reap+reopen changes it.
 
-### Screenshot
+### Screenshot (server endpoint)
 
-`--screenshot DIR` captures the **currently-open** tab(s) and exits — it does
-not open a URL. Naming: `<user>__<session>[_n].png`. Without `--session` it
-shots every live tab for that user (indexed `_0`... when >1).
+The CLI's one-shot `--screenshot` mode went with `camofox.py` in S5d;
+the tour does not screenshot. The server endpoint remains, and the
+MCP adapter's `camofox_screenshot` wraps it:
 
 - Endpoint `GET /tabs/{tabId}/screenshot?userId=X&fullPage=true` returns
   **raw PNG bytes, not JSON** — read it as binary, never `json.loads`.
-- `--full-page` defaults on; `--no-full-page` for viewport-only (faster on
-  lazy-rendered pages).
-
-**`--screenshot` + `--tools open-page` compose**: the screenshot is
-taken once, right after the open, while the tab is held (this is what
-the `.replit` "alive" workflow uses). They are NOT mutually exclusive —
-combined, they open, snapshot the loaded page, and hold:
-
-```
-t=0      open (page loads) → screenshot → hold until the caller stops it
-```
-
-The open's failures are **bounded**: a failed open is retried, and
-after `--max-failures N` **consecutive** failed opens (default 3) the
-client prints the last error and **exits non-zero** instead of
-spinning forever against a dead server or a browser that can no
-longer launch. Set `--max-failures 0` only if you truly want retries
-without bound.
-
-Screenshot runs **before** the refresh in each cycle, so it captures the
-fully-loaded page from the previous reload, not a half-loaded one. `--screenshot`
-alone (no `--tools`) stays one-shot + exit.
-
-- Order matters: screenshot-before-refresh = shoot the settled page.
-  Screenshot-after-refresh would catch the page mid-reload.
-- `--tools <name>` requires `--url`; missing it exits 1 with a clear message.
-- The loop reopens the tab automatically (same `--session`) if a refresh
-  fails and the tab was reaped, so it self-heals across long runs.
+- `fullPage=true` captures the whole page; omit it for viewport-only
+  (faster on lazy-rendered pages).
 
 ### Output conventions
 
-List output is column-aligned with a gap between every field (`USER` 12,
-`SESSION` 20, numbers right-aligned, fixed `   ` before `DOMAINS`). Keep
-header and row format strings identical when editing — mismatched widths are
-the usual cause of the columns running together.
+The deleted CLI's column-aligned list output went with it in S5d.
+Session/user state is read from the server's JSON endpoints now
+(`GET /tabs?userId=<u>`), or via the MCP adapter's `camofox_list_tabs`.
 
-### `--session` vs `--user`
+### user vs session (the tour's `TOUR_CAMOFOX_USER` / `TOUR_CAMOFOX_SESSION`)
 
-- **`--user`** = account/identity: own cookie jar + own
-  `state/profiles/<hash>/` dir. Separate accounts by `--user`; their
+- **user** = account/identity: own cookie jar + own
+  `state/profiles/<hash>/` dir. Separate accounts by user; their
   cookies never mix.
-- **`--session`** = a label for a *group of tabs* inside one user (API
-  `listItemId`). Carries no auth. Same `--session` on re-open reattaches to
-  the group — but reattach is to the GROUP, not to a tab: every
-  `open-page` process still creates its OWN tab in the group
-  (`POST /tabs` always creates). N processes sharing one `--session` =
-  N tabs, not 1. `DELETE /tabs/group/:listItemId` clears the whole group;
-  `camofox.py --user <u> --session <s> --close` is the CLI form.
-- Same user, **different URL** → the default recipe (own `--session` and
-  own process per loop) buys isolation with one tab per loop. Read the
-  memory budget below before running more than a couple of loops against
-  heavy pages.
+- **session** = a label for a *group of tabs* inside one user (API
+  `listItemId`). Carries no auth. The same session key on re-open
+  reattaches to the group — but reattach is to the GROUP, not to a
+  tab: every stop still creates its OWN tab in the group
+  (`POST /tabs` always creates). N stops sharing one session prefix =
+  N tabs over the tour's life, not 1 (the tour closes its group at
+  every stop teardown: `DELETE /tabs/group/:listItemId?userId=<u>`).
+- Same user, **different URL** → the default recipe (own session and
+  own tab per stop) buys isolation with one live tab per stop. Read
+  the memory budget below before running more than a couple of tours
+  against heavy pages.
 
 ### Memory budget: cookies are cheap, tabs are not (measured, repl-cfx-1, 2026-11-05)
 
@@ -918,41 +890,32 @@ Low-memory rules for keep-alive work:
   loops sharing a `--session` and `--screenshot` dir overwrite each
   other. Give parallel loops distinct sessions (and accept their tabs),
   or run sequentially.
-- **Dismiss upsell/limit modals before the screenshot** with
-  `--dismiss TEXT` (repeatable): after the load, `open-page` finds a
-  visible dialog whose text contains TEXT and clicks its close control —
-  e.g. `--dismiss 'Keep using Replit?'` closes Replit's Starter-limit
-  upsell ("You've reached your Starter limit"), which otherwise sits in
-  every tour screenshot. The mechanism in `camofox.py` is generic (dialog
-  + close control only, never a CTA); the site-specific TEXT stays with
-  the caller (workflow args / tour script), and each attempt's outcome
-  (`dismissed` / `not-found` / `found-no-close`) lands in the detail log.
-- **Assert the page is worth keeping alive** with `--fail-text TEXT`
-  (repeatable): after the tab opens,
-  `open-page` exits non-zero if the page's visible text contains
-  **all** of the given TEXTs (a conjunction — one common word in a
-  project's own code must not trip it), confirmed by a second probe 5s
-  later. This is the checker for the failure screenshots cannot flag:
-  the page loads and refreshes fine, but the session is useless — e.g.
-  the cookies went stale and every stop is a logged-out wall, which a
-  tour will happily screenshot for hours. Replit wiring (tour scripts):
-  `--fail-text "Log in" --fail-text "Sign up"` on replit.com stops; the
-  tour script turns the early exit into a `*** stop FAILED early`
-  banner in its own log, and a circuit breaker
-  (`TOUR_MAX_EARLY_FAILURES`, default 3, 0 = off) aborts the whole tour
-  after that many *consecutive* early-failed stops — a stop that serves
-  its full dwell resets the count — so a systematically dead session
-  (e.g. every stop failing the checker on one stale cookie jar) stops
-  the workflow instead of looping rounds forever. Like `--dismiss`,
-  the mechanism is generic and the needles are caller data.
-- **Log colors (tour + client).** Severity you can scan: tour stops
-  cyan, `closed:` dim, round-complete green, `FAILED early` bold
-  yellow, `ABORTED` bold red; the client's two stderr exit messages
-  (content check, max failures) print bold red while its detail log
-  stays plain. Always on, no opt-out (house style: the eye catches
-  severity by color before reading text, so diagnosis starts from
-  the color). Message text is untouched inside the span, so grep on
-  the logs still works.
+- **Dismiss upsell/limit modals after the open**: the tour's camofox
+  engine runs its generic dismissal after each stop's open — find a
+  visible dialog whose text contains the needle and click its close
+  control; the built-in needle is `Keep using Replit?` (Replit's
+  Starter-limit upsell, "You've reached your Starter limit"). The
+  mechanism (in `tour.py`'s `cf_dismiss_dialogs`) is generic (dialog
+  + close control only, never a CTA); the needle is caller data, and
+  each attempt's outcome (`dismissed` / `not-found` /
+  `found-no-close`) lands in the tour log.
+- **Assert the page is worth keeping alive**: the wall check the CLI
+  exposed as `--fail-text` now lives INSIDE the tour as a shared
+  verdict rule (both engines): a stop whose visible text contains
+  **all** of "Log in" and "Sign up" (a conjunction — one common word
+  in a project's own code must not trip it), confirmed by a second
+  probe 5s later, is a `LOGGED-OUT-WALL` verdict. This is the checker
+  for the failure screenshots cannot flag: the page loads fine, but
+  the session is useless — e.g. the cookies went stale and every stop
+  is a logged-out wall. A circuit breaker (`TOUR_MAX_EARLY_FAILURES`,
+  default 3, 0 = off) aborts the whole tour after that many
+  *consecutive* non-SHELL stops — a SHELL stop resets the count — so a
+  systematically dead session (e.g. every stop walling on one stale
+  cookie jar) stops the workflow instead of looping rounds forever.
+- **Log format.** The tour writes the fleet log standard —
+  `[YYYY-MM-DD HH:MM:SS] [LEVEL] message`, plain by default; colour
+  is opt-in (`--colour` / `TOUR_LOG_COLOUR=1`) and wraps ONLY the
+  `[LEVEL]` token, so grep on the logs keeps working.
 
 ## Hermes integration: camofox-browser MCP (the right lane for agent browsing)
 
@@ -995,8 +958,8 @@ Pitfalls found while wiring this (all verified live):
   `CAMOFOX_BASE_URL` or `CAMOFOX_PORT` explicitly when the server lives
   elsewhere).
 - ✅ **One dial name (v4.7.1):** `CAMOFOX_BASE_URL` for BOTH clients — the MCP
-  adapter reads it natively (`server.mjs:46`), `camofox.py` reads it directly
-  (`camofox.py:82`). No alias, no fallback: a stray `CAMOFOX_URL` is simply
+  adapter reads it natively (`server.mjs:46`), and the tour's built-in
+  client reads it the same way. No alias, no fallback: a stray `CAMOFOX_URL` is simply
   ignored and the client dials its default — if something "won't work", check
   the var name first.
 - `/browser connect` + `browser.cdp_url` do NOT help: Camofox is
@@ -1024,10 +987,10 @@ Two non-obvious facts, both measured:
    the Replit proxy root, and `fetch` reads that variable. Verified: with the
    system bundle, MCP `camofox_create_tab` → 200 and `camofox_list_tabs` shows
    the tab, verification on.
-   **Python (`urllib`, `camofox.py`) fails the same way** with
+   **Python (`urllib`, the tour's client) fails the same way** with
    `CERTIFICATE_VERIFY_FAILED`: its default trust path (`capath=/etc/ssl/certs`,
    no `cafile`) doesn't load the Replit proxy root that curl trusts from
-   `/etc/ssl/certs/ca-certificates.crt`. `camofox.py` passes that bundle
+   `/etc/ssl/certs/ca-certificates.crt`. The tour's client passes that bundle
    explicitly and keeps verification on. **certifi does not fix this** — its
    bundle lacks the Replit root. Don't disable verification to get past it.
 2. **⚠ The Replit proxy makes every request look like loopback
@@ -1060,7 +1023,7 @@ node "$CAMOFOX_ROOT/camofox-browser/mcp/server.mjs"
 ⚠ **`CAMOFOX_API_KEY` is NOT what protects `/tabs` — `CAMOFOX_ACCESS_KEY` is.**
 Cookie import is the one exception: `POST /sessions/<u>/cookies` checks
 `CAMOFOX_API_KEY` only, so a client that sends the access key there gets 403.
-`camofox.py` sends the access key everywhere except cookie import.
+The tour's built-in client sends the access key everywhere except cookie import.
 Measured on :9000 through the Replit dev domain (2026-10-06), `NODE_ENV=production`:
 
 | route | no key at all | `CAMOFOX_API_KEY` set | `CAMOFOX_ACCESS_KEY` set |
@@ -1114,15 +1077,15 @@ Run these checks, in order, before calling a port public:
 
 Use a freshly generated key for each test run, store it in a file under the scratch folder with mode 600, and delete it when the test ends. Stop the test server by PID after each run, and confirm the local port is closed.
 
-### Running `camofox.py` from a machine other than the server
+### Running the client from a machine other than the server
 
-`camofox.py` probes `/health` at `CAMOFOX_BASE_URL` before it acts, and that variable defaults to `http://127.0.0.1:9377`. On any machine without a local Camofox on 9377, the probe never answers and the script exits with `camofox not ready after 60s (is the camofox launcher running?)`. That message means the probe got no answer from the configured URL. It does not mean the launcher is down.
+The tour's client probes `/health` at `CAMOFOX_BASE_URL` before it acts, and that variable defaults to `http://127.0.0.1:9377`. On any machine without a local Camofox on 9377, the probe never answers — `--check` reports the server UNREACHABLE and prints the timeout diagnosis (refused / blocked / wedged), and a tour start FATALs the same way. An unanswered probe means the configured URL did not answer. It does not mean the launcher is down. (The deleted CLI collapsed all of this into one `camofox not ready after 60s` exit — the diagnosis is why the tour's version exists.)
 
-- Set `CAMOFOX_BASE_URL=https://<domain>:<port>` before the run. The script reads it at import, so an env file loaded later has no effect.
-- Key selection: `load_key()` (`camofox.py:118`) sends `CAMOFOX_API_KEY` in preference to `CAMOFOX_ACCESS_KEY` whenever both are set. A server with the global gate on rejects the API key on `/tabs` (401), so `camofox.py` fails even though the access key is also set. On a build where `load_key()` still prefers the API key, `/tabs` returns 401 even with the access key set. Verified: API key alone → 401 on `/tabs`; access key alone → past the gate. Cookie import is the exception: it needs the API key, and the access key gets 403.
-- Verify certificates on the client machine. A sandbox that does not trust the Replit proxy root CA fails the same probe with `CERTIFICATE_VERIFY_FAILED`, and the script reports that as "not ready". Test the URL with `urllib` or `curl` first. Only the Replit root CA fixes this, not disabling verification.
+- Set `CAMOFOX_BASE_URL=https://<domain>:<port>` before the run (system env, or the camofox `.env` the client resolves at startup — a var exported after the start has no effect).
+- Key selection: the client sends `CAMOFOX_ACCESS_KEY` in preference to `CAMOFOX_API_KEY` whenever both are set. (An early camofox.py build preferred the API key and failed exactly here — a server with the global gate on rejects the API key on `/tabs` (401) even when the access key is also set; the preference was fixed before the CLI was removed, and the tour's client kept the fixed order.) Verified: API key alone → 401 on `/tabs`; access key alone → past the gate. Cookie import is the exception: it needs the API key, and the access key gets 403.
+- Verify certificates on the client machine. A sandbox that does not trust the Replit proxy root CA fails the same probe with `CERTIFICATE_VERIFY_FAILED`, surfaced as an `_error` value. Test the URL with `urllib` or `curl` first. Only the Replit root CA fixes this, not disabling verification.
 - Test `/health` with no key, then `/tabs` with no key (expect 401), then with the access key (expect past the gate).
-- `open-page` holds its tab and never exits on its own. A `timeout` kill leaves the output empty, which looks like a failure. Confirm a tab operation from the server log (`tab created`, status 200) or from one direct `camofox.req` call, not from the client's output.
+- A tour stop holds its tab for the dwell; the tour process exiting (or being killed) mid-stop leaves the session group on the server until its reaper takes it. Confirm a tab operation from the server log (`tab created`, status 200) or from `GET /tabs?userId=<u>`, not from the client's output alone.
 
 ## Verification (done)
 
@@ -1147,7 +1110,10 @@ Use a freshly generated key for each test run, store it in a file under the scra
   foreground cap, not the script — it is idempotent, so just re-run it).
   It is a *per-package* `nix path-info --recursive`, so it never touches the
   700k-entry store glob that legitimately costs minutes.
-- `scripts/camofox.py` — unified cookie-import / list / keep-alive CLI.
+- `scripts/tour.py` — the unified keep-alive tour; its built-in camofox
+  engine is the only Python camofox client (cookie import, session per
+  stop, timeout diagnosis). The standalone `camofox.py` CLI was removed
+  in S5d.
 - `scripts/replit/libpool.sh` — heals the host-wide pool `$REPL_HOME/.local/lib`
   (the dir the setup.sh rc block prepends to `LD_LIBRARY_PATH`; commonly
   *also* pinned by hand in `.replit [userenv.shared]` — setup.sh does not
@@ -1192,7 +1158,7 @@ in the repo and bump the `version:` in the frontmatter when behaviour changes.
 `.replit` workflows invoke skill scripts by their **full repo path** rather
 than a `$REPL_HOME/scripts/` symlink farm (that farm is removed — call the
 script directly, e.g.
-`python3 skynight137-skills/scripts/replit/camofox.py …`).
+`python3 skynight137-skills/scripts/tour.py …`).
 
 Running any script in this skill writes `scripts/__pycache__/`; the repo has no
 `.gitignore`, so `git status` shows it as untracked noise. It is not tracked —

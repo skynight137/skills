@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """tour.py — the unified session keep-alive tour (fleet session keep-alive).
 
-A SHARED payload: it lives in scripts/setup/ next to the setup entry
-and serves both machine kinds, selected by `--machine muse|repl` (env
+A SHARED ready-to-run script: it lives at the scripts/ root — NOT in
+scripts/setup/ (setup prepares; it never runs things) — and serves
+both machine kinds, selected by `--machine muse|repl` (env
 TOUR_MACHINE fallback; default auto-detect, mirroring setup.sh:
 REPL_HOME set → repl, else muse). The machine picks the defaults that
 differ per VM kind — the XDG base the engine homes resolve under, the
@@ -13,9 +14,18 @@ ONE tour program, engine chosen by flag: `--browser lightpanda|camofox`
 (env TOUR_BROWSER fallback, default lightpanda). It supersedes lp-tour.py
 (the Lightpanda-only tour) — the Lightpanda engine below is that proven
 program ported unchanged in mechanics; the camofox engine drives the
-camofox server API through camofox.py's own client machinery and reaches
+camofox server API through its own built-in client (below) and reaches
 the same diagnosis grade. See references/lightpanda.md and
 references/session-keepalive.md for the engine comparison and mechanics.
+
+Both engines implement ONE adapter pattern, so a future engine (say
+--browser chromium) is just another adapter following it:
+  prepare (resolve config + credentials, probe the engine's runtime)
+  → plant cookies → open one session/tab on the target URL → poll and
+  sample until the shared verdict engine decides → optional cookie
+  read-back (Lightpanda write-back) → close the session/tab.
+Verdicts, dwell handling and the circuit breaker live OUTSIDE the
+adapters, in the shared tour loop.
 
 The job, engine-independent: sequential stops over TOUR_LINKS — for each
 project URL, open the page logged-in (cookie jar), hold it for the dwell,
@@ -56,13 +66,13 @@ Lightpanda engine (proven shape, fleet trial 2026-11-06):
     re-facing the challenge from a static jar.
 
 Camofox engine (the fallback engine):
-  * drives the camofox SERVER's HTTP API via camofox.py's client
-    (req/convert/dismiss_dialogs/diagnose) — reuse, not reinvention.
-    camofox.py itself stays a repl-tree payload (scripts/replit/): the
-    adapter resolves it cross-tree at ../replit/camofox.py relative to
-    this file, with a copy next to tour.py as the second candidate;
-    when it is absent — e.g. a muse box that never fetched the replit
-    tree — the camofox engine reports a clean ERROR, never a traceback;
+  * drives the camofox SERVER's HTTP API via its own built-in client
+    (cf_req/cf_convert/cf_dismiss_dialogs/cf_diagnose_timeout, in the
+    engine section below) — SELF-CONTAINED since S5d: the client is
+    the one the deleted camofox.py CLI used (same requests, same key
+    selection, same timeout diagnosis), carried into the tour when
+    that refresh-page-era CLI was removed; no cross-tree import, so
+    --browser camofox works in any tree that carries tour.py alone;
   * the server is a resident service the CALLER runs (its own workflow);
     the tour NEVER spawns it — an unreachable server is an ERROR verdict
     (and a --check failure), surfaced, not papered over;
@@ -83,7 +93,7 @@ source of every var is logged at startup, name + source only):
   file      lightpanda: $LIGHTPANDA_HOME/.env (LIGHTPANDA_ENV_FILE wins)
             camofox:    $XDG_CONFIG_HOME/camofox/.env (CAMOFOX_ENV_FILE
                         wins, then legacy $CAMOFOX_ROOT/.env — the same
-                        discovery camofox.py itself uses)
+                        discovery the camofox lane itself documents)
   TOUR_LINKS          required: comma/whitespace-separated project URLs
                       (fallback: LP_LINKS — the lp-tour-era name, kept
                       for one release so captain .env files work as-is)
@@ -132,7 +142,7 @@ venv python, and passes --browser/--machine straight through).
 (binary + jar for lightpanda, server health + jar for camofox), and
 exits without opening anything.
 """
-import asyncio, json, os, shutil, signal, socket, subprocess, sys, time, urllib.request
+import asyncio, json, os, shutil, signal, socket, subprocess, sys, time, urllib.error, urllib.request
 
 # ── engine selection ───────────────────────────────────────────────────
 # Resolved BEFORE the rest of config: the .env fallback file lives in
@@ -202,7 +212,8 @@ _CF_CONFIG_HOME = os.path.join(_XDG, "camofox")
 
 def _env_file_for(browser):
     """The .env fallback for the chosen engine — the same discovery the
-    engine's own tooling uses (lp-tour.py / camofox.default_env)."""
+    engine's own tooling uses (the lightpanda home for Lightpanda; the
+    camofox lane's documented candidate order for camofox)."""
     if browser == "camofox":
         root = os.environ.get("CAMOFOX_ROOT") or os.path.join(
             os.environ.get("REPL_HOME") or os.path.expanduser("~"), "camofox")
@@ -309,6 +320,12 @@ COLOUR = _COLOUR_FLAG or cfg("TOUR_LOG_COLOUR", "") in ("1", "true", "yes")
 CF_USER = cfg("TOUR_CAMOFOX_USER", "tour")
 CF_SESSION = cfg("TOUR_CAMOFOX_SESSION", "tour")
 CF_URL = cfg("CAMOFOX_BASE_URL", "http://127.0.0.1:9377").rstrip("/")
+# Key selection mirrors the deleted camofox.py's load_key: the ACCESS
+# key wins (the server's global gate checks it on every route except
+# /health); the API key is the fallback — and the ONLY key the cookie
+# import route accepts, so it is resolved separately too.
+CF_KEY = cfg_chain(["CAMOFOX_ACCESS_KEY", "CAMOFOX_API_KEY"], "") or None
+CF_API_KEY = cfg("CAMOFOX_API_KEY", "") or None
 
 LINKS = [u for u in cfg_chain(["TOUR_LINKS", "LP_LINKS"], "")
          .replace(",", " ").split() if u]
@@ -631,60 +648,165 @@ async def run_stop_lightpanda(idx, url):
 
 
 # ══ Camofox engine ════════════════════════════════════════════════════
-# Drives the camofox server's HTTP API through camofox.py's own client
-# machinery (req / convert / dismiss_dialogs / diagnose_timeout),
-# imported lazily. camofox.py is a REPL-tree payload: it is resolved
-# cross-tree at ../replit/camofox.py relative to this file, with a
-# copy next to tour.py as the second candidate; when neither exists
-# (a muse box that never fetched the replit tree) the engine raises
-# CamofoxUnavailable — a clean ERROR, never a traceback. camofox.py
-# is import-safe (its import only resolves its env-file config, the
-# documented big-env merge). The server is a resident service owned by
-# the caller: the tour checks its health and reports ERROR, it NEVER
+# Drives the camofox server's HTTP API through the client BELOW —
+# self-contained since S5d. The client is the one the deleted
+# camofox.py CLI used (cf_req / cf_convert / cf_dismiss_dialogs /
+# cf_diagnose_timeout are that code, carried into the tour when the
+# refresh-page-era CLI was removed): same requests, same key
+# selection, same timeout diagnosis — no cross-tree import, so this
+# engine works in any tree that carries tour.py alone. It follows the
+# shared adapter pattern: prepare (health probe) → plant cookies
+# (import at tour start) → open one session per stop → poll/sample →
+# close the session. The server is a resident service owned by the
+# caller: the tour checks its health and reports ERROR, it NEVER
 # spawns it. Every request carries an explicit timeout — the sync
 # equivalent of the Lightpanda side's asyncio.wait_for discipline.
-_CF = None        # the imported camofox module
 CURRENT_CF = None  # (key, session) of the live stop, for signal cleanup
 
+# Python's default trust path (capath only on Replit) does not include
+# the Replit proxy root that curl trusts via the system bundle. Use
+# the system bundle when it exists; verification stays on either way.
+_CF_SSL_CTX = None
+if os.path.exists("/etc/ssl/certs/ca-certificates.crt"):
+    import ssl
+    _CF_SSL_CTX = ssl.create_default_context(
+        cafile="/etc/ssl/certs/ca-certificates.crt")
+_CF_SAMESITE = {"no_restriction": "None", "lax": "Lax",
+                "strict": "Strict", "unspecified": "Lax",
+                "none": "None"}
 
-class CamofoxUnavailable(Exception):
-    """camofox.py could not be located or imported on this machine."""
 
-
-def _camofox():
-    global _CF
-    if _CF is None:
-        here = os.path.dirname(os.path.abspath(__file__))
-        cands = [os.path.normpath(os.path.join(here, "..", "replit")),
-                 here]
-        found = next((d for d in cands
-                      if os.path.isfile(os.path.join(d, "camofox.py"))),
-                     None)
-        if found is None:
-            raise CamofoxUnavailable(
-                "camofox.py not found (looked in "
-                + ", ".join(cands) + ") — the camofox engine needs "
-                "the replit payload tree (scripts/replit/camofox.py); "
-                "fetch it, or use --browser lightpanda on this machine")
-        if found not in sys.path:
-            sys.path.insert(0, found)
-        try:
-            import camofox
-        except Exception as e:
-            raise CamofoxUnavailable(
-                f"camofox.py in {found} failed to import: "
-                f"{type(e).__name__}: {str(e)[:120]}")
-        _CF = camofox
-    return _CF
+def cf_req(key, method, path, body=None, timeout=300):
+    """One bounded request to the camofox server. Returns the parsed
+    JSON body, or {"_http_error": code, "_body": ...} /
+    {"_error": str} — errors are VALUES, so callers decide what is
+    fatal (the tour's call, never the client's)."""
+    data = json.dumps(body).encode() if body is not None else None
+    r = urllib.request.Request(
+        CF_URL + path, data=data,
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {key or ''}"}, method=method)
+    try:
+        with urllib.request.urlopen(r, timeout=timeout,
+                                    context=_CF_SSL_CTX) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return {"_http_error": e.code, "_body": e.read().decode()[:400]}
+    except Exception as e:
+        return {"_error": str(e)}
 
 
 def cf_key():
-    return _camofox().load_key(None)
+    return CF_KEY
+
+
+def cf_convert(c):
+    """Browser-export cookie -> the server's import shape."""
+    out = {"name": c["name"], "value": c["value"],
+           "domain": c.get("domain", "").lstrip(".")}
+    if c.get("path"):
+        out["path"] = c["path"]
+    if c.get("expirationDate"):
+        out["expires"] = int(float(c["expirationDate"]))
+    if c.get("httpOnly"):
+        out["httpOnly"] = True
+    if c.get("secure"):
+        out["secure"] = True
+    ss = c.get("sameSite")
+    if ss:
+        out["sameSite"] = _CF_SAMESITE.get(str(ss), "Lax")
+    return out
+
+
+def cf_diagnose_timeout():
+    """Probe /health and report what a hung request actually means, so
+    the operator reads a conclusion instead of running curl themselves.
+    Three states:
+      refused  -> server not running at all
+      /health also hangs -> whole server stuck (event loop blocked)
+      /health answers fast -> server alive but browser ops wedge (dead
+                              juggler; /health lies: browserConnected
+                              is a cached playwright flag, verified live)"""
+    try:
+        t0 = time.time()
+        with urllib.request.urlopen(CF_URL + "/health", timeout=5,
+                                    context=_CF_SSL_CTX) as resp:
+            h = json.loads(resp.read())
+        ms = int((time.time() - t0) * 1000)
+        return (f"[camofox] diagnosis: server {CF_URL} answers /health "
+                f"in {ms}ms (browserRunning={h.get('browserRunning')}, "
+                f"activeSessions={h.get('activeSessions')}) but this "
+                f"request hung -> the browser's page channel is wedged "
+                f"(/health's flags are cached, not a real probe). Fix: "
+                f"restart the server — kill the 'node server.js' "
+                f"process and re-run the camofox launcher (or Stop/"
+                f"re-run its workflow).")
+    except urllib.error.HTTPError:
+        return (f"[camofox] diagnosis: server {CF_URL} is up but "
+                f"/health returned an HTTP error.")
+    except (ConnectionRefusedError, OSError) as e:
+        if isinstance(e, ConnectionRefusedError) \
+                or "refused" in str(e).lower():
+            return (f"[camofox] diagnosis: connection refused on "
+                    f"{CF_URL} -> the server is NOT running. Start it: "
+                    f"camofox  (or: bash setup.sh --camofox)")
+        return (f"[camofox] diagnosis: {CF_URL} did not answer /health "
+                f"({e}) -> the server process is alive but its event "
+                f"loop is blocked; restart it (kill the node server, "
+                f"re-run: camofox).")
+
+
+# Generic modal dismissal. The MECHANISM is site-agnostic — find a
+# visible dialog whose text mentions a caller-given needle, click ITS
+# close control — while the needle itself is caller data, so no
+# site-specific strings live in this client. Deliberately
+# conservative: only dialog-ish containers, only a plausible close
+# control (aria-label close/dismiss, or a bare × / ✕ label) — never a
+# CTA like "Upgrade" or "Subscribe".
+_CF_DISMISS_JS = """(() => {
+  const needle = %s;
+  const visible = (el) => !!(el.offsetWidth || el.offsetHeight ||
+                             el.getClientRects().length);
+  const boxes = [...document.querySelectorAll(
+    '[role="dialog"], dialog, [class*="modal" i]')];
+  for (const box of boxes) {
+    if (!visible(box)) continue;
+    if (!(box.innerText || '').toLowerCase().includes(needle)) continue;
+    const btns = [...box.querySelectorAll('button, [role="button"]')];
+    const close = btns.find((b) =>
+      /close|dismiss/i.test(b.getAttribute('aria-label') || '') ||
+      ['\\u00d7', '\\u2715'].includes((b.textContent || '').trim()));
+    if (close) { close.click(); return 'dismissed'; }
+    return 'found-no-close';
+  }
+  return 'not-found';
+})()"""
+
+
+def cf_dismiss_dialogs(key, user, tab, needles):
+    """Best-effort: close dialogs matching each needle text. Never
+    raises — a failed dismissal must not kill a tour; outcomes are
+    logged so the log shows whether the box was actually closed."""
+    for needle in needles:
+        try:
+            r = cf_req(key, "POST", f"/tabs/{tab}/evaluate",
+                       {"userId": user,
+                        "expression":
+                            _CF_DISMISS_JS % json.dumps(needle.lower())},
+                       timeout=30)
+            outcome = r.get("result") if isinstance(r, dict) else None
+            if outcome:
+                log(f"dismiss '{needle}': {outcome}", "SKIP")
+            elif isinstance(r, dict) \
+                    and ("_http_error" in r or "_error" in r):
+                log(f"dismiss '{needle}': request failed {r}", "SKIP")
+        except Exception as e:
+            log(f"dismiss '{needle}': error {e}", "SKIP")
 
 
 def cf_health(key, timeout=5):
     """The /health dict when the server answers cleanly, else None."""
-    h = _camofox().req(key, "GET", "/health", timeout=timeout)
+    h = cf_req(key, "GET", "/health", timeout=timeout)
     if isinstance(h, dict) and "_error" not in h and "_http_error" not in h:
         return h
     return None
@@ -692,12 +814,10 @@ def cf_health(key, timeout=5):
 
 def cf_import_cookies(key):
     """Import the jar into the tour's camofox user via the server's
-    import path. Same endpoint + payload as camofox.import_cookies
-    (POST /sessions/<user>/cookies, API key — that route checks
-    CAMOFOX_API_KEY only), but returns (ok, detail) instead of exiting:
-    whether a failed import is fatal is the tour's call, not the
-    client's. Returns (True, count) or (False, reason)."""
-    cf = _camofox()
+    import path (POST /sessions/<user>/cookies, API key — that route
+    checks CAMOFOX_API_KEY only). Returns (ok, detail) instead of
+    exiting: whether a failed import is fatal is the tour's call, not
+    the client's. Returns (True, count) or (False, reason)."""
     try:
         raw = json.load(open(JAR))
     except Exception as e:
@@ -708,19 +828,19 @@ def cf_import_cookies(key):
         if "name" not in c or "value" not in c:
             continue
         c = dict(c)
-        # camofox.convert reads the browser-export `expirationDate`;
+        # cf_convert reads the browser-export `expirationDate`;
         # a Playwright-format jar carries the same instant as `expires`.
         if not c.get("expirationDate") and c.get("expires"):
             c["expirationDate"] = c["expires"]
         norm.append(c)
-    api_key = os.environ.get("CAMOFOX_API_KEY") or key
-    r = cf.req(api_key, "POST", f"/sessions/{CF_USER}/cookies",
-               {"cookies": [cf.convert(c) for c in norm]}, timeout=60)
+    api_key = CF_API_KEY or key
+    r = cf_req(api_key, "POST", f"/sessions/{CF_USER}/cookies",
+               {"cookies": [cf_convert(c) for c in norm]}, timeout=60)
     if isinstance(r, dict) and "_http_error" not in r and "_error" not in r:
         return True, r.get("count", len(norm))
     if isinstance(r, dict) and r.get("_error") == "timed out":
         return False, ("import timed out — "
-                       + cf.diagnose_timeout())
+                       + cf_diagnose_timeout())
     return False, f"import failed: {r}"
 
 
@@ -731,9 +851,9 @@ _TITLE_JS = "(() => document.title)()"
 def cf_eval(key, tab, expr, timeout=30):
     """One bounded page read via the server's evaluate route; the
     result value, or None when the request itself failed."""
-    r = _camofox().req(key, "POST", f"/tabs/{tab}/evaluate",
-                       {"userId": CF_USER, "expression": expr},
-                       timeout=timeout)
+    r = cf_req(key, "POST", f"/tabs/{tab}/evaluate",
+               {"userId": CF_USER, "expression": expr},
+               timeout=timeout)
     if isinstance(r, dict) and "_error" not in r and "_http_error" not in r:
         return r.get("result")
     return None
@@ -750,22 +870,17 @@ def run_stop_camofox(idx, url):
     engine: the server is a resident service, not a per-stop process."""
     global CURRENT_CF
     name = url.rsplit("/", 1)[-1]
-    try:
-        cf = _camofox()
-    except CamofoxUnavailable as e:
-        log(f"stop {name}: {e}", "ERROR")
-        return "ERROR", None, None
     key = cf_key()
     session = f"{CF_SESSION}-{idx}"
     t0 = time.time()
     verdict, shell_at = "UNKNOWN", None
 
     if cf_health(key) is None:
-        log(f"stop {name}: camofox server unreachable at {cf.CAMOFOX_URL} "
+        log(f"stop {name}: camofox server unreachable at {CF_URL} "
             "— the tour never spawns it; start the camofox service",
             "ERROR")
         return "ERROR", None, None
-    r = cf.req(key, "POST", "/tabs",
+    r = cf_req(key, "POST", "/tabs",
                {"userId": CF_USER, "sessionKey": session, "url": url},
                timeout=60)
     if not isinstance(r, dict) or "_error" in r or "_http_error" in r \
@@ -776,9 +891,9 @@ def run_stop_camofox(idx, url):
     CURRENT_CF = (key, session)
     log(f"stop {name}: tab={tab[:8]} session={session} url={url}")
     try:
-        # The Replit upsell modal, when present — camofox.py's generic
+        # The Replit upsell modal, when present — the generic
         # dismissal (needle is caller data, mechanism is site-agnostic).
-        cf.dismiss_dialogs(key, CF_USER, tab, ["Keep using Replit?"])
+        cf_dismiss_dialogs(key, CF_USER, tab, ["Keep using Replit?"])
         markers = shell_markers(name)
         deadline = time.time() + POLL
         last_title = None
@@ -825,7 +940,7 @@ def run_stop_camofox(idx, url):
     finally:
         # Session per stop, closed at teardown — tabs outlive their
         # client process on this server, so NOT closing leaks RAM.
-        r = cf.req(key, "DELETE",
+        r = cf_req(key, "DELETE",
                    f"/tabs/group/{session}?userId={CF_USER}", timeout=30)
         if isinstance(r, dict) and ("_error" in r or "_http_error" in r):
             log(f"stop {name}: session close failed: {r}", "WARN")
@@ -878,12 +993,7 @@ def check():
               "next to it)", flush=True)
         rc = 1
     if BROWSER == "camofox":
-        try:
-            key = cf_key()
-        except CamofoxUnavailable as e:
-            print(f"check: camofox client UNAVAILABLE: {e}", flush=True)
-            print("check: FAILED", flush=True)
-            return 1
+        key = cf_key()
         h = cf_health(key)
         if h is not None:
             print(f"check: camofox server ok: {CF_URL} "
@@ -895,7 +1005,7 @@ def check():
                   "the tour never spawns it; start the camofox service "
                   "(camofox launcher / its workflow) first",
                   flush=True)
-            print(_camofox().diagnose_timeout(), flush=True)
+            print(cf_diagnose_timeout(), flush=True)
             rc = 1
         if os.path.exists(JAR):
             try:
@@ -955,11 +1065,7 @@ async def main():
         sys.exit(2)
     cookies_note = ""
     if BROWSER == "camofox":
-        try:
-            key = cf_key()
-        except CamofoxUnavailable as e:
-            log(f"FATAL: {e}", "ERROR")
-            sys.exit(2)
+        key = cf_key()
         if cf_health(key) is None:
             log(f"FATAL: camofox server unreachable at {CF_URL} — "
                 "the tour never spawns it; start the camofox service "
@@ -1034,9 +1140,9 @@ def _cleanup(signum, frame):
     if CURRENT_CF is not None:
         try:
             key, session = CURRENT_CF
-            _camofox().req(key, "DELETE",
-                           f"/tabs/group/{session}?userId={CF_USER}",
-                           timeout=5)
+            cf_req(key, "DELETE",
+                   f"/tabs/group/{session}?userId={CF_USER}",
+                   timeout=5)
         except Exception:
             pass
     sys.exit(128 + signum)

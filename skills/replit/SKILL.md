@@ -23,21 +23,27 @@ a machine tree holds ONLY what that VM kind genuinely needs:
 - `scripts/setup.sh` — THE setup entry for both machine kinds
   (`--machine repl` selects this profile; the old per-skill entry file
   that used to live in the replit payload tree is gone).
-- `scripts/setup/…` — the SHARED tree: the profiles, `core.sh`, the
-  join engine, EVERY setup lane (`common`/`cli`/`rc`/`doctor`/
+- `scripts/setup/…` — the SHARED setup tree: the profiles, `core.sh`,
+  the join engine, EVERY setup lane (`common`/`cli`/`rc`/`doctor`/
   `cleanup`/…; the repl join lane is `join-repl.sh` — `join.sh` there
-  is the shared engine), plus the shared payloads that live there in
-  their own right (`tour.*`, the llm-wiki bundle).
+  is the shared engine), plus the llm-wiki bundle. Setup PREPARES —
+  nothing in this tree is a program an operator runs directly.
+- `scripts/tour.py` / `scripts/tour.sh`, `scripts/socks5-probe.py` —
+  shared READY-TO-RUN scripts at the scripts/ root (the tour serves
+  both machine kinds via `--machine`; the probe runs on any
+  tailscaled-SOCKS box). They are not setup: setup prepares, these run.
 - `scripts/replit/…` — REPL-ONLY payloads: the runtime files a repl
-  box executes (`dot_replit.py`, `camofox.py`, the probes,
+  box executes (`dot_replit.py`, the probes,
   `start-replit-chromium.sh`, `join-lifecycle-test.sh`) plus the nix
   machinery the lanes invoke from there (`nixenv`, `resolve-libs.sh`,
   `generate-closure.sh`, `libpool.sh`).
 
 **Path rule.** Every `scripts/…` path in this file and its references is
-repo-root-relative (on a box: inside the landed tree below), with one
-shorthand: a bare `scripts/<file>` with no tree segment denotes a file
-in the repl payload tree, `scripts/replit/<file>`.
+repo-root-relative (on a box: inside the landed tree below) and
+literal — `scripts/tour.py` really is at the root. One legacy
+shorthand survives in older references: a bare `scripts/<file>` with
+no tree segment and no root file of that name denotes a file in the
+repl payload tree, `scripts/replit/<file>`.
 
 **When a task needs a payload, ask the operator first**, then fetch:
 
@@ -82,8 +88,8 @@ other lane assumes its persistence rules.
 | add a tool to setup.sh, decide where its payload/config/cache lives, name a flag or var | `references/toolchain-layout.md` | `scripts/setup/` |
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/replit/generate-closure.sh`, `scripts/replit/libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `start-replit-chromium.sh` |
-| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
-| run a session keep-alive tour (one unified tour, a SHARED payload used by both machine kinds: engine by flag — Lightpanda CDP by default — ~380 MB per stop, zero idle, one fresh server per stop; camofox server API as the fallback engine, same verdicts) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `scripts/setup/tour.sh --browser lightpanda --machine repl`, `scripts/setup/tour.py` |
+| open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `scripts/tour.py --browser camofox` (the tour's built-in engine is the only Python client left — the `camofox.py` CLI was removed in S5d) |
+| run a session keep-alive tour (one unified tour, a SHARED ready-to-run script used by both machine kinds: engine by flag — Lightpanda CDP by default — ~380 MB per stop, zero idle, one fresh server per stop; camofox server API as the fallback engine, same verdicts) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `scripts/tour.sh --browser lightpanda --machine repl`, `scripts/tour.py` |
 | pick the right browser lane (4 exist: Replit Playwright Chromium, Hermes Chrome 145, agent-browser CLI, Camofox) | `references/browser-lanes.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `.hermes/tools/chromium-1208`, `agent-browser`, `:9377` |
 | run a desktop GUI app (AppImage/Tauri/GTK) headless — Xvfb, window manager, software GL, EGL/loader traps | `headless-gui-linux` skill | `start.sh`-style launcher, `xwininfo -root -tree` gates |
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
@@ -277,11 +283,14 @@ without ripgrep.
   is derived from `$SCRIPT_DIR` — never a hardcoded clone path.
 - `dot_replit.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
   - Verify the pin after every `--fix`: `write_replit_bashrc` needs tomlkit (from `.venv`, `python3`, or `uv`). On a fresh box none of them has tomlkit, so the function prints `python tomlkit not found, write REPLIT_BASHRC manually` and still returns 0. That is a failure: workflow shells then lack the line and break silently. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`. Install tomlkit into `.venv` before running `setup.sh --fix` on a fresh machine, or add the line by hand under `[userenv.shared]`.
-- `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
-  keep-alive loop). See camofox.md for its env-file contract.
-- `scripts/setup/tour.py` / `scripts/setup/tour.sh` — the unified
-  keep-alive tour (supersedes lp-tour), a SHARED payload: it lives in
-  the shared setup tree and serves both machine kinds — `--machine
+- `camofox.py` — **REMOVED in S5d (2026-11-07)**: the refresh-page-era
+  scraping/keep-alive CLI. Its client machinery lives on inside
+  `tour.py`'s camofox engine (below); there is no standalone camofox
+  CLI any more. See camofox.md for the server's env-file contract.
+- `scripts/tour.py` / `scripts/tour.sh` — the unified
+  keep-alive tour (supersedes lp-tour), a SHARED ready-to-run script:
+  it lives at the scripts/ root — NOT in the setup tree (setup
+  prepares; the tour runs) — and serves both machine kinds — `--machine
   muse|repl` (env `TOUR_MACHINE`; default auto-detect, REPL_HOME set
   → repl else muse, mirroring `scripts/setup.sh`), with the machine
   choosing the engine-home/jar/log-dir defaults. Sequential stops over
@@ -292,11 +301,11 @@ without ripgrep.
   dwell hold, circuit breaker). Lightpanda: one fresh `lightpanda
   serve` per stop, native `--cookie` jar planting, optional jar
   write-back (`TOUR_JAR_WRITEBACK`). Camofox: drives the resident
-  camofox server via `camofox.py`'s client — `camofox.py` stays a
-  repl-tree payload, resolved cross-tree at `scripts/replit/camofox.py`
-  (clean ERROR when absent, e.g. on a muse box) — cookie import path,
-  session per stop, health surfaced as ERROR — the tour never spawns
-  the server. Config from the system env / the engine home's `.env`
+  camofox server via the tour's OWN built-in client (self-contained
+  since S5d — the same adapter pattern as the Lightpanda engine, so a
+  future `--browser chromium` is just another adapter) — cookie import
+  path, session per stop, health surfaced as ERROR — the tour never
+  spawns the server. Config from the system env / the engine home's `.env`
   with the resolution logged per var; log lines are
   `[YYYY-MM-DD HH:MM:SS] [LEVEL] msg`, colour opt-in via `--colour`.
   The `.sh` is a justified shim — it only assembles `LD_LIBRARY_PATH`
@@ -392,15 +401,15 @@ on disk before moving on:
 ## Camofox public access
 
 - With `CAMOFOX_ACCESS_KEY` set, every route except `/health` requires `Authorization: Bearer <access key>`. A browser address bar cannot send that header, so `{"error":"Unauthorized"}` in a browser means the gate works. It is not a fault.
-- The global gate checks the access key only; `CAMOFOX_API_KEY` gets 401 on `/tabs`. Cookie import is the reverse: `POST /sessions/<u>/cookies` checks the API key only, so the access key gets 403 there. `camofox.py` sends the access key everywhere except cookie import, which uses the API key.
+- The global gate checks the access key only; `CAMOFOX_API_KEY` gets 401 on `/tabs`. Cookie import is the reverse: `POST /sessions/<u>/cookies` checks the API key only, so the access key gets 403 there. The tour's built-in camofox client sends the access key everywhere except cookie import, which uses the API key.
 - Removing the access key opens every route to anyone with the URL. Never do that to clear a 401 on a public server.
 - **The runtime env snippet keeps the access key only on the DEFAULT loopback port.** It unsets `CAMOFOX_ACCESS_KEY` when `CAMOFOX_BIND_HOST` is loopback AND the port is unset/`:9377`; a `.replit` workflow that serves the box's `:80` sets neither the bind host nor a port, so ORDER matters — export `PORT` before sourcing the snippet, or the public port comes up keyless. Make an unkeyed `curl` (expect 401) part of every public deployment, and check the key's presence in the running process (`tr '\0' '\n' < /proc/<pid>/environ | grep CAMOFOX_`) rather than assuming the workflow env reached it.
-- **The MCP adapter runs as a LOCAL process pointed at the box's public HTTPS URL — not as an `ssh <box> bash <wrapper>` hop.** The operator treats an ssh-spawned MCP server as the wrong shape when the service is already published (`kok mcp kita tetep pake ssh? udah pindah ke https langsung`): ssh is for managing the box, HTTPS is for using the service. Default recipe: `npm i -g @askjo/camofox-browser-mcp` into the workspace npm prefix, then register a local wrapper with `hermes mcp add <name> --command <wrapper> --env CAMOFOX_BASE_URL=https://<box-domain> CAMOFOX_USER_ID=<id> ...` — **no key in `--env`**: Hermes does not expand `${VAR}` inside `mcp_servers.*.env`, so a `${CAMOFOX_ACCESS_KEY}` there reaches the adapter as a literal string and every call 401s while a direct `curl` with the same token works. The wrapper reads `CAMOFOX_ACCESS_KEY` / `CAMOFOX_API_KEY` out of the profile `.env` itself (one home, nothing duplicated into `config.yaml`). Register with `hermes -p <profile> mcp add ...`: `hermes chat` and the WebUI resolve the PROFILE config (`profiles/<p>/config.yaml`) while a bare `hermes mcp add` writes the DEFAULT one, so the CLI keeps its old entry and 401s after a "successful" add. The wrapper only fixes the runtime the adapter inherits: `LD_LIBRARY_PATH=$REPL_HOME/.local/lib` (libatomic for the workspace node), `PATH` with the node bin dir, and an ABSOLUTE `node .../server.mjs` exec — `#!/usr/bin/env node` inside a server that Hermes spawns finds no node and the connect fails as `Connection closed`. Keep the ssh wrapper only as the fallback for a service that is not published over HTTPS; in that shape it needs three things or every call fails while `hermes mcp test` stays green (that command lists only STATIC tool defs — always issue one real tool call): `source /run/replit/env/latest` (ambient key; without it `401 Unauthorized`), `PORT` exported so the snippet keeps the key, and `CAMOFOX_BASE_URL` pointed at the port the server actually binds (adapter defaults to `:9377` → `camofox error: fetch failed`). `camofox_import_cookies` parses the Netscape file on the MACHINE RUNNING THE ADAPTER and uploads it, so the file must exist there; a leading-dot domain raises Firefox `NS_ERROR_ILLEGAL_VALUE`, and a warm user context can reject a synthetic cookie that a fresh `CAMOFOX_USER_ID` accepted — use real browser-exported cookie files, the same ones `camofox.py --cookies` takes. Two operational details: `hermes mcp add` ends with an interactive `Enable all N tools? [Y/n/select]` prompt that silently CANCELS when stdin is not a TTY — pipe `printf 'Y\n' |` to enable the tools non-interactively, then confirm with `hermes mcp list`; and the wrapper is a Hermes-home helper (parameterised `REPL_HOME`/`HERMES_PROFILE`, keys read from the profile `.env`) — it lives with Hermes, NOT in this skill (operator decision 2026-11-05); write it once in the Hermes home rather than retyping the LD_LIBRARY_PATH/node/env preamble."
-- A public test goes through the public URL with a header-capable client (`curl` or `camofox.py`). A localhost pass proves the server works, not the proxy path.
+- **The MCP adapter runs as a LOCAL process pointed at the box's public HTTPS URL — not as an `ssh <box> bash <wrapper>` hop.** The operator treats an ssh-spawned MCP server as the wrong shape when the service is already published (`kok mcp kita tetep pake ssh? udah pindah ke https langsung`): ssh is for managing the box, HTTPS is for using the service. Default recipe: `npm i -g @askjo/camofox-browser-mcp` into the workspace npm prefix, then register a local wrapper with `hermes mcp add <name> --command <wrapper> --env CAMOFOX_BASE_URL=https://<box-domain> CAMOFOX_USER_ID=<id> ...` — **no key in `--env`**: Hermes does not expand `${VAR}` inside `mcp_servers.*.env`, so a `${CAMOFOX_ACCESS_KEY}` there reaches the adapter as a literal string and every call 401s while a direct `curl` with the same token works. The wrapper reads `CAMOFOX_ACCESS_KEY` / `CAMOFOX_API_KEY` out of the profile `.env` itself (one home, nothing duplicated into `config.yaml`). Register with `hermes -p <profile> mcp add ...`: `hermes chat` and the WebUI resolve the PROFILE config (`profiles/<p>/config.yaml`) while a bare `hermes mcp add` writes the DEFAULT one, so the CLI keeps its old entry and 401s after a "successful" add. The wrapper only fixes the runtime the adapter inherits: `LD_LIBRARY_PATH=$REPL_HOME/.local/lib` (libatomic for the workspace node), `PATH` with the node bin dir, and an ABSOLUTE `node .../server.mjs` exec — `#!/usr/bin/env node` inside a server that Hermes spawns finds no node and the connect fails as `Connection closed`. Keep the ssh wrapper only as the fallback for a service that is not published over HTTPS; in that shape it needs three things or every call fails while `hermes mcp test` stays green (that command lists only STATIC tool defs — always issue one real tool call): `source /run/replit/env/latest` (ambient key; without it `401 Unauthorized`), `PORT` exported so the snippet keeps the key, and `CAMOFOX_BASE_URL` pointed at the port the server actually binds (adapter defaults to `:9377` → `camofox error: fetch failed`). `camofox_import_cookies` parses the Netscape file on the MACHINE RUNNING THE ADAPTER and uploads it, so the file must exist there; a leading-dot domain raises Firefox `NS_ERROR_ILLEGAL_VALUE`, and a warm user context can reject a synthetic cookie that a fresh `CAMOFOX_USER_ID` accepted — use real browser-exported cookie files, the same ones the tour's jar import takes. Two operational details: `hermes mcp add` ends with an interactive `Enable all N tools? [Y/n/select]` prompt that silently CANCELS when stdin is not a TTY — pipe `printf 'Y\n' |` to enable the tools non-interactively, then confirm with `hermes mcp list`; and the wrapper is a Hermes-home helper (parameterised `REPL_HOME`/`HERMES_PROFILE`, keys read from the profile `.env`) — it lives with Hermes, NOT in this skill (operator decision 2026-11-05); write it once in the Hermes home rather than retyping the LD_LIBRARY_PATH/node/env preamble."
+- A public test goes through the public URL with a header-capable client (`curl`, or the tour's camofox engine pointed at it via `CAMOFOX_BASE_URL`). A localhost pass proves the server works, not the proxy path.
 - Keep TLS verification on in every client. Diagnose a public failure in this order: `curl -sS https://<domain>:<port>/health` (verified) first, then `curl -sk` (skip verify). If the verified call fails with curl error 60 and the `-k` call returns 200, the server is fine and this client's trust store lacks the Replit proxy root CA (see the bundle rule below); a `502` from the domain means nothing listens on that port. Run the verified call before naming any cause. A client with verification off proves reachability only; never report it as a pass for auth or the tool path.
 - curl and Python can trust different stores on the same box. curl reads `/etc/ssl/certs/ca-certificates.crt`, which holds the Replit proxy root; Python's default context has `cafile=None` and only `capath=/etc/ssl/certs`, so the identical URL fails with `CERTIFICATE_VERIFY_FAILED`. Fix it in the client: `ssl.create_default_context(cafile='/etc/ssl/certs/ca-certificates.crt')` and pass `context=` to every `urlopen`. Confirm the root is in that bundle with a verified `curl` (no `-k`) first. certifi's bundle lacks the proxy root, so `certifi.where()` does not fix it. Do not disable verification; `PYTHONHTTPSVERIFY` is not a Python setting and does nothing. The per-client variable table (Node, Python `urllib`/`httpx`/`requests`, git, uv) and the generator fix are in `references/tls-trust.md`.
 - Node has the same split, and `NODE_OPTIONS=--use-system-ca` alone is not enough. `NODE_EXTRA_CA_CERTS` overrides the system store, and the Nix bundle it often points at lacks the proxy root. Set `NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt` for the MCP adapter and any `fetch` client, and keep verification on. Confirm with `fetch(url)` in the same environment before running the adapter.
-- `camofox.py` prints "not ready" for every probe failure, including certificate errors. To see the real exception, run `camofox.req(None, 'GET', '/health')` with `CAMOFOX_BASE_URL` set; the `_error` field names the cause.
+- The tour's camofox client turns every probe failure into an `_error` value, including certificate errors — a bare failure message hides the cause. `tour.py --check --browser camofox` prints the client's own timeout diagnosis (refused / event-loop-blocked / page-channel-wedged) with `CAMOFOX_BASE_URL` set; read that before blaming the server.
 - The Camofox MCP adapter reports every network failure as `camofox error: fetch failed`, which hides the TLS cause. If `tools/list` works but tool calls fail with that text, the adapter's `fetch` cannot verify the proxy, not the server. Fix the client trust store (above), then rerun the tool call.
 - Read a Replit secret into a shell variable with `replit secrets exec --keys NAME -- sh -c 'printf %s "$NAME"'`. The `--` form is required; without it the output is empty and looks like a missing key. `--keys` takes a COMMA-SEPARATED list (`--keys A,B`, or the flag repeated) — passing the names as separate arguments makes the second one the command to exec, which surfaces as `exec: "B": executable file not found in $PATH`.
 - A key copy in `.hermes/.env` can differ from the Replit secret. When `/tabs` returns 401 with a key you believe is correct, compare SHA-256 prefixes of both values (never print them) before blaming the server.
@@ -414,7 +423,7 @@ A public port must appear in `.replit` `[[ports]]` with matching `localPort` and
 - `camofox_import_cookies` resolves `cookiesPath` against `$(XDG_CONFIG_HOME)/camofox/cookies` ON THE MACHINE RUNNING THE ADAPTER (not `CAMOFOX_COOKIES_DIR`, not `~/.camofox`), parses the file there and uploads it. A browser JSON export must be converted to Netscape first: strip the leading dot from the domain, keep httpOnly out of the `#HttpOnly_` prefix, and map a session expiry to a far-future timestamp; real exports then import clean (a 12-cookie Replit set opened the authed page first try), while a synthetic leading-dot cookie raises Firefox `NS_ERROR_ILLEGAL_VALUE`.
 - Separate the gate's status from the target page's status. A gate rejection is the server's own JSON error: `{"error":"Unauthorized"}` (401) or `{"error":"Forbidden"}` (403). A `/tabs` call that passes the gate returns 200, and the target page's status is in the `httpStatus` field (for example 404 or 403 from the site). Read `httpStatus` before blaming auth.
 - A cookie-import 403 with the correct client code means the running server's keys differ from the secret. The server reads `CAMOFOX_API_KEY` and `CAMOFOX_ACCESS_KEY` only at startup, so changing a Replit secret does nothing until the server restarts. Compare key lengths (never values) between the secret and the server's environment, then restart the server with the same values and retry.
-- A `.replit` workflow runs `camofox.py` from its own path. After a fix merges, pull the clone that path points at; a local clone at an older commit runs the old code and reproduces a fixed bug. Check `git log -1 -- <file>` in that clone before debugging the code.
+- A `.replit` workflow runs `scripts/tour.sh` from its own clone path. After a fix merges, pull the clone that path points at; a local clone at an older commit runs the old code and reproduces a fixed bug. Check `git log -1 -- scripts/tour.py` in that clone before debugging the code.
 - `env -i` empties PATH, so a following `timeout python3` fails with `No such file or directory`. Pass the absolute interpreter (`PY=$(command -v python3)`) when running in a clean environment.
 - **Never assign `PATH` a literal value in an agent shell.** Terminal state persists across calls, so `export PATH=/one/dir:/usr/bin:/bin` (to reach a single tool) silently drops the Nix and `$XDG_BIN_HOME` entries for every LATER call: `python3`, `replit`, `uv` and the platform toolchain then fail with `command not found` several steps after the edit, pointing nowhere near the cause. Append (`PATH="$PATH:<dir>"`) or export into a file under `$HERMES_HOME/cache/scratch/` and `. that-file` at the top of later calls. Recover by reading the platform PATH from a fresh login shell (`bash -lc 'printf %s "$PATH"'`) or re-sourcing the rc.
 - **Lost `replit`? It is a Nix store path, not a stable location**: `/nix/store/*replit-cli-*/bin/replit` (plus `-runtime-path/bin` for the platform toolchain). Re-derive it rather than concluding the CLI is gone.

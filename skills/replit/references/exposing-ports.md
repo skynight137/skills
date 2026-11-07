@@ -445,8 +445,8 @@ for p in $(pgrep -f "^[^ ]*[t]ailscaled --tun"); do kill "$p"; done
   `setup.sh --tailscale --join --workflow` (summary + socket watch;
   tailscaled's own log was already a file), the llm-wiki supervisors
   (non-TTY runs self-redirect to `logs/llm-wiki-{public,ui}.log`), and
-  `camofox.py --tools open-page --log-file logs/<name>.log` (detail
-  to the file, failures still surface as one console line).
+  the tour (`tour.sh … >> logs/lp-tour.log` — the tour's stdout IS its
+  log; the workflow task only carries the redirect).
 - A workflow launcher runs in a bare shell: unset `NODE_ENV` inside the script
   (`NODE_ENV=production` is exported here and npm then omits devDependencies →
   `tsc: command not found`) and export app vars there, not in your interactive

@@ -60,7 +60,7 @@ Options:
                         pinned 1.0.3 binary, SHA256-verified) + the keep-alive
                         tour venv under \$LIGHTPANDA_HOME
                         (\$XDG_CONFIG_HOME/lightpanda). No resident server:
-                        scripts/setup/tour.sh opens one project at a time
+                        scripts/tour.sh opens one project at a time
                         (~380 MB per stop, zero idle). Not part of --all;
                         install it explicitly where a fleet tour runs.
                         See references/lightpanda.md

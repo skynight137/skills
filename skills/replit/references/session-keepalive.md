@@ -17,8 +17,8 @@ per row:
 
 | engine | cost while a stop is held | idle cost | Cloudflare passage | verdict |
 |---|---|---|---|---|
-| **Lightpanda 1.0.3** (`scripts/setup/tour.py --browser lightpanda`, references/lightpanda.md) | ~370–391 MB total (one process, RSS≈PSS) | **zero** — one fresh `serve` per stop, torn down after | interstitial clears by itself in ~7–18 s; 4/4 SHELL in the live tour trial | **proven for the open-only job** — the cheap lane |
-| **Camofox** (`camofox.py --tools open-page`) | 550–650 MB per tab **plus** the resident server | ~174–200 MB resident server, always on | the anti-detection Firefox lane; passes what the others cannot | **production engine** — the proven, heavy one |
+| **Lightpanda 1.0.3** (`scripts/tour.py --browser lightpanda`, references/lightpanda.md) | ~370–391 MB total (one process, RSS≈PSS) | **zero** — one fresh `serve` per stop, torn down after | interstitial clears by itself in ~7–18 s; 4/4 SHELL in the live tour trial | **proven for the open-only job** — the cheap lane |
+| **Camofox** (`scripts/tour.py --browser camofox`; measured in the `camofox.py --tools open-page` era — same server, same per-tab cost) | 550–650 MB per tab **plus** the resident server | ~174–200 MB resident server, always on | the anti-detection Firefox lane; passes what the others cannot | **production engine** — the proven, heavy one |
 | Playwright + bundled Chromium | ~1.9–2.1 GB RSS per tab (≈3× a camofox tab like-for-like) | zero | fresh profile 0/7 reached Replit; persistent profile passed once, then stalled repeatedly despite a stored `cf_clearance`; headless blocked outright | **falsified on both axes** — cost and edge; not a tour engine |
 
 Everything below this section (the two reapers, the persistence
@@ -28,7 +28,8 @@ server and a fresh page, kept alive only by the next round's open.
 
 ## Failure triage: opaque 500 on `POST /sessions/:userId/cookies`
 
-`camofox.py` prints `import failed: {'_http_error': 500, '_body': '{"error":"Internal server error"}'}`
+The client reports `import failed: {'_http_error': 500, '_body': '{"error":"Internal server error"}'}`
+(the camofox.py-era wording; the tour's engine logs the same failure as a FATAL cookie-import line)
 whenever the server's 500 handler runs with `NODE_ENV=production`: `safeError()`
 (server.js) logs the REAL message to the server's stdout and returns the generic
 string. The client is innocent — always read the server log first:
@@ -69,13 +70,13 @@ Two verified causes of that 500 on this box (Sep 2026):
 2. **Missing `camofox/.env`.** Cookie import is key-gated: with no
    `CAMOFOX_API_KEY` in the SERVER env it answers 403 in production (not 500) —
    write `$XDG_CONFIG_HOME/camofox/.env` with the secret from
-   `/run/replit/env/latest.json` (chmod 600) so both server and `camofox.py`
+   `/run/replit/env/latest.json` (chmod 600) so both server and client
    find it without relying on platform env.
 
 Also note: this repl's workflow server runs on **`:9000`** (workflow env
 `CAMOFOX_PORT`), not the `:9377` default — clients dial `CAMOFOX_BASE_URL`,
 and a shell without it (or a probe hardcoding
-9377) gets connection refused, which `camofox.py` reports as `_error`, not
+9377) gets connection refused, which the client reports as `_error`, not
 `_http_error`.
 
 ## The two reapers

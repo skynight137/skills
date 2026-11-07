@@ -64,7 +64,7 @@ jobs:
         shell: bash
         env:
           PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
-        run: python3 -m py_compile scripts/replit/*.py scripts/muse/*.py scripts/setup/*.py
+        run: python3 -m py_compile scripts/*.py scripts/replit/*.py scripts/muse/*.py
 
       - name: Skill discovery from a clean checkout
         shell: bash
@@ -122,7 +122,7 @@ jobs:
       #    ambient XDG homes.
       - name: No unguarded XDG reads in standalone shell entry points
         run: |
-          files="scripts/muse/setup.sh scripts/setup/tour.sh scripts/replit/join-lifecycle-test.sh"
+          files="scripts/muse/setup.sh scripts/tour.sh scripts/replit/join-lifecycle-test.sh"
           if grep -nE '\\$XDG_(DATA|STATE|CONFIG|CACHE)_HOME' $files \
                | grep -vE ':[0-9]+:\\s*#' \
                | grep -vE '\\$\\{XDG_[A-Z_]+:-' \
