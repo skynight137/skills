@@ -25,20 +25,4 @@ wait_for_jobs() {
   return 0
 }
 
-# Verify a downloaded file's SHA256 against the expected hex digest.
-# verify_sha256 <file> <expected-hex-checksum> <label>
-verify_sha256() {
-  local file="$1" expected="$2" label="$3"
-  if ! command -v sha256sum >/dev/null 2>&1; then
-    warn "sha256sum not found — skipping integrity check for $label"
-    return 0
-  fi
-  local actual
-  actual="$(sha256sum "$file" | awk '{print $1}')"
-  [[ -n "$expected" ]] || die "$label: no SHA256 obtained from upstream - refusing unverified install"
-  if [[ "$actual" != "$expected" ]]; then
-    rm -f "$file"
-    die "$label checksum mismatch (got $actual, expected $expected) — download may be corrupt"
-  fi
-  ok "$label verified (SHA256)"
-}
+# verify_sha256 lives in scripts/setup/core.sh (shared library).
