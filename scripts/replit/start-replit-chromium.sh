@@ -6,7 +6,7 @@
 # Scope: REPLIT's store browser ONLY ($REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE).
 # It deliberately does NOT fall back to any other browser — the Hermes bundled
 # Chrome is a separate lane with its own installer and launcher, see
-# setup.sh --hermes-browser (launch-hermes-chrome) and references/browser-lanes.md.
+# setup.sh --hermes-browser (launch-hermes-chrome) and docs/browser-lanes.md.
 #
 # Why no LD_LIBRARY_PATH here: the Replit store Chrome is a self-contained
 # wrapper — it exports its own SSL_CERT_FILE/FONTCONFIG_FILE and execs a bundled
