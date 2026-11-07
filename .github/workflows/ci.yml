@@ -15,7 +15,9 @@
 #                   binaries; its coverage is the payload checks.
 #                   Excluded: --join (needs a live tailnet auth key; its
 #                   install half is the tailscale leg), --zsh (Nix
-#                   profile lane, not a direct-binary install).
+#                   profile lane, not a direct-binary install), and the
+#                   tailscale lane on macOS (upstream publishes no
+#                   user-local darwin build — the .pkg is system-wide).
 
 name: CI
 
@@ -161,7 +163,6 @@ jobs:
           - {tool: node, flag: --node, label: "Node:", os: macos-latest}
           - {tool: rclone, flag: --rclone, label: "rclone:", os: macos-latest}
           - {tool: cloudflared, flag: --cloudflared, label: "cloudflared:", os: macos-latest}
-          - {tool: tailscale, flag: --tailscale, label: "tailscale:", os: macos-latest}
 
     steps:
       - uses: actions/checkout@v4

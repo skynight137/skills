@@ -74,6 +74,9 @@ verify_sha256() {
 # Tailscale ───────────────────────────────────────────────────────────
 # Channel asset name for a version from the pkgs.tailscale.com index.
 tailscale_asset_name() {  # $1 = version from the channel index
+  # pkgs.tailscale.com publishes user-local tarballs for Linux only;
+  # macOS gets a system-wide .pkg, which this setup never installs.
+  [[ "$(uname -s)" == Darwin ]] && die "tailscale: no user-local macOS build upstream (official .pkg is system-wide) — this lane is Linux-only"
   case "$(uname -m)" in
     x86_64|amd64)   echo "tailscale_${1}_amd64.tgz" ;;
     aarch64|arm64)  echo "tailscale_${1}_arm64.tgz" ;;

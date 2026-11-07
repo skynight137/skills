@@ -6,9 +6,11 @@
 # in a versioned dir (rclone-vX-linux-<arch>/); no checksum file on the current
 # channel, so the binary is extracted and placed straight into XDG_BIN_HOME.
 rclone_zip_name() {
+  local os=linux
+  [[ "$(uname -s)" == Darwin ]] && os=osx
   case "$(uname -m)" in
-    x86_64|amd64)   echo "rclone-current-linux-amd64.zip" ;;
-    aarch64|arm64)  echo "rclone-current-linux-arm64.zip" ;;
+    x86_64|amd64)   echo "rclone-current-$os-amd64.zip" ;;
+    aarch64|arm64)  echo "rclone-current-$os-arm64.zip" ;;
     *)              die "rclone: unsupported arch $(uname -m)" ;;
   esac
 }
