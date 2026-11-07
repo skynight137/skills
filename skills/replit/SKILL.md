@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.39.3
+version: 4.39.4
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -297,9 +297,12 @@ without ripgrep.
   default lightpanda). Both engines produce the same per-stop verdicts
   (SHELL / LOGGED-OUT-WALL / CF-STALL / ERROR / UNKNOWN, time-to-shell,
   dwell hold, circuit breaker). Both dismiss blocking page popups
-  during a stop (whitelist dismiss controls only — the workspace
-  does not boot until Replit's session/upsell dialogs are closed,
-  2026-11-07); the stop summary counts them as `popups_dismissed=`,
+  when the shell is reached and again before the post-hold sample —
+  never at tab open, when the CF challenge is still up and the
+  page's dialogs do not exist yet (whitelist dismiss controls
+  only — the workspace does not boot until Replit's session/upsell
+  dialogs are closed, 2026-11-07); the stop summary counts them as
+  `popups_dismissed=`,
   and a surviving limit/upsell dialog logs `popup-wall:` — SHELL
   alone never proved a boot, the netmap is the judge. Lightpanda: one fresh `lightpanda
   serve` per stop, native `--cookie` jar planting, optional jar

@@ -1312,10 +1312,6 @@ def run_stop_camofox(idx, url):
     CURRENT_CF = (key, session)
     log(f"stop {name}: tab={tab[:8]} session={session} url={url}")
     try:
-        # Blocking Replit dialogs, when present — the generic
-        # dismissal (needles are caller data, mechanism site-agnostic).
-        popups += cf_dismiss_dialogs(key, CF_USER, tab,
-                                     CF_POPUP_NEEDLES)
         markers = shell_markers(name)
         deadline = time.time() + POLL
         last_title = None
@@ -1349,10 +1345,13 @@ def run_stop_camofox(idx, url):
                 f"last_title={last_title!r}", "WARN")
 
         if verdict == "SHELL":
-            # Same timing as the lightpanda engine: dismiss again
-            # now that the shell is in (the workspace boots during
-            # the dwell only if the way is clear), and once more
-            # before the post-hold sample for late popups.
+            # Dismissal runs only after the page settles
+            # (post-challenge), never at tab open — during the CF
+            # challenge the page's dialogs do not exist yet. Same
+            # timing as the lightpanda engine: dismiss now that the
+            # shell is in (the workspace boots during the dwell
+            # only if the way is clear), and once more before the
+            # post-hold sample for late popups.
             popups += cf_dismiss_dialogs(key, CF_USER, tab,
                                          CF_POPUP_NEEDLES)
             log(f"stop {name}: holding dwell={DWELL}s", "SKIP")
