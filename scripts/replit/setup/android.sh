@@ -36,8 +36,8 @@ accept_licenses() {
 install_cmdline_tools() {
   need_cmd wget
   need_cmd unzip
-  local TMP_ZIP="$XDG_DATA_HOME/_cmdline-tools.zip"
-  local TMP_DIR="$XDG_DATA_HOME/_cmdline-tools-extract"
+  local TMP_ZIP="${XDG_DATA_HOME:-$HOME/.local/share}/_cmdline-tools.zip"
+  local TMP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/_cmdline-tools-extract"
   echo "  Downloading cmdline-tools..."
   wget -q --show-progress -O "$TMP_ZIP" "$CMDLINE_TOOLS_URL" \
     || die "cmdline-tools download failed"
@@ -54,8 +54,8 @@ install_cmdline_tools() {
 install_java() {
   need_cmd wget
   need_cmd tar
-  local TMP_TGZ="$XDG_DATA_HOME/_jdk$JAVA_MAJOR.tar.gz"
-  local TMP_DIR="$XDG_DATA_HOME/_jdk$JAVA_MAJOR-extract"
+  local TMP_TGZ="${XDG_DATA_HOME:-$HOME/.local/share}/_jdk$JAVA_MAJOR.tar.gz"
+  local TMP_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/_jdk$JAVA_MAJOR-extract"
 
   echo "  Downloading Eclipse Temurin JDK $JAVA_MAJOR (latest GA)..."
   wget -q --show-progress -L \
@@ -113,8 +113,8 @@ install_android_tools() {
   [[ "$AVAIL_GB" -ge 5 ]] || die "Need at least 5 GB free in $WORKSPACE. Currently ${AVAIL_GB} GB."
 
   step "Creating persistent toolchain directories"
-  mkdir -p "$SDK" "$JAVA_HOME" "$XDG_BIN_HOME" "$XDG_DATA_HOME"
-  ok "Created: $XDG_DATA_HOME/{android-sdk, java}"
+  mkdir -p "$SDK" "$JAVA_HOME" "$XDG_BIN_HOME" "${XDG_DATA_HOME:-$HOME/.local/share}"
+  ok "Created: ${XDG_DATA_HOME:-$HOME/.local/share}/{android-sdk, java}"
 
   step "Android cmdline-tools and Java prerequisites"
   install_cmdline_tools &

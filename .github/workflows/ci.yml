@@ -1,0 +1,108 @@
+# CI for skynight137/skills — modeled on the user-provided matrix example:
+# OS matrix, fail-fast: false, concurrency cancel-in-progress, artifacts
+# uploaded even on failure. There is no app to build here — the payload
+# checks ARE the tests. Node is pinned to 26 (the fleet's major).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  payload-checks:
+    name: Payloads (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false # one OS failing must not stop the others
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Shell syntax (all payload scripts)
+        shell: bash
+        run: |
+          fail=0
+          while IFS= read -r f; do bash -n "$f" || { echo "SYNTAX FAIL: $f"; fail=1; }; done \
+            < <(find scripts -name '*.sh' -type f)
+          exit $fail
+
+      - name: Python compile (cache outside the tree)
+        shell: bash
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
+        run: python3 -m py_compile scripts/replit/*.py scripts/muse/*.py
+
+      - name: Skill discovery from a clean checkout
+        shell: bash
+        run: npx -y skills add ./ --list
+
+      - name: Path audit (every cited payload path exists)
+        shell: bash
+        run: |
+          fail=0
+          for p in $(grep -rhoE 'scripts/(muse|replit)/[A-Za-z0-9._/-]+' skills README.md \
+                     | sort -u); do
+            [ -e "$p" ] || { echo "CITED BUT MISSING: $p"; fail=1; }
+          done
+          exit $fail
+
+  xdg-absent:
+    name: XDG-absent smoke (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The bug class the user flagged: code that reads ambient XDG vars
+      # bare breaks or writes outside the tree when they are unset (some
+      # runners, some shells). The setup lanes under scripts/replit/setup/
+      # are exempt by construction — setup.sh's preamble defines every
+      # XDG_* var before sourcing them — so this job checks the surfaces
+      # that face the raw environment:
+      # 1. Behavioral: replit setup --help with every XDG var unset must
+      #    still work (its preamble re-derives them itself).
+      - name: replit setup --help with XDG unset
+        run: |
+          env -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
+              -u XDG_CACHE_HOME -u XDG_BIN_HOME \
+            timeout 60 bash scripts/replit/setup.sh --help </dev/null >/dev/null
+
+      # 2. Python payloads must never hard-subscript an XDG var
+      #    (os.environ["XDG_..."] crashes when it is unset).
+      - name: No hard XDG subscripts in python payloads
+        run: |
+          if grep -rnE 'environ\\[.(XDG_[A-Z_]+)' scripts/ --include='*.py'; then
+            echo "hard XDG subscript found"; exit 1
+          fi
+          echo "python XDG reads all guarded"
+
+      # 3. Standalone shell entry points: no bare unguarded reads of the
+      #    ambient XDG homes.
+      - name: No unguarded XDG reads in standalone shell entry points
+        run: |
+          files="scripts/muse/setup.sh scripts/replit/lp-tour.sh scripts/replit/join-lifecycle-test.sh"
+          if grep -nE '\\$XDG_(DATA|STATE|CONFIG|CACHE)_HOME' $files \
+               | grep -vE ':[0-9]+:\\s*#' \
+               | grep -vE '\\$\\{XDG_[A-Z_]+:-' \
+               | grep -vE 'XDG_[A-Z_]+=' ; then
+            echo "Unguarded XDG reads found (see above)"; exit 1
+          fi
+          echo "standalone XDG reads guarded"
