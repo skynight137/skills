@@ -73,7 +73,7 @@ CAMOFOX_CLOSURE_STAMP="$CAMOFOX_STATE_DIR/closure.node"
 # layout so an existing install keeps working without a re-fetch. Copy, never
 # move: the old path stays valid, and a second run is a no-op.
 camofox_migrate_aux_files() {
-  local old_dir="$XDG_DATA_HOME/camofox" f
+  local old_dir="${XDG_DATA_HOME:-$HOME/.local/share}/camofox" f
   [[ -d "$old_dir" ]] || return 0
   mkdir -p "$CAMOFOX_STATE_DIR" 2>/dev/null || return 0
   for f in closure.txt env.sh; do
@@ -725,7 +725,7 @@ clean_camofox() {
   # Engine (re-fetchable) + closure/env snippet (aux files under the state dir).
   rm -rf "$CAMOUFOX_INSTALL_DIR"
   rm -f "$CAMOFOX_CLOSURE_FILE" "$CAMOFOX_CLOSURE_STAMP" "$CAMOFOX_ENV_SNIPPET"
-  rm -rf "$XDG_DATA_HOME/camofox"   # older layout, if still present
+  rm -rf "${XDG_DATA_HOME:-$HOME/.local/share}/camofox"   # older layout, if still present
   # Server state (cookies/profiles) is user data — kept; delete $CAMOFOX_STATE_DIR to wipe.
   ok "Camofox removed (engine + closure + package; server state kept in $CAMOFOX_STATE_DIR)"
 }

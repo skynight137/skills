@@ -153,7 +153,7 @@ BASHRC="${BASHRC:-$(_bashrc_candidate)}"
 # fixed wiring that must not drift, so it is regenerated on every run.
 REPLIT_BASHRC_FILE="${REPLIT_BASHRC_FILE:-}"
 if [[ "$REPLIT_MODE" == true ]]; then
-  REPLIT_BASHRC_FILE="${REPLIT_BASHRC_FILE:-$XDG_CONFIG_HOME/replit_bashrc}"
+  REPLIT_BASHRC_FILE="${REPLIT_BASHRC_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/replit_bashrc}"
 fi
 
 # Snapshot the environment (name → value) BEFORE the script assigns or
