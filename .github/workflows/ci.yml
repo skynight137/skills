@@ -107,7 +107,7 @@ jobs:
           mkdir -p "$SETUP_ROOT"
           env -u XDG_DATA_HOME -u XDG_STATE_HOME -u XDG_CONFIG_HOME \
               -u XDG_CACHE_HOME -u XDG_BIN_HOME \
-            timeout 60 bash scripts/replit/setup.sh --help </dev/null >/dev/null
+            timeout 60 bash scripts/setup.sh --machine repl --help </dev/null >/dev/null
 
       # 2. Python payloads must never hard-subscript an XDG var
       #    (os.environ["XDG_..."] crashes when it is unset).

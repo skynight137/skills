@@ -31,7 +31,8 @@ __rs_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }
 # dir cannot leave a dead absolute path behind. Only an outside copy needs the absolute
 # one, and then the caller says so.
 __rs_cmd() {
-  local base="${REPL_HOME:-$HOME/workspace}" cmd="$RS_SKILL_ROOT/setup.sh"
+  local base="${REPL_HOME:-$HOME/workspace}" cmd
+  cmd="$(cd -- "$(dirname -- "$RS_SKILL_ROOT/../setup.sh")" 2>/dev/null && pwd)/setup.sh"
   [[ "$cmd" == "$base"/* ]] && cmd="${cmd#"$base"/}"
   printf '%s\n' "$cmd"
 }
@@ -91,10 +92,10 @@ __rs_workflow() {
   # Already wired? Then only two things matter: does the command it points at still
   # exist, and does it carry --workflow. Path first — a moved skill dir must not be masked
   # by the --workflow check, or a dead absolute path sits there forever.
-  if grep -qE 'setup\.sh --join' "$rp"; then
+  if grep -qE 'setup\.sh.*--join' "$rp"; then
     local wired
     # Only the line that carries --join: other workflows point at the same script.
-    wired="$(grep -oE 'bash +[^"]*setup\.sh --join' "$rp" | head -1 | sed -E 's/^bash +//; s/ --join$//')"
+    wired="$(grep -oE 'bash +[^"]*setup\.sh' "$rp" | head -1 | sed -E 's/^bash +//')"
     if [[ -n "$wired" && ! -f "$wired" && ! -f "$base/$wired" ]]; then
       warn "entri workflow menunjuk '$wired' yang tak ada (skill dipindah?) — perbarui barisnya"
     else
@@ -110,7 +111,7 @@ __rs_workflow() {
             sed -i -E "s#^args = \"TAILSCALE_NODE_NAME=$pinned #args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME #" "$rp"
             changed="$changed nama-node"
           else
-            sed -i -E "s#^args = \"(bash [^\"]*setup\.sh --join)#args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME \1#" "$rp"
+            sed -i -E "s#^args = \"(bash [^\"]*setup\.sh[^\"]*--join)#args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME \1#" "$rp"
             changed="$changed nama-node"
           fi
           grep -qE "^args = \"TAILSCALE_NODE_NAME=$TAILSCALE_NODE_NAME " "$rp" \
@@ -121,17 +122,17 @@ __rs_workflow() {
       # --join implies the start; only --workflow can still be missing (an entry wired before
       # that modifier existed). Verified afterwards — sed on a file we do not own gets
       # no trust from us.
-      if ! grep -qE 'setup\.sh --join --workflow' "$rp"; then
-        sed -i -E 's#^(args = ".*setup\.sh --join\b[^"]*)"$#\1 --workflow"#' "$rp"
+      if ! grep -qE 'setup\.sh.*--join --workflow' "$rp"; then
+        sed -i -E 's#^(args = ".*setup\.sh.*--join\b[^"]*)"$#\1 --workflow"#' "$rp"
         changed="--workflow"
       fi
       if [ -n "${changed# }" ]; then
-        grep -qE 'setup\.sh --join --workflow' "$rp" \
+        grep -qE 'setup\.sh.*--join --workflow' "$rp" \
           && { ok "workflow join di-upgrade ke $changed (entri lama)"; return 0; } \
           || warn "entri workflow join ada tapi gagal ditambahi $changed — cek $rp baris 'args'"
         return 0
       fi
-      grep -qE 'setup\.sh --join --workflow' "$rp" && { ok "workflow join sudah terdaftar (--workflow)"; return 0; }
+      grep -qE 'setup\.sh.*--join --workflow' "$rp" && { ok "workflow join sudah terdaftar (--workflow)"; return 0; }
       skip "workflow join sudah ada di $rp — tidak diubah"
       return 0
     fi
@@ -144,7 +145,7 @@ __rs_workflow() {
   # skill dir. Only an out-of-workspace copy needs the absolute path.
   echo
   ok "boot start: di UI Replit, tambahkan task 'shell.exec' ke workflow mana pun, isinya:"
-  echo "    bash $(__rs_cmd) --tailscale --join --workflow"
+  echo "    bash $(__rs_cmd) --machine repl --tailscale --join --workflow"
   ok "  nama workflow & urutannya bebas; --join yang menyalakan daemon, --workflow menahan task tetap hidup selama daemon jalan (terminal workflow hanya berisi summary; log penuh di file) supaya job tidak di-reap"
   # `cmd && cmd` as the last statement returns 1 under errexit; use an if.
   if __rs_cmd_external; then ok "  path absolut: skill ada di luar workspace, pindahkan ke dalamnya agar tak basi"; fi

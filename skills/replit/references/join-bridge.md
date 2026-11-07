@@ -59,7 +59,7 @@ symlink `~/.ssh`), menyalakan sshd + tailscaled dan join tailnet. Tanpa `--join`
 `--tailscale` cuma memasang dan tak menyalakan apa pun:
 
 ```bash
-TAILSCALE_AUTH_KEY=tskey-auth-... bash skills/scripts/replit/setup.sh --tailscale --join
+TAILSCALE_AUTH_KEY=tskey-auth-... bash skills/scripts/setup.sh --machine repl --tailscale --join
 ```
 
 The auth key is read from the **environment only** (never baked into the script, so
@@ -320,7 +320,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   type `shell.exec`, command:
 
   ```
-  bash <skill-dir>/scripts/setup.sh --tailscale --join --workflow      # path relatif ke workspace
+  bash <skill-dir>/scripts/setup.sh --machine repl --tailscale --join --workflow      # path relatif ke workspace
   ```
 
   `install_join` prints that one line and leaves `.replit` alone. The path is made
@@ -346,7 +346,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   is why the start path uses `set` and keeps `up` only as the not-yet-logged-in fallback.
   Setting `TAILSCALE_NODE_NAME` is how the skill side makes a name stick: when exported, every
   `--join` asserts it, so pin it in the workflow `args`
-  (`TAILSCALE_NODE_NAME=hermes-agent bash skills/scripts/replit/setup.sh --join --workflow`) rather than trusting
+  (`TAILSCALE_NODE_NAME=hermes-agent bash skills/scripts/setup.sh --machine repl --join --workflow`) rather than trusting
   the OS hostname — and not in an rc, which re-fires per terminal. A retired name can linger
   in `tailscale status` until removed in the console; the live node is the one under `self`.
   `tailscale set --hostname=` returns before the control plane has applied it, so POLL the
@@ -364,7 +364,7 @@ that needs `TAILSCALE_AUTH_KEY` again (the wiped state dir held the node identit
   file means owning something that is not ours: a second `name = "remote-shell"` collides with a
   workflow the operator already uses, and `[workflows]` sits in a different place on every
   host. But a full `[[workflows.workflow]]` block is also more than needed — the UI creates
-  the task for them — so `--join` prints just `bash <skill-dir>/scripts/setup.sh --tailscale --join --workflow`
+  the task for them — so `--join` prints just `bash <skill-dir>/scripts/setup.sh --machine repl --tailscale --join --workflow`
   and leaves the file alone; name and ordering stay theirs.
 - **Print the `args` path workspace-relative, never absolute.** Workflows run with the
   workspace as cwd, so a relative path survives the operator moving or renaming the skill
@@ -483,7 +483,7 @@ An absolute local path is only reachable on the SAME box. The skill therefore ha
 to exist on B before `--join` can run there — clone/copy the skill dir once (it is
 persistent), then the whole setup is one command and stays re-runnable. If a file on
 B must be delivered by URL, pin it at the commit SHA
-(`.../<sha>/scripts/replit/setup.sh`): a branch name drifts, a SHA cannot.
+(`.../<sha>/scripts/setup.sh`): a branch name drifts, a SHA cannot.
 Verify the raw URL answers 200 first, and never put a token in the URL when the
 repo is already public.
 

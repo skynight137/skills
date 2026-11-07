@@ -102,7 +102,7 @@ install_hermes_chromium() {
   mkdir -p "$HERMES_CHROME_STATE"
 
   # Resolve on THIS machine (never copy a store path between hosts).
-  if bash "$SCRIPT_DIR/setup/resolve-libs.sh" "$HERMES_CHROME_CLOSURE" chromium; then
+  if bash "$REPL_SKILL_DIR/setup/resolve-libs.sh" "$HERMES_CHROME_CLOSURE" chromium; then
     ok "closure resolved: $HERMES_CHROME_CLOSURE ($(tr ':' '\n' < "$HERMES_CHROME_CLOSURE" | grep -c .) lib dirs)"
     hermes_chrome_closure_fallback "$bin" "$HERMES_CHROME_CLOSURE"
   else

@@ -15,12 +15,19 @@ metadata:
 ## Payloads live outside this bundle
 
 This bundle is curated memory only (`SKILL.md` + `references/`). The executable
-payload tree — `setup.sh` + its `setup/` modules, `lp-tour.*`, `camofox.py`,
-the probes, the llm-wiki bundle — is NOT in the bundle. It lives at the repo
+payload tree — the `setup/` lane modules, `lp-tour.*`, `camofox.py`,
+the probes, the llm-wiki bundle — is NOT in the bundle. (The setup
+ENTRY left this tree in the shared-setup refactor: it is the repo
+root's `scripts/setup.sh`, one entry for both machine kinds.) It lives at the repo
 root: `scripts/replit/` in `skynight137/skills` (public).
 
 **Path rule.** Every `scripts/…` path in this file and its references denotes
 a file inside that payload tree (on a box: inside the landed tree below).
+Two exceptions, both at the repo root and shared with the muse skill:
+`scripts/setup.sh` is THE setup entry for both machine kinds
+(`--machine repl` selects this profile; the old `scripts/replit/setup.sh`
+is gone), and `scripts/setup/…` holds the shared modules it dispatches
+to (core.sh, the join engine, the profiles).
 
 **When a task needs a payload, ask the operator first**, then fetch:
 
@@ -76,7 +83,7 @@ other lane assumes its persistence rules.
 | decide which ports may be public on Replit, and how to expose one (declared in `.replit`, edge opens only after a restart; supported list = 80, 3000-3003, 4200, 5000, 5173, 6000, 6800, 8000, 8008, 8080, 8081, 8099, 9000) | `references/public-ports.md` | — |
 | serve a knowledge base to agents (llm_wiki desktop app headless + MCP over HTTP, read-only token, supervisor) plus a noVNC view of the real desktop UI | `references/llm-wiki-server.md` | `setup.sh --llm-wiki` (bundle: `scripts/llm-wiki/`), `run-public.sh`, `run-ui.sh`, `start-app.sh`, `llmwiki-server.js`. Public port = `LLM_WIKI_PORT` (default 8080; 8081 only where the Hermes dashboard owns 8080); loopback `8199` (no token) is what local agents use. MCP lives ONLY on the server ports — the app API `19828` answers `{"error":"Not found"}` for `/mcp`. Token header `x-llm-wiki-token` or `Authorization: Bearer`; write tool is `llm_wiki_write_page` with field `content` (not `body`). This box's wiki-of-record lives on the `-wiki` box (role suffix): bundle `$REPL_HOME/llmwiki-app`, `.replit` workflows `llm-wiki-server` (`run-public.sh`, `waitForPort 8199`), `llm-wiki-ui` (`run-ui.sh`) and `tailscale-join`, and the Hermes MCP entry `https://<that box's REPLIT_DEV_DOMAIN>/mcp` + `Authorization: Bearer ${LLM_WIKI_API_TOKEN}` read from the profile `.env` (headers DO expand `${VAR}`; `mcp_servers.*.env` values do not). The project dir must EXIST on disk — a stale `LLM_WIKI_PROJECT` naming a missing directory makes every MCP call fail with `Failed to resolve project path`; create the dir with its `wiki/` skeleton or point `llm_wiki_set_project` at an existing one. A local `wiki/` folder is a mirror only. Pages grounded in box experience carry the provenance tag `repl` (a reader outside Replit can skip them on that tag alone); the project's `wiki/SCHEMA.md` records the tag taxonomy, the required frontmatter, and the evidence rule (`target | authorization source | evidence path`). The noVNC layer must pass `--file-only` to websockify or the published port serves `Directory listing for /` over its own web root, and the UI port should be the published number (`LLM_WIKI_UI_PORT:-3000` with `localPort == externalPort`) |
 | own the interactive shell (zsh + oh-my-zsh + powerlevel10k, durable dotfiles, rc wiring rules) | `references/shell-rc-and-zsh.md` | `scripts/setup/zsh.sh`, `scripts/setup/rc.sh`, `scripts/setup/common.sh` (tool-var registry) |
-| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/join-bridge.md` | `scripts/setup.sh --tailscale --join` (host key + key-only sshd config + tailnet join, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--tailscale` alone installs the binaries only, `--workflow` = the same in workflow mode; set `TAILSCALE_NODE_NAME=<name>` inline on the workflow args (or a Replit secret) to pin the tailnet node name, otherwise the console name is left alone |
+| host a browser-only web terminal / get a real shell on a second box, or reach a fresh disposable box from here | `references/join-bridge.md` | `scripts/setup.sh --machine repl --tailscale --join` (host key + key-only sshd config + tailnet join, persistent `~/.ssh`, prints one workspace-relative workflow task line) — `--tailscale` alone installs the binaries only, `--workflow` = the same in workflow mode; set `TAILSCALE_NODE_NAME=<name>` inline on the workflow args (or a Replit secret) to pin the tailnet node name, otherwise the console name is left alone |
 | add a tool or flag to `setup.sh` (the ~2 dozen call sites, repair/verify/clean, the rc-writer harness) | `references/setup-tool-checklist.md` | `setup.sh`, `scripts/setup/*.sh` |
 
 Hermes-on-Replit recovery specifically (uv `--locked` trailing-slash failures,
@@ -441,7 +448,7 @@ rewrites old `.replit` entries. Old args must fail loudly instead of drifting.
 10. **Expect the lockout and stage the way back first.** After a full uninstall nothing on the
     box can be reached from here (sshd and tailscaled are both gone), so line up the recovery
     line before starting — `cd ~/workspace && TAILSCALE_NODE_NAME=<node> bash
-    scripts/replit/setup.sh --tailscale --join`, typed by the operator in the platform
+    scripts/setup.sh --machine repl --tailscale --join`, typed by the operator in the platform
     shell. It needs no auth key while the state dir survives; a clean that already wiped the
     state does need `TAILSCALE_AUTH_KEY`.
 11. **A rename of the state dir orphans the old directory.** Nothing migrates, so

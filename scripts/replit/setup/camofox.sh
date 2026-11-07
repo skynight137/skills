@@ -417,7 +417,7 @@ EOF
   # substituted in afterwards. A hardcoded clone path here
   # (/home/runner/workspace/skynight137-skills/...) sent fresh users to a
   # root that exists on none of the npx-installed boxes.
-  sed -i "s#__CAMOFOX_SETUP_CMD__#$SCRIPT_DIR/setup.sh#" "$f"
+  sed -i "s#__CAMOFOX_SETUP_CMD__#$SETUP_ENTRY#" "$f"
   chmod +x "$f"
   ok "camofox launcher shim: $f"
 }
@@ -621,7 +621,7 @@ camofox_ensure_node() {
   ver="$(node --version 2>/dev/null || true)"
   major="${ver#v}"; major="${major%%.*}"
   [[ "$major" == "$NODE_MAJOR" ]] \
-    || die "camofox: node is ${ver:-unknown} — camofox requires the managed v$NODE_MAJOR.x (the platform nix node poisons the closure; see camofox_ensure_node). Re-run: bash $SCRIPT_DIR/setup.sh --node"
+    || die "camofox: node is ${ver:-unknown} — camofox requires the managed v$NODE_MAJOR.x (the platform nix node poisons the closure; see camofox_ensure_node). Re-run: bash $SETUP_ENTRY --machine repl --node"
   command -v npm >/dev/null 2>&1 \
     || die "camofox: npm not on PATH after ensuring the managed node ($NODE_DIR/bin)"
   ok "camofox: using managed Node.js $ver ($bin)"
@@ -672,7 +672,7 @@ install_camofox() {
   fi
   if ((_closure_stale)); then
     echo "  generating GTK/X11 lib closure -> $CAMOFOX_CLOSURE_FILE"
-    if bash "$SCRIPT_DIR/setup/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE"; then
+    if bash "$REPL_SKILL_DIR/setup/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE"; then
       camofox_node_id > "$CAMOFOX_CLOSURE_STAMP"
     else
       warn "closure generation failed — camofox will not start until the nix store has gtk3/alsa-lib/xorg.libXdamage"

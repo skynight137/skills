@@ -740,7 +740,7 @@ EOF
     return 0
   fi
 
-  if ! "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$replit_file" \
+  if ! "${py[@]}" "$REPL_SKILL_DIR/dot_replit.py" --file "$replit_file" \
        --set "REPLIT_BASHRC=$target"; then
     warn ".replit REPLIT_BASHRC pin failed — workflow shells keep the platform env"
     return 0
@@ -986,7 +986,7 @@ strip_userenv_keys() {
   ((${#del[@]})) || return 0
   local -a py=()
   replit_resolve_py py || { warn "no tomlkit-capable python (project .venv or uv) — $file userenv keys left untouched"; return 0; }
-  if "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$file" "${del[@]}"; then
+  if "${py[@]}" "$REPL_SKILL_DIR/dot_replit.py" --file "$file" "${del[@]}"; then
     ok "Removed $labels-owned userenv keys from $file"
   else
     warn "userenv key cleanup failed for $file — edit it by hand"
@@ -1053,7 +1053,7 @@ write_replit_env() {
     delete_args+=(--delete-key "$var")
   done
 
-  if ! "${py[@]}" "$SCRIPT_DIR/dot_replit.py" --file "$replit_file" \
+  if ! "${py[@]}" "$REPL_SKILL_DIR/dot_replit.py" --file "$replit_file" \
       "${delete_args[@]}"; then
     mv -f "$backup" "$replit_file"
     die ".replit userenv update failed — reverted to backup"

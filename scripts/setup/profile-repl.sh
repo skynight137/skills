@@ -14,6 +14,11 @@ fi
 # Absolute path of this script's directory — the tomlkit .replit writer
 # (dot_replit.py) lives next to setup.sh.
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Location map after the S4 move (this profile lives in scripts/setup/;
+# its lanes and payloads stay in scripts/replit/):
+SETUP_LIB_DIR="$SCRIPT_DIR"               # scripts/setup — core.sh, join.sh, profiles
+REPL_SKILL_DIR="$SCRIPT_DIR/../replit"    # scripts/replit — setup/ lanes + payloads
+SETUP_ENTRY="$SCRIPT_DIR/../setup.sh"     # the one entry (scripts/setup.sh)
 
 # Install root (resolved once — no flag, one env override) ──────────────────
 # Set BEFORE the XDG defaults below because every path root depends on it.
@@ -24,7 +29,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # the platform env installed into the wiped $HOME tree without a word — so
 # it is gone: every root uses the persistent layout, and an unresolvable
 # root stops the run before anything installs.
-source "$SCRIPT_DIR/setup/root.sh"
+source "$SCRIPT_DIR/../replit/setup/root.sh"
 resolve_setup_root || exit 1
 [[ "$SETUP_ROOT_SOURCE" == env ]] && record_setup_root
 setup_root_persistence_check
@@ -180,24 +185,24 @@ done < <(compgen -e)
 
 # Source order matters only for the top-level setup each module runs at
 # source time (common initialises env/paths first; cli runs main last).
-source "$SCRIPT_DIR/../setup/core.sh"
-source "$SCRIPT_DIR/../setup/join.sh"  # shared join engine (S3)
-source "$SCRIPT_DIR/setup/common.sh"
-source "$SCRIPT_DIR/setup/ui_menu.sh"
-source "$SCRIPT_DIR/setup/bin.sh"
-source "$SCRIPT_DIR/setup/fix.sh"
-source "$SCRIPT_DIR/setup/rc.sh"
-source "$SCRIPT_DIR/setup/doctor.sh"
-source "$SCRIPT_DIR/setup/uv.sh"
-source "$SCRIPT_DIR/setup/zsh.sh"
-source "$SCRIPT_DIR/setup/android.sh"
-source "$SCRIPT_DIR/setup/node_opencode.sh"
-source "$SCRIPT_DIR/setup/download.sh"
-source "$SCRIPT_DIR/setup/expose.sh"
-source "$SCRIPT_DIR/setup/join.sh"
-source "$SCRIPT_DIR/setup/camofox.sh"
-source "$SCRIPT_DIR/setup/lightpanda.sh"
-source "$SCRIPT_DIR/setup/hermes_chromium.sh"
-source "$SCRIPT_DIR/setup/llm-wiki.sh"
-source "$SCRIPT_DIR/setup/cleanup.sh"
-source "$SCRIPT_DIR/setup/cli.sh"
+source "$SCRIPT_DIR/core.sh"
+source "$SCRIPT_DIR/join.sh"  # shared join engine (S3)
+source "$SCRIPT_DIR/../replit/setup/common.sh"
+source "$SCRIPT_DIR/../replit/setup/ui_menu.sh"
+source "$SCRIPT_DIR/../replit/setup/bin.sh"
+source "$SCRIPT_DIR/../replit/setup/fix.sh"
+source "$SCRIPT_DIR/../replit/setup/rc.sh"
+source "$SCRIPT_DIR/../replit/setup/doctor.sh"
+source "$SCRIPT_DIR/../replit/setup/uv.sh"
+source "$SCRIPT_DIR/../replit/setup/zsh.sh"
+source "$SCRIPT_DIR/../replit/setup/android.sh"
+source "$SCRIPT_DIR/../replit/setup/node_opencode.sh"
+source "$SCRIPT_DIR/../replit/setup/download.sh"
+source "$SCRIPT_DIR/../replit/setup/expose.sh"
+source "$SCRIPT_DIR/../replit/setup/join.sh"
+source "$SCRIPT_DIR/../replit/setup/camofox.sh"
+source "$SCRIPT_DIR/../replit/setup/lightpanda.sh"
+source "$SCRIPT_DIR/../replit/setup/hermes_chromium.sh"
+source "$SCRIPT_DIR/../replit/setup/llm-wiki.sh"
+source "$SCRIPT_DIR/../replit/setup/cleanup.sh"
+source "$SCRIPT_DIR/../replit/setup/cli.sh"
