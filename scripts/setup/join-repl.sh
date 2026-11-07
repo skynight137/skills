@@ -22,7 +22,11 @@
 
 : "${RS_PORT:=6800}"
 RS_DIR="${RS_DIR:-${REPL_HOME:-$HOME/workspace}/.ssh/join-tailnet}"
-RS_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")/.." 2>/dev/null && pwd)"
+# This lane's own directory. Since S5c the lane lives in scripts/setup/
+# (as join-repl.sh — scripts/setup/join.sh is the shared ENGINE it calls),
+# so the entry setup.sh is exactly one level up from here; __rs_cmd
+# resolves it as "$RS_SKILL_ROOT/../setup.sh".
+RS_SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)"
 
 __rs_homedir() { getent passwd "$(id -un)" | cut -d: -f6; }
 

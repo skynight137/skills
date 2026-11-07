@@ -11,25 +11,31 @@ if (( BASH_VERSINFO[0] < 4 )); then
   exit 1
 fi
 
-# Absolute path of this script's directory — the tomlkit .replit writer
-# (dot_replit.py) lives next to setup.sh.
+# Absolute path of this script's directory (scripts/setup/ — the
+# profile, the shared modules and every lane live here since S5c).
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# Location map after the S4 move (this profile lives in scripts/setup/;
-# its lanes and payloads stay in scripts/replit/):
-SETUP_LIB_DIR="$SCRIPT_DIR"               # scripts/setup — core.sh, join.sh, profiles
-REPL_SKILL_DIR="$SCRIPT_DIR/../replit"    # scripts/replit — setup/ lanes + payloads
+# Location map after the S5c move (this profile lives in scripts/setup/
+# and so do ALL the setup lanes now — the tree is shared, the machine
+# kind is --machine, not a directory):
+SETUP_LIB_DIR="$SCRIPT_DIR"               # scripts/setup — core.sh, join.sh (engine), profiles, every lane
+# scripts/replit — REPL-ONLY payloads: the runtime files a repl box
+# executes (dot_replit.py, camofox.py, the probes, the chromium
+# launcher) plus the nix machinery the lanes invoke (nixenv,
+# resolve-libs.sh, generate-closure.sh, libpool.sh). Lanes reach them
+# ONLY through this var — never a spelled-out ../replit path.
+REPL_SKILL_DIR="$SCRIPT_DIR/../replit"
 SETUP_ENTRY="$SCRIPT_DIR/../setup.sh"     # the one entry (scripts/setup.sh)
 
 # Install root (resolved once — no flag, one env override) ──────────────────
 # Set BEFORE the XDG defaults below because every path root depends on it.
 # Resolve the install root ONCE, before anything else derives a path
-# (setup/root.sh). The resolver owns $REPL_HOME from here on: explicit
+# (scripts/setup/root.sh). The resolver owns $REPL_HOME from here on: explicit
 # $SETUP_ROOT -> recorded root -> platform workspace -> die. The old silent
 # default layout (WORKSPACE=$(pwd), $HOME roots) was a trap — a shell missing
 # the platform env installed into the wiped $HOME tree without a word — so
 # it is gone: every root uses the persistent layout, and an unresolvable
 # root stops the run before anything installs.
-source "$SCRIPT_DIR/../replit/setup/root.sh"
+source "$SETUP_LIB_DIR/root.sh"
 resolve_setup_root || exit 1
 [[ "$SETUP_ROOT_SOURCE" == env ]] && record_setup_root
 setup_root_persistence_check
@@ -85,7 +91,7 @@ SSHX_DOWNLOAD_BASE="https://s3.amazonaws.com/sshx"
 
 # Lightpanda: lightweight headless browser (CDP server) for keep-alive
 # tours. Pinned release — the release publishes NO checksum asset, so
-# setup/lightpanda.sh carries the per-arch size + SHA256 pins computed
+# scripts/setup/lightpanda.sh carries the per-arch size + SHA256 pins computed
 # from the official downloads; they move with this version.
 LIGHTPANDA_VERSION="1.0.3"
 LIGHTPANDA_RELEASE_BASE="https://github.com/lightpanda-io/browser/releases/download"
@@ -191,25 +197,25 @@ done < <(compgen -e)
 
 # Source order matters only for the top-level setup each module runs at
 # source time (common initialises env/paths first; cli runs main last).
-source "$SCRIPT_DIR/core.sh"
-source "$SCRIPT_DIR/join.sh"  # shared join engine (S3)
-source "$SCRIPT_DIR/../replit/setup/common.sh"
-source "$SCRIPT_DIR/../replit/setup/ui_menu.sh"
-source "$SCRIPT_DIR/../replit/setup/bin.sh"
-source "$SCRIPT_DIR/../replit/setup/fix.sh"
-source "$SCRIPT_DIR/../replit/setup/rc.sh"
-source "$SCRIPT_DIR/../replit/setup/doctor.sh"
-source "$SCRIPT_DIR/../replit/setup/uv.sh"
-source "$SCRIPT_DIR/../replit/setup/zsh.sh"
-source "$SCRIPT_DIR/../replit/setup/android.sh"
-source "$SCRIPT_DIR/../replit/setup/node_opencode.sh"
-source "$SCRIPT_DIR/../replit/setup/download.sh"
-source "$SCRIPT_DIR/../replit/setup/expose.sh"
-source "$SCRIPT_DIR/../replit/setup/join.sh"
-source "$SCRIPT_DIR/../replit/setup/camofox.sh"
-source "$SCRIPT_DIR/../replit/setup/lightpanda.sh"
-source "$SCRIPT_DIR/../replit/setup/omniroute.sh"
-source "$SCRIPT_DIR/../replit/setup/hermes_chromium.sh"
-source "$SCRIPT_DIR/../replit/setup/llm-wiki.sh"
-source "$SCRIPT_DIR/../replit/setup/cleanup.sh"
-source "$SCRIPT_DIR/../replit/setup/cli.sh"
+source "$SETUP_LIB_DIR/core.sh"
+source "$SETUP_LIB_DIR/join.sh"  # shared join engine (S3)
+source "$SETUP_LIB_DIR/common.sh"
+source "$SETUP_LIB_DIR/ui_menu.sh"
+source "$SETUP_LIB_DIR/bin.sh"
+source "$SETUP_LIB_DIR/fix.sh"
+source "$SETUP_LIB_DIR/rc.sh"
+source "$SETUP_LIB_DIR/doctor.sh"
+source "$SETUP_LIB_DIR/uv.sh"
+source "$SETUP_LIB_DIR/zsh.sh"
+source "$SETUP_LIB_DIR/android.sh"
+source "$SETUP_LIB_DIR/node_opencode.sh"
+source "$SETUP_LIB_DIR/download.sh"
+source "$SETUP_LIB_DIR/expose.sh"
+source "$SETUP_LIB_DIR/join-repl.sh"  # the repl join LANE (install_join); join.sh above is the shared engine
+source "$SETUP_LIB_DIR/camofox.sh"
+source "$SETUP_LIB_DIR/lightpanda.sh"
+source "$SETUP_LIB_DIR/omniroute.sh"
+source "$SETUP_LIB_DIR/hermes_chromium.sh"
+source "$SETUP_LIB_DIR/llm-wiki.sh"
+source "$SETUP_LIB_DIR/cleanup.sh"
+source "$SETUP_LIB_DIR/cli.sh"

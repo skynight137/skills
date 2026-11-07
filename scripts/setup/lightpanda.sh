@@ -194,7 +194,7 @@ install_lightpanda() {
     want_size="$(lightpanda_asset_size)"
     if [[ "$got_size" != "$want_size" ]]; then
       rm -f "$tmp"
-      die "lightpanda ($asset) size mismatch (got $got_size, expected $want_size for $LIGHTPANDA_VERSION) — download may be corrupt, or LIGHTPANDA_VERSION moved without refreshing the pins in setup/lightpanda.sh"
+      die "lightpanda ($asset) size mismatch (got $got_size, expected $want_size for $LIGHTPANDA_VERSION) — download may be corrupt, or LIGHTPANDA_VERSION moved without refreshing the pins in scripts/setup/lightpanda.sh"
     fi
     verify_sha256 "$tmp" "$(lightpanda_asset_sha256)" "lightpanda ($asset)"
     chmod +x "$tmp"

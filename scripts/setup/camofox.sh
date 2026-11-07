@@ -548,7 +548,7 @@ PY
     appended)   ok "camofox: added [nix] channel = \"$CAMOFOX_NIX_CHANNEL\" to .replit (without it replit.nix triggers recovery mode and never rebuilds)" ;;
     *)          warn "camofox: unexpected [nix] channel result: $out" ;;
   esac
-  # A malformed .replit breaks every later dot_replit/setup run — verify.
+  # A malformed .replit breaks every later dot_replit / setup run — verify.
   python3 -c "import tomllib; tomllib.load(open('$f','rb'))" 2>/dev/null \
     || warn "camofox: .replit no longer parses as TOML after the channel edit — check $f"
 }
@@ -672,7 +672,7 @@ install_camofox() {
   fi
   if ((_closure_stale)); then
     echo "  generating GTK/X11 lib closure -> $CAMOFOX_CLOSURE_FILE"
-    if bash "$REPL_SKILL_DIR/setup/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE"; then
+    if bash "$REPL_SKILL_DIR/generate-closure.sh" "$CAMOFOX_CLOSURE_FILE"; then
       camofox_node_id > "$CAMOFOX_CLOSURE_STAMP"
     else
       warn "closure generation failed — camofox will not start until the nix store has gtk3/alsa-lib/xorg.libXdamage"

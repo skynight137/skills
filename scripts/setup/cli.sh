@@ -222,7 +222,7 @@ SUMMARY
 # SCRIPT_DIR was captured before any cd. Every file is already loaded by this
 # point, so a failure anywhere means a real syntax error.
 _syntax_ok=true
-for _f in "$SETUP_ENTRY" "$REPL_SKILL_DIR"/setup/*.sh; do
+for _f in "$SETUP_ENTRY" "$SETUP_LIB_DIR"/*.sh; do
   [[ -f "$_f" ]] || continue
   bash -n "$_f" 2>/dev/null || { _syntax_ok=false; break; }
 done

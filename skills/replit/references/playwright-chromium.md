@@ -94,7 +94,7 @@ CHROME_PORT=9223 CHROME_DATA_DIR="$XDG_DATA_HOME/chromium/agent-b" \
 - **`LD_LIBRARY_PATH`:** usually unnecessary — the Nix `chrome` wrapper
   points at its own store. Only touch it if you see `cannot open shared
   object file`, and then use the closure method from `references/nix.md` §3 or
-  the resolver (`scripts/setup/resolve-libs.sh chromium`), never
+  the resolver (`scripts/replit/resolve-libs.sh chromium`), never
   a hand-picked partial list **and never a copied `/nix/store/<hash>` path** —
   those hashes differ per machine.
 - Playwright scripts and CDP are independent lanes to the same browser;

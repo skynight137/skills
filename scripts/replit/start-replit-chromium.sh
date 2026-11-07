@@ -12,7 +12,7 @@
 # wrapper — it exports its own SSL_CERT_FILE/FONTCONFIG_FILE and execs a bundled
 # binary with its own RPATH. It needs NO /nix/store closure. (Builds that DO
 # need one — e.g. Hermes' chrome-linux64 — resolve it at install time in
-# setup/hermes_chromium.sh via setup/resolve-libs.sh, never a hardcoded hash.)
+# scripts/setup/hermes_chromium.sh via scripts/replit/resolve-libs.sh, never a hardcoded hash.)
 #
 # Usage: run ONCE when you need the browser; a no-op if the CDP port is live.
 # Do NOT schedule it on recurring cron — launch on demand, kill it when done.

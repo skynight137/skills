@@ -15,25 +15,34 @@ metadata:
 ## Payloads live outside this bundle
 
 This bundle is curated memory only (`SKILL.md` + `references/`). The executable
-payload tree — the `setup/` lane modules, `tour.*`, `camofox.py`,
-the probes — is NOT in the bundle. (The setup
-ENTRY left this tree in the shared-setup refactor: it is the repo
-root's `scripts/setup.sh`, one entry for both machine kinds.) It lives at the repo
-root: `scripts/replit/` in `skynight137/skills` (public).
+payloads are NOT in the bundle; they live at the repo root of
+`skynight137/skills` (public), split by the S5 rule — shared things
+live in one shared tree and are distinguished by `--machine muse|repl`;
+a machine tree holds ONLY what that VM kind genuinely needs:
 
-**Path rule.** Every `scripts/…` path in this file and its references denotes
-a file inside that payload tree (on a box: inside the landed tree below).
-Two exceptions, both at the repo root and shared with the muse skill:
-`scripts/setup.sh` is THE setup entry for both machine kinds
-(`--machine repl` selects this profile; the old per-skill entry file
-that used to live in the replit payload tree is gone), and `scripts/setup/…` holds the shared modules it dispatches
-to (core.sh, the join engine, the profiles) plus the shared payloads
-that live there in their own right (`tour.*`, the llm-wiki bundle).
+- `scripts/setup.sh` — THE setup entry for both machine kinds
+  (`--machine repl` selects this profile; the old per-skill entry file
+  that used to live in the replit payload tree is gone).
+- `scripts/setup/…` — the SHARED tree: the profiles, `core.sh`, the
+  join engine, EVERY setup lane (`common`/`cli`/`rc`/`doctor`/
+  `cleanup`/…; the repl join lane is `join-repl.sh` — `join.sh` there
+  is the shared engine), plus the shared payloads that live there in
+  their own right (`tour.*`, the llm-wiki bundle).
+- `scripts/replit/…` — REPL-ONLY payloads: the runtime files a repl
+  box executes (`dot_replit.py`, `camofox.py`, the probes,
+  `start-replit-chromium.sh`, `join-lifecycle-test.sh`) plus the nix
+  machinery the lanes invoke from there (`nixenv`, `resolve-libs.sh`,
+  `generate-closure.sh`, `libpool.sh`).
+
+**Path rule.** Every `scripts/…` path in this file and its references is
+repo-root-relative (on a box: inside the landed tree below), with one
+shorthand: a bare `scripts/<file>` with no tree segment denotes a file
+in the repl payload tree, `scripts/replit/<file>`.
 
 **When a task needs a payload, ask the operator first**, then fetch:
 
-- clone (recommended): `git clone https://github.com/skynight137/skills` — payloads at `scripts/replit/`, this memory at `skills/replit/`.
-- or one file: `curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/replit/<path> -o <dest>`.
+- clone (recommended): `git clone https://github.com/skynight137/skills` — payloads under `scripts/`, this memory at `skills/replit/`.
+- or one file: `curl -fsSL https://raw.githubusercontent.com/skynight137/skills/main/scripts/<path> -o <dest>`.
 
 Land the tree where the box's workflows already point —
 `.agents/skills/replit/scripts/` — whole tree, layout unchanged (modules
@@ -71,7 +80,7 @@ other lane assumes its persistence rules.
 |---|---|---|
 | persist data/env/rc/git, understand what survives a restart, fix env-var plumbing | `references/platform.md` | `setup.sh`, `dot_replit.py` |
 | add a tool to setup.sh, decide where its payload/config/cache lives, name a flag or var | `references/toolchain-layout.md` | `scripts/setup/` |
-| get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
+| get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/replit/generate-closure.sh`, `scripts/replit/libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `start-replit-chromium.sh` |
 | open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
 | run a session keep-alive tour (one unified tour, a SHARED payload used by both machine kinds: engine by flag — Lightpanda CDP by default — ~380 MB per stop, zero idle, one fresh server per stop; camofox server API as the fallback engine, same verdicts) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `scripts/setup/tour.sh --browser lightpanda --machine repl`, `scripts/setup/tour.py` |
@@ -144,7 +153,7 @@ official Node ≥22 tarballs needing libatomic): `references/hermes-on-replit.md
    answered by `ldd <binary>`: a static binary lists nothing, a GUI one lists
    libs that must be resolved into a closure (`.ldpath` / `closure.txt`).
 4. **`$REPLIT_LD_LIBRARY_PATH` is never enough** for GUI browsers — you need
-   the full transitive closure (nix.md §3; `scripts/setup/generate-closure.sh`).
+   the full transitive closure (nix.md §3; `scripts/replit/generate-closure.sh`).
 5. **npm is behind a package firewall**; pin `--registry=https://registry.npmjs.org/`.
    It can reject a transitive dependency outright (`403 ... Blocked by Security
    Policy` on a CVE-flagged package), and only the *dev* tree pulls the usual
@@ -168,10 +177,11 @@ without ripgrep.
 
 ## Scripts (entry point in `scripts/`, modules in `scripts/setup/`)
 
-- `setup.sh` — thin entry point: install-root resolution + version config,
-  then `source`s the modules in `scripts/setup/` (`common` → `ui_menu`/`bin`/`fix`/
+- `setup.sh` — thin entry point: dispatches to `scripts/setup/profile-repl.sh`
+  (install-root resolution + version config), which `source`s the modules
+  in `scripts/setup/` (`common` → `ui_menu`/`bin`/`fix`/
   `rc`/`doctor`/installers/`cleanup` → `cli`). All wiring helpers resolve via
-  `$SCRIPT_DIR`, so every module and `setup/` must sit beside `setup.sh`.
+  `$SCRIPT_DIR`/`$SETUP_LIB_DIR`, so the whole `scripts/` tree must stay intact.
   **Install root**: resolved ONCE by `setup/root.sh` before anything derives
   a path — `SETUP_ROOT` env (explicit operator choice, recorded for later
   runs) → recorded root → platform workspace (`$REPL_HOME`) → die. There is
@@ -294,7 +304,7 @@ without ripgrep.
   `libstdc++.so.6` before python starts) and resolves the venv
   python. `tour.sh --check` is the no-open preflight. See
   `references/lightpanda.md`.
-- `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
+- `scripts/replit/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
 - `$XDG_BIN_HOME/launch-camofox-browser` — **generated at install** (not a repo
   file): sources the closure `env.sh`, preflights the install, then starts
   `camofox-browser` with its full log going to `$REPL_HOME/logs/camofox-browser.log`,

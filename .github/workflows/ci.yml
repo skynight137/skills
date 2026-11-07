@@ -89,7 +89,7 @@ jobs:
 
       # The bug class the user flagged: code that reads ambient XDG vars
       # bare breaks or writes outside the tree when they are unset (some
-      # runners, some shells). The setup lanes under scripts/replit/setup/
+      # runners, some shells). The setup lanes under scripts/setup/
       # are exempt by construction — setup.sh's preamble defines every
       # XDG_* var before sourcing them — so this job checks the surfaces
       # that face the raw environment:
