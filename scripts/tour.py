@@ -155,6 +155,10 @@ source of every var is logged at startup, name + source only):
                       the launcher and the tour in parallel; the
                       --check probe stays one-shot)    (default 180)
   CAMOFOX_BASE_URL    camofox: server URL (default http://127.0.0.1:9377)
+  TOUR_PW_HEADLESS    patchright/cloakbrowser: headless launch
+                      (default true)
+  TOUR_CLOAK_HUMANIZE cloakbrowser: behavioural humanize layer
+                      (default off)
   LIGHTPANDA_HOME     install/state root (default <machine XDG config
                       base>/lightpanda: $XDG_CONFIG_HOME when set, else
                       repl $REPL_HOME/.config, muse ~/.config)
@@ -237,6 +241,8 @@ else:
 _LP_HOME_AMBIENT = os.environ.get("LIGHTPANDA_HOME") or os.path.join(
     _XDG, "lightpanda")
 _CF_CONFIG_HOME = os.path.join(_XDG, "camofox")
+_PW_HOME = os.path.join(_XDG, "patchright")
+_CLOAK_HOME = os.path.join(_XDG, "cloakbrowser")
 
 
 # ══ engine registry ═══════════════════════════════════════════════════
@@ -482,9 +488,95 @@ class _CamofoxEngine(_Engine):
                 pass
 
 
+class _PwEngine(_Engine):
+    """Shared adapter for the local Playwright engines (the section
+    below the Lightpanda engine): a real local Chromium, launched
+    once per tour process and reused by every stop. Subclasses set
+    KEY (registry name), HOME (engine home), LAUNCH (the async
+    launcher in the engine section). prepare() is sync by interface,
+    so it only validates; the browser itself launches lazily inside
+    the first stop (pw_ensure_session) and the cookie injection is
+    logged there."""
+
+    KEY = ""
+    HOME = ""
+    LAUNCH = None
+
+    def env_file(self):
+        return os.path.join(self.HOME, ".env")
+
+    def jar_default(self):
+        return os.path.join(self.HOME, "cookies.json")
+
+    def profile_dir(self):
+        return os.path.join(self.HOME, "profile")
+
+    def config_line(self):
+        return (f"config: resolved: {self.KEY} "
+                f"profile={self.profile_dir()} jar={JAR} "
+                f"headless={PW_HEADLESS}")
+
+    def check(self):
+        rc = 0
+        import importlib.util
+        if importlib.util.find_spec(self.KEY) is not None:
+            print(f"check: {self.KEY} package importable in the tour "
+                  "venv", flush=True)
+        else:
+            print(f"check: {self.KEY} package MISSING in the tour "
+                  f"venv — pip install {self.KEY} into it",
+                  flush=True)
+            rc = 1
+        if os.path.exists(JAR):
+            try:
+                n = len(pw_cookies())
+                print(f"check: jar ok: {JAR} ({n} cookies)", flush=True)
+            except Exception as e:
+                print(f"check: jar UNREADABLE: {JAR}: {e}", flush=True)
+                rc = 1
+        else:
+            print(f"check: jar missing: {JAR} — a tour would FATAL "
+                  "on it", flush=True)
+            rc = 1
+        return rc
+
+    def prepare(self):
+        if not os.path.exists(JAR):
+            log(f"FATAL: jar missing at {JAR}", "ERROR")
+            sys.exit(2)
+        import importlib.util
+        if importlib.util.find_spec(self.KEY) is None:
+            log(f"FATAL: {self.KEY} package missing in the tour "
+                f"venv — pip install {self.KEY} into it", "ERROR")
+            sys.exit(2)
+        n = len(pw_cookies())
+        return f" cookies={n} (injected at first stop)"
+
+    async def run_stop(self, idx, url):
+        sess = await pw_ensure_session(self)
+        return await run_stop_pw(idx, url, sess)
+
+    def teardown(self):
+        pw_kill_session()
+
+
+class _PatchrightEngine(_PwEngine):
+    KEY = "patchright"
+    HOME = _PW_HOME
+    LAUNCH = "_pw_launch_patchright"
+
+
+class _CloakEngine(_PwEngine):
+    KEY = "cloakbrowser"
+    HOME = _CLOAK_HOME
+    LAUNCH = "_pw_launch_cloak"
+
+
 ENGINES = {
     "lightpanda": _LightpandaEngine(),
     "camofox": _CamofoxEngine(),
+    "patchright": _PatchrightEngine(),
+    "cloakbrowser": _CloakEngine(),
 }
 # The resolved adapter for this run (None when --browser names no
 # registered engine — check()/main() reject that before anything
@@ -596,6 +688,12 @@ CF_API_KEY = cfg("CAMOFOX_API_KEY", "") or None
 # launch-camofox and the tour in parallel, so the server is routinely
 # still starting when the tour first probes it.
 CF_WAIT = cfg_int("TOUR_CAMOFOX_WAIT_S", 180)
+
+# Local Playwright engines (patchright / cloakbrowser): one shared
+# headless knob; cloak's behavioural layer is opt-in (a tour only
+# opens pages — humanize matters when a flow types/clicks through).
+PW_HEADLESS = cfg("TOUR_PW_HEADLESS", "true") in ("1", "true", "yes")
+CLOAK_HUMANIZE = cfg("TOUR_CLOAK_HUMANIZE", "") in ("1", "true", "yes")
 
 LINKS = [u for u in cfg_chain(["TOUR_LINKS", "LP_LINKS"], "")
          .replace(",", " ").split() if u]
@@ -1033,6 +1131,209 @@ async def run_stop_lightpanda(idx, url):
         CURRENT_SRV = None
         srvlog.close()
         kill_leftovers(f"post-stop {name}")
+    tts = round(shell_at, 1) if shell_at else None
+    return verdict, tts, rss_peak, popups
+
+
+# ══ local Playwright engines (patchright / cloakbrowser) ═══════════
+# A real local Chromium driven through Playwright — ONE persistent
+# browser + context per tour process, created lazily at the first
+# stop and reused by every stop and round: the camofox lesson
+# applied to a local browser (a cold session pays the full CF price
+# at stop 1; a warm one reuses its clearance). Cross-restart
+# continuity is the jar's job — TOUR_JAR_WRITEBACK merges the live
+# context's cookies back after every SHELL stop, exactly as the
+# Lightpanda engine does. The engines differ only in the launcher:
+# patchright = Playwright's own Chromium with the driver's CDP
+# leaks patched; cloakbrowser = a Chromium build with source-level
+# fingerprint patches behind a Playwright-shaped async API. Both
+# launch a persistent context on the engine's profile dir.
+
+
+class _PwSession:
+    def __init__(self, key, ctx, pw, fragment):
+        self.key, self.ctx, self.pw, self.fragment = \
+            key, ctx, pw, fragment
+
+
+PW_SESSION = None  # the live _PwSession, for run_stop + signal cleanup
+
+
+def pw_cookies():
+    """Cookie jar (browser-export or Playwright format) -> a
+    Playwright add_cookies list. Returns the normalized cookies."""
+    raw = json.load(open(JAR))
+    items = raw.get("cookies", raw) if isinstance(raw, dict) else raw
+    out = []
+    for c in items:
+        if "name" not in c or "value" not in c:
+            continue
+        nc = {"name": c["name"], "value": c["value"],
+              "domain": c.get("domain", ".replit.com"),
+              "path": c.get("path", "/")}
+        if c.get("expires"):
+            try:
+                nc["expires"] = float(c["expires"])
+            except Exception:
+                pass
+        for f in ("secure", "httpOnly"):
+            if c.get(f) is not None:
+                nc[f] = bool(c[f])
+        if c.get("sameSite") in ("Strict", "Lax", "None"):
+            nc["sameSite"] = c["sameSite"]
+        out.append(nc)
+    return out
+
+
+async def _pw_launch_patchright(engine):
+    from patchright.async_api import async_playwright
+    pw = await async_playwright().start()
+    ctx = await pw.chromium.launch_persistent_context(
+        engine.profile_dir(), headless=PW_HEADLESS)
+    return pw, ctx
+
+
+async def _pw_launch_cloak(engine):
+    import cloakbrowser as cloak
+    fn = getattr(cloak, "launch_persistent_context_async", None)
+    if fn is None:
+        raise RuntimeError(
+            "cloakbrowser exposes no launch_persistent_context_async "
+            "in this version — the adapter needs its async API")
+    # Pass humanize only when this build's signature accepts it —
+    # the package's API surface moves between versions.
+    import inspect
+    kw = {"headless": PW_HEADLESS}
+    if "humanize" in inspect.signature(fn).parameters:
+        kw["humanize"] = CLOAK_HUMANIZE
+    ctx = await fn(engine.profile_dir(), **kw)
+    return None, ctx
+
+
+async def pw_ensure_session(engine):
+    global PW_SESSION
+    if PW_SESSION is not None and PW_SESSION.key == engine.KEY:
+        return PW_SESSION
+    pw, ctx = await globals()[engine.LAUNCH](engine)
+    cookies = pw_cookies()
+    if cookies:
+        await ctx.add_cookies(cookies)
+    PW_SESSION = _PwSession(engine.KEY, ctx, pw, engine.profile_dir())
+    log(f"{engine.KEY}: session up, injected {len(cookies)} cookies "
+        f"from {JAR}")
+    return PW_SESSION
+
+
+def pw_rss(fragment):
+    try:
+        r = subprocess.run(["pgrep", "-f", fragment],
+                           capture_output=True, text=True)
+        peak = 0
+        for x in r.stdout.split():
+            if x.strip().isdigit():
+                peak = max(peak, rss_mb(int(x)))
+        return peak
+    except Exception:
+        return 0
+
+
+def pw_kill_session():
+    if PW_SESSION is None:
+        return
+    try:
+        r = subprocess.run(["pgrep", "-f", PW_SESSION.fragment],
+                           capture_output=True, text=True)
+        for x in r.stdout.split():
+            if x.strip().isdigit():
+                try:
+                    os.kill(int(x), signal.SIGKILL)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+
+async def run_stop_pw(idx, url, sess):
+    """One local-Playwright tour stop (patchright / cloakbrowser) —
+    the Lightpanda stop's poll/dismiss/dwell discipline, on a fresh
+    page of the process-wide persistent context.
+    Returns (verdict, time_to_shell_s, rss_peak_mb, popups_dismissed)."""
+    name = url.rsplit("/", 1)[-1]
+    t0 = time.time()
+    rss_peak = 0
+    popups = 0
+    verdict, shell_at = "UNKNOWN", None
+    page = None
+    try:
+        page = await sess.ctx.new_page()
+        try:
+            await asyncio.wait_for(
+                page.goto(url, wait_until="domcontentloaded"), 60)
+        except Exception as e:
+            log(f"stop {name}: goto exc {type(e).__name__} "
+                f"{str(e)[:120]} (continuing to poll)", "WARN")
+        markers = shell_markers(name)
+        deadline = time.time() + POLL
+        last_title = None
+        while time.time() < deadline:
+            try:
+                title = await asyncio.wait_for(page.title(), 10)
+            except Exception:
+                title = "?"
+            if title != last_title:
+                log(f"stop {name}: title -> {title!r}", "SKIP")
+                last_title = title
+            rss_peak = max(rss_peak, pw_rss(sess.fragment))
+            text = await body_text(page)
+            if is_wall(text):
+                await asyncio.sleep(5)
+                text2 = await body_text(page)
+                if is_wall(text2):
+                    verdict = "LOGGED-OUT-WALL"
+                    log(f"stop {name}: wall confirmed "
+                        f"(text len={len(text2)})", "WARN")
+                    break
+                continue
+            hit = marker_hit(markers, text)
+            if hit:
+                verdict, shell_at = "SHELL", time.time() - t0
+                log(f"stop {name}: SHELL marker={hit!r} "
+                    f"textlen={len(text)} tts={shell_at:.1f}s", "OK")
+                break
+            await asyncio.sleep(5)
+        else:
+            if last_title and "Just a moment" in last_title:
+                verdict = "CF-STALL"
+            log(f"stop {name}: poll deadline, verdict={verdict} "
+                f"last_title={last_title!r}", "WARN")
+        if verdict == "SHELL":
+            popups += await lp_dismiss_popups(page, name)
+            log(f"stop {name}: holding dwell={DWELL}s", "SKIP")
+            held = 0
+            while held < DWELL:
+                step = min(20, DWELL - held)
+                await asyncio.sleep(step)
+                held += step
+                rss_peak = max(rss_peak, pw_rss(sess.fragment))
+            popups += await lp_dismiss_popups(page, name)
+            text = await body_text(page)
+            still = any(m in text for m in markers) \
+                and not is_wall(text)
+            log(f"stop {name}: post-hold still-shell={still} "
+                f"textlen={len(text)} rss_peak={rss_peak}MB",
+                "OK" if still else "WARN")
+            if WRITEBACK:
+                await writeback_ctx(sess.ctx, name)
+    except Exception as e:
+        verdict = "ERROR"
+        log(f"stop {name}: ERROR {type(e).__name__} {str(e)[:200]}",
+            "ERROR")
+    finally:
+        if page is not None:
+            try:
+                await asyncio.wait_for(page.close(), 10)
+            except Exception:
+                pass
     tts = round(shell_at, 1) if shell_at else None
     return verdict, tts, rss_peak, popups
 

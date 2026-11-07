@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.39.4
+version: 4.40.0
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -293,8 +293,13 @@ without ripgrep.
   → repl else muse, mirroring `scripts/setup.sh`), with the machine
   choosing the engine-home/jar/log-dir defaults. Sequential stops over
   `TOUR_LINKS` (fallback `LP_LINKS`), engine by
-  `--browser lightpanda|camofox` (env `TOUR_BROWSER`,
-  default lightpanda). Both engines produce the same per-stop verdicts
+  `--browser lightpanda|camofox|patchright|cloakbrowser` (env
+  `TOUR_BROWSER`, default lightpanda). patchright and cloakbrowser
+  are local Playwright engines: one persistent Chromium context per
+  tour process (patchright = stock Chromium, driver CDP leaks
+  patched; cloakbrowser = source-patched Chromium behind a
+  Playwright-shaped API, pip-installed into the tour venv). All
+  engines produce the same per-stop verdicts
   (SHELL / LOGGED-OUT-WALL / CF-STALL / ERROR / UNKNOWN, time-to-shell,
   dwell hold, circuit breaker). Both dismiss blocking page popups
   when the shell is reached and again before the post-hold sample —
