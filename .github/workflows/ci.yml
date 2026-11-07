@@ -176,6 +176,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      # The payloads need bash >= 4 (associative arrays); a stock Mac
+      # ships bash 3.2, so the macOS legs run under Homebrew's bash —
+      # the same remedy setup.sh's own version guard prescribes.
+      - name: Install modern bash (macOS legs)
+        if: matrix.os == 'macos-latest'
+        run: brew install bash
+
       - name: Install ${{ matrix.tool }} into an isolated root and verify
         env:
           SETUP_ROOT: ${{ runner.temp }}/ws-${{ matrix.tool }}
