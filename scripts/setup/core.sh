@@ -11,8 +11,16 @@
 # its profile is built on the shared modules.
 
 # Logging ─────────────────────────────────────────────────────────────
-# House style: ANSI-colored by severity, always on; the message text
-# stays plain inside the color span so grep keeps working.
+# House log standard (user, 2026-11-07): every line is
+#   [YYYY-MM-DD HH:MM:SS] [LEVEL] message
+# so logs diagnose fast and grep clean. COLOUR IS OPT-IN: most logs
+# land in files (WS/logs) where ANSI only hurts, so the default is
+# plain. A script that loops or prints to a console opts in with a
+# --colour argument (honoured anywhere in argv) or SETUP_LOG_COLOUR=1;
+# colour then wraps ONLY the [LEVEL] token, by severity (INFO cyan,
+# OK green, SKIP dim, WARN bold yellow, ERROR bold red), and the
+# message text stays plain so grep keeps working. (This supersedes
+# the 2026-11-06 always-on rule.)
 COL_GREEN=$'\033[0;32m'
 COL_YELLOW=$'\033[1;33m'
 COL_RED=$'\033[0;31m'
@@ -20,12 +28,24 @@ COL_CYAN=$'\033[0;36m'
 COL_DIM=$'\033[2m'
 COL_RESET=$'\033[0m'
 COL_BOLD=$'\033[1m'
-
-step() { echo -e "\n${COL_BOLD}$*${COL_RESET}"; }
-ok()   { echo "${COL_GREEN}✓${COL_RESET} $*"; }
-skip() { echo "${COL_YELLOW}→ skip:${COL_RESET} $*"; }
-warn() { echo "${COL_YELLOW}⚠${COL_RESET} $*"; }
-die()  { echo -e "\n${COL_RED}✗ ERROR:${COL_RESET} $*\n"; exit 1; }
+SETUP_LOG_COLOUR="${SETUP_LOG_COLOUR:-0}"
+for _core_arg in "$@"; do
+  [[ "$_core_arg" == "--colour" ]] && SETUP_LOG_COLOUR=1
+done
+unset _core_arg
+_log() {
+  local _lvl="$1" _col="$2"; shift 2
+  if [[ "$SETUP_LOG_COLOUR" == 1 ]]; then
+    printf '[%s] [%s%s%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$_col" "$_lvl" "$COL_RESET" "$*"
+  else
+    printf '[%s] [%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$_lvl" "$*"
+  fi
+}
+step() { _log INFO  "$COL_CYAN"         "$@"; }
+ok()   { _log OK    "$COL_GREEN"        "$@"; }
+skip() { _log SKIP  "$COL_DIM"          "$@"; }
+warn() { _log WARN  "$COL_YELLOW"       "$@" >&2; }
+die()  { _log ERROR "$COL_BOLD$COL_RED" "$@" >&2; exit 1; }
 
 need_cmd() { command -v "$1" &>/dev/null || die "'$1' not found and is required to continue"; }
 need_cmd_or_install() { need_cmd "$1"; }  # reserved for future auto-install of deps
