@@ -87,6 +87,7 @@ only — so a run's config is auditable, never silent.
 | `LP_BASE_PORT` | 19401 | first CDP port; stop *i* uses base+*i* |
 | `LP_MAX_ROUNDS` | 0 | 0 = tour forever |
 | `LP_ONLY` | — | run only the stop whose last path segment matches |
+| `LP_JAR_WRITEBACK` | off | `1` = after each SHELL stop, merge the live session's cookies back into the jar (atomic, merge-only, fail-open), so the session keeps what it earns — notably a `cf_clearance` — across stops and rounds instead of re-facing Cloudflare from a static jar. If the engine refuses cookie read-back, it disables itself for that process and the tour carries on |
 | `LIGHTPANDA_BIN` | `$LIGHTPANDA_HOME/lightpanda`, then PATH | engine override |
 
 Round time is `len(LP_LINKS) × (TOUR_DWELL_S + TOUR_GAP_S)` — the
