@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.40.0
+version: 4.40.1
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -298,7 +298,14 @@ without ripgrep.
   are local Playwright engines: one persistent Chromium context per
   tour process (patchright = stock Chromium, driver CDP leaks
   patched; cloakbrowser = source-patched Chromium behind a
-  Playwright-shaped API, pip-installed into the tour venv). All
+  Playwright-shaped API, pip-installed into the tour venv). On nix
+  boxes their Chromium is a foreign binary: it runs only with its
+  interpreter patched to the store's matching glibc ld.so plus a
+  per-engine `closure.txt` of store lib dirs in the engine home
+  (tour.sh prepends it for these engines only — the system ld.so +
+  nix libc mix dies on GLIBC_PRIVATE symbols, and store libs from
+  mixed generations need version conflicts resolved by the loader
+  itself; proven on repl-30 2026-11-07). All
   engines produce the same per-stop verdicts
   (SHELL / LOGGED-OUT-WALL / CF-STALL / ERROR / UNKNOWN, time-to-shell,
   dwell hold, circuit breaker). Both dismiss blocking page popups

@@ -553,7 +553,15 @@ class _PwEngine(_Engine):
         return f" cookies={n} (injected at first stop)"
 
     async def run_stop(self, idx, url):
-        sess = await pw_ensure_session(self)
+        try:
+            sess = await pw_ensure_session(self)
+        except Exception as e:
+            # A launch failure (missing libs, a license gate, a
+            # broken download) is THIS stop's ERROR verdict, not a
+            # dead tour — the breaker decides when to give up.
+            log(f"stop {url.rsplit('/', 1)[-1]}: session launch "
+                f"failed: {type(e).__name__} {str(e)[:160]}", "ERROR")
+            return "ERROR", None, 0, 0
         return await run_stop_pw(idx, url, sess)
 
     def teardown(self):
