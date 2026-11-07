@@ -218,7 +218,7 @@ install_lightpanda() {
   record_tool_path_dirs "$XDG_BIN_HOME"
   wire_tool lightpanda LIGHTPANDA_HOME LIGHTPANDA_BIN -- "$XDG_BIN_HOME"
 
-  ok "lightpanda ready — tour: bash $SCRIPT_DIR/lp-tour.sh (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: lp-tour.sh --check)"
+  ok "lightpanda ready — tour: bash $REPL_SKILL_DIR/lp-tour.sh (config: $LIGHTPANDA_HOME/.env, see .env.example there; preflight: lp-tour.sh --check)"
 }
 
 clean_lightpanda() {

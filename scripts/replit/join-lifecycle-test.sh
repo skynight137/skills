@@ -8,7 +8,7 @@
 # key) is what proves the sweep is narrow: those must survive untouched.
 set -u
 cd "${REPL_HOME:-$HOME/workspace}" || exit 1
-S="${SETUP_SH:-${REPL_HOME:-$HOME/workspace}/.agents/skills/replit/scripts/setup.sh}"  # payload setup.sh (repo layout: scripts/replit/setup.sh — override with SETUP_SH)
+S="${SETUP_SH:-${REPL_HOME:-$HOME/workspace}/.agents/skills/replit/scripts/setup.sh}"  # payload setup.sh (repo layout: scripts/setup.sh --machine repl — override with SETUP_SH)
 TS="${REPL_HOME:-$HOME/workspace}/.local/bin/tailscale"
 SOCK="${TAILSCALE_SOCKET:-${TAILSCALE_STATE_DIR:-${XDG_STATE_HOME:-${REPL_HOME:-$HOME/workspace}/.local/state}/tailscale}/tailscaled.sock}"
 OUT="$HOME/lifecycle.out"

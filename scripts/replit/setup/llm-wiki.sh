@@ -66,8 +66,8 @@ _llm_wiki_provision_display() {
     case "$p" in *xkeyboard-config*) xkb="$st/nix/store/${p##*/}/share/X11/xkb" ;; esac
   done
   # nixenv sits next to this module (scripts/setup/), not in scripts/ where setup.sh lives.
-  cp -f "$SCRIPT_DIR/setup/nixenv" "$XDG_BIN_HOME/nixenv" \
-    || { warn "llm-wiki: nixenv tidak ada di $SCRIPT_DIR/setup — Xvfb hasil build tak bisa jalan"; return 1; }
+  cp -f "$REPL_SKILL_DIR/setup/nixenv" "$XDG_BIN_HOME/nixenv" \
+    || { warn "llm-wiki: nixenv tidak ada di $REPL_SKILL_DIR/setup — Xvfb hasil build tak bisa jalan"; return 1; }
   chmod +x "$XDG_BIN_HOME/nixenv"
   for p in $outs; do
     up="$st/nix/store/${p##*/}"
@@ -88,7 +88,7 @@ nix_bin_out() {
 }
 
 install_llm_wiki() {
-  local src="$SCRIPT_DIR/llm-wiki" dest note=""
+  local src="$REPL_SKILL_DIR/llm-wiki" dest note=""
 
   # Never create a SECOND copy: on a box that already runs the server from its own
   # directory (a workflow points at it and it holds that box's tokens + port), reuse

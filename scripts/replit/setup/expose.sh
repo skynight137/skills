@@ -115,7 +115,7 @@ BIN="$XDG_BIN_HOME"
 TSD="\$BIN/tailscaled"
 TS="\$BIN/tailscale"
 SERVICE_PORT="\${1:-\${FUNNEL_PORT:-}}"
-NOW="bash $SCRIPT_DIR/setup.sh"
+NOW="bash $SETUP_ENTRY --machine repl"
 
 for b in "\$TSD" "\$TS"; do
   [[ -x "\$b" ]] || { echo "launch-tailscaled: \$b is missing — run: \$NOW --tailscale" >&2; exit 1; }
