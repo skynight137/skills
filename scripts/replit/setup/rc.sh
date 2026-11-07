@@ -74,7 +74,7 @@ Options:
                         run: omniroute (gateway on PORT from .env, default
                         9000). The installer never starts the server.
   -lw, --llm-wiki           Install the llm-wiki server (knowledge base for agents):
-                        scripts/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
+                        scripts/setup/llm-wiki/ bundle -> \$XDG_DATA_HOME/llmwiki-app, then
                         AppImage + shared token (.env, chmod 600). Start with
                         run-public.sh (app + REST/MCP, public port \$LLM_WIKI_PORT or
                         8080, loopback 8199) and run-ui.sh (desktop UI in the browser

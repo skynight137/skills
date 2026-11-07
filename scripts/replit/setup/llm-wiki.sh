@@ -2,7 +2,7 @@
 #
 #   bash setup.sh --llm-wiki
 #
-# Installs the bundle shipped in scripts/llm-wiki/ into
+# Installs the bundle shipped in scripts/setup/llm-wiki/ into
 # ${LLM_WIKI_HOME:-$XDG_DATA_HOME/llmwiki-app}:
 #
 #   install.sh        fetch the AppImage, extract it, mint the shared token
@@ -88,7 +88,7 @@ nix_bin_out() {
 }
 
 install_llm_wiki() {
-  local src="$REPL_SKILL_DIR/llm-wiki" dest note=""
+  local src="$SETUP_LIB_DIR/llm-wiki" dest note=""
 
   # Never create a SECOND copy: on a box that already runs the server from its own
   # directory (a workflow points at it and it holds that box's tokens + port), reuse

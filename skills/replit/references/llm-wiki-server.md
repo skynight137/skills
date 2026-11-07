@@ -13,7 +13,7 @@ Berlaku di Replit maupun VPS Debian/Ubuntu biasa.
 
 Server Node yang mempublikasikan; API app **tidak** diumbar langsung.
 
-## File bundel — sekarang dikirim **di dalam skill ini** (`scripts/llm-wiki/`)
+## File bundel — sekarang dikirim **di dalam skill ini** (`scripts/setup/llm-wiki/`)
 
 `install.sh` (unduh AppImage + ekstrak + bikin token) · `run-public.sh` (supervisor:
 Xvfb → WM → app → server, auto-restart) · `run-ui.sh` (x11vnc + noVNC: UI desktop
