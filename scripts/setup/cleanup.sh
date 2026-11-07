@@ -592,8 +592,9 @@ clean() {
     all)
       step "Cleaning entire toolchain"
       # Strip env wiring FIRST: strip_userenv_keys needs a tomlkit-capable
-      # interpreter, and clean_uv deletes uv — the fallback tomlkit source
-      # when python3/.venv lack it — as a side effect of removing binaries.
+      # interpreter, and clean_uv deletes uv — one tomlkit source (the
+      # provisioned $TOML_VENV is another) — as a side effect of removing
+      # binaries. Stripping first keeps every source available.
       # 'all' is the ONLY path that strips env wiring (the rc / .replit
       # managed blocks) — per-target clean removes binaries + payload only.
       if [[ -f "$BASHRC" ]]; then
@@ -633,8 +634,8 @@ clean() {
       ;;
     android-tools|uv|node|zsh|oc|opencode|ollama|claude|hermes|ori|camofox|lightpanda|hermes-chromium|llm-wiki|rclone|qbt|aria2|ffmpeg|cloudflared|tailscale|sshx)
       # Drop this tool's wiring from the managed blocks FIRST (strip_userenv_keys
-      # needs a tomlkit-capable interpreter; clean_uv deletes uv, the fallback
-      # source), then remove the binaries + payload. Labels here differ from
+      # needs a tomlkit-capable interpreter; clean_uv deletes uv, one of the
+      # sources), then remove the binaries + payload. Labels here differ from
       # wire_tool ownership labels: android-tools -> android, oc -> opencode.
       local wire_label="$CLEAN_TARGET"
       case "$wire_label" in
@@ -686,7 +687,7 @@ clean() {
       summary="$(IFS=','; echo "${CLEAN_TOOLS[*]}")"
       hint="bash setup.sh"
       # Drop env wiring FIRST (strip_userenv_keys needs a tomlkit-capable
-      # interpreter; clean_uv deletes uv, the fallback source), then remove
+      # interpreter; clean_uv deletes uv, one of the sources), then remove
       # the ticked binaries + payload.
       [[ -f "$BASHRC" ]] && strip_tool_wiring "${CLEAN_TOOLS[*]}" "$BASHRC"
       [[ " ${CLEAN_TOOLS[*]} " == *" hermes "* ]] && strip_legacy_hermes_block "$BASHRC" || true

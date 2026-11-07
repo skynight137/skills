@@ -6,6 +6,10 @@
 #   payload-checks  syntax + discovery + cited-path audit, 3 OSes.
 #   xdg-absent      setup.sh --help with every XDG var unset — the
 #                   "terkadang XDG tidak ada dan menyebabkan bugs" class.
+#   tomlkit-provision
+#                   fresh-box case: no tomlkit python and no uv on the
+#                   runner — setup must provision both itself so the
+#                   REPLIT_BASHRC pin lands (tests/tomlkit-provision.sh).
 #   tool-setups     per-tool install tests: each setup.sh lane installs
 #                   into an isolated root and must pass setup's own
 #                   --doctor line for that tool ("installed AND runs").
@@ -130,6 +134,22 @@ jobs:
             echo "Unguarded XDG reads found (see above)"; exit 1
           fi
           echo "standalone XDG reads guarded"
+
+  tomlkit-provision:
+    name: tomlkit provisioning (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner IS the fresh-box case: its python3 has no tomlkit and
+      # uv is not installed, so setup must provision both itself for the
+      # REPLIT_BASHRC pin to land. tests/tomlkit-provision.sh asserts on
+      # the pin + the doctor `toml python:` line + idempotency.
+      - name: setup provisions tomlkit; REPLIT_BASHRC pin lands
+        env:
+          SETUP_ROOT: ${{ runner.temp }}/ws-tomlkit
+        run: bash tests/tomlkit-provision.sh
 
   tool-setups:
     name: Tool setup (${{ matrix.tool }}, ${{ matrix.os }})
