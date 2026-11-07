@@ -42,7 +42,7 @@ main() {
       && ! $INSTALL_ZSH && ! $INSTALL_OPENCODE && ! $INSTALL_OLLAMA && ! $INSTALL_CLAUDE \
       && ! $INSTALL_HERMES && ! $INSTALL_ORI && ! $INSTALL_RCLONE \
       && ! $INSTALL_QBT && ! $INSTALL_ARIA2 && ! $INSTALL_FFMPEG \
-      && ! $INSTALL_CAMOFOX && ! $INSTALL_LIGHTPANDA && ! $INSTALL_OMNIROUTE && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
+      && ! $INSTALL_CAMOFOX && ! $INSTALL_LIGHTPANDA && ! $INSTALL_HERMES_CHROMIUM && ! $INSTALL_LLM_WIKI \
       && ! $INSTALL_CLOUDFLARED && ! $INSTALL_TAILSCALE && ! $INSTALL_SSHX && ! $INSTALL_JOIN; then
       die "No tools selected. Aborting."
     fi
@@ -133,7 +133,6 @@ main() {
   fi
   $INSTALL_CAMOFOX  && run_install_step camofox            install_camofox
   $INSTALL_LIGHTPANDA && run_install_step lightpanda       install_lightpanda
-  $INSTALL_OMNIROUTE && run_install_step omniroute        install_omniroute
   $INSTALL_HERMES_CHROMIUM && run_install_step hermes-chromium install_hermes_chromium
   # llm-wiki's server half is plain Node: on a fresh box without node the install used to
   # finish and then run-public.sh died with "node is required". Install it here instead.
@@ -178,7 +177,7 @@ main() {
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
    cloudflared  tailscale  sshx
-   camofox-browser  lightpanda (version subcommand)  omniroute
+   camofox-browser  lightpanda (version subcommand)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   else
@@ -198,7 +197,7 @@ SUMMARY
    opencode  ollama  claude  hermes  ori
    rclone  qbittorrent-nox  aria2c  ffmpeg  ffprobe
    cloudflared  tailscale  sshx
-   camofox-browser  lightpanda (version subcommand)  omniroute
+   camofox-browser  lightpanda (version subcommand)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SUMMARY
   fi
