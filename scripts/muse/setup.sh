@@ -280,7 +280,7 @@ start_sshd() {
   if [[ "$SSH_USER" != root ]]; then
     chown "$SSH_USER:$SSH_USER" "$SVC_HOME" 2>/dev/null || true; chmod 755 "$SVC_HOME"
     if [[ -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" ]]; then
-      chown "root:$SSH_USER" "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+      chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true; chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
     fi
   else
     if [[ -f "$SSHDIR/join-tailnet/ssh_host_ed25519_key" ]]; then
@@ -538,9 +538,11 @@ if [[ "$SSH_USER" == root ]]; then
   chown root:root "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
   chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
 else
-  # Group read lets the non-root sshd (running as the service user) open it.
-  chown "root:$SSH_USER" "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
-  chmod 640 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
+  # sshd 9.6 rejects a 0640 host key as too open (verified on
+  # muse-test, 2026-11-07): the key must be 0600, owned by the
+  # service user whose sshd reads it.
+  chown "$SSH_USER:$SSH_USER" "$SSHDIR/join-tailnet/ssh_host_ed25519_key" 2>/dev/null || true
+  chmod 600 "$SSHDIR/join-tailnet/ssh_host_ed25519_key"
 fi
 touch "$SSHDIR/join-tailnet/authorized_keys"; chmod 600 "$SSHDIR/join-tailnet/authorized_keys"
 # Default trust: the fleet hop (mirrors the replit skill's hermes-join-hop).
