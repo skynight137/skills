@@ -21,8 +21,15 @@ repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 setup_sh="$repo_root/scripts/replit/setup.sh"
 log="${RUNNER_TEMP:-/tmp}/install-${label//[^A-Za-z0-9]/_}.log"
 
+# GNU timeout is absent on macOS (gtimeout lives in coreutils); fall
+# back to the job-level timeout there rather than failing every leg.
+TIMEOUT_BIN=""
+for c in timeout gtimeout; do
+  if command -v "$c" >/dev/null 2>&1; then TIMEOUT_BIN="$c"; break; fi
+done
+
 echo "== install: setup.sh $flag (root: $SETUP_ROOT) =="
-if ! timeout "${TOOL_TIMEOUT:-1200}" bash "$setup_sh" "$flag" </dev/null >"$log" 2>&1; then
+if ! ${TIMEOUT_BIN:+$TIMEOUT_BIN "${TOOL_TIMEOUT:-1200}"} bash "$setup_sh" "$flag" </dev/null >"$log" 2>&1; then
   echo "FAIL: install step exited non-zero; last 40 log lines:"
   tail -40 "$log"
   exit 1
