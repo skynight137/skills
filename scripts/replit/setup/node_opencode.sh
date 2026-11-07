@@ -138,6 +138,7 @@ install_ollama() {
   sed -i \
     -e 's/SUDO="sudo"/SUDO=""/' \
     -e 's/ -o0 -g0//g' \
+    -e 's/^    configure_systemd$/    : # user-local install: no systemd service, no system user/' \
     -e 's#^OLLAMA_INSTALL_DIR=$(dirname${BINDIR})#:#' \
     -e "s#for BINDIR in /usr/local/bin /usr/bin /bin; do#OLLAMA_INSTALL_DIR=\"\${OLLAMA_INSTALL_DIR:-/usr/local}\"; OLLAMA_BIN_DIR=\"\${OLLAMA_BIN_DIR:-\$OLLAMA_INSTALL_DIR/bin}\"; for BINDIR in \"\$OLLAMA_BIN_DIR\"; do#" \
     "$installer"
@@ -145,6 +146,16 @@ install_ollama() {
   if grep -q 'SUDO="sudo"' "$installer"; then
     rm -f "$installer"
     die "Ollama installer patch failed (sudo still present) — upstream changed. Report: https://github.com/ollama/ollama/releases"
+  fi
+
+  # The upstream script calls configure_systemd whenever a systemctl
+  # binary exists; that function creates a system user and a systemd
+  # unit, which a user-local install must never do (it hard-fails
+  # without root — caught by the CI tool-setup leg on a stock Ubuntu
+  # runner, where systemctl exists but there is no systemd running).
+  if grep -qE '^    configure_systemd$' "$installer"; then
+    rm -f "$installer"
+    die "Ollama installer patch failed (configure_systemd call still present) — upstream changed. Report: https://github.com/ollama/ollama/releases"
   fi
 
   # Fresh-install contract: replace the payload, KEEP downloaded models
