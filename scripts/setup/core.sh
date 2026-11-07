@@ -46,6 +46,10 @@ ok()   { _log OK    "$COL_GREEN"        "$@"; }
 skip() { _log SKIP  "$COL_DIM"          "$@"; }
 warn() { _log WARN  "$COL_YELLOW"       "$@" >&2; }
 die()  { _log ERROR "$COL_BOLD$COL_RED" "$@" >&2; exit 1; }
+# ERROR without exiting — for failures that must be loud (and greppable at
+# [ERROR]) but must not kill the run: exit actions run under a trap that
+# swallows exit codes, and a mid-cleanup failure must not strand the rest.
+err()  { _log ERROR "$COL_BOLD$COL_RED" "$@" >&2; }
 
 need_cmd() { command -v "$1" &>/dev/null || die "'$1' not found and is required to continue"; }
 need_cmd_or_install() { need_cmd "$1"; }  # reserved for future auto-install of deps

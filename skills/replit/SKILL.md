@@ -1,7 +1,7 @@
 ---
 name: replit
 description: "Replit sandbox toolkit: platform facts ($HOME wiped on recreate, REPL_HOME/XDG/env channels, rc & git persistence), pulling libs from /nix/store (.replit [nix] packages vs replit.nix vs nix-env, transitive LD_LIBRARY_PATH closure), Playwright on Replit's bundled Chromium (no browser download), and the Camoufox anti-detection Firefox server (Cloudflare/Turnstile/WAF sites, cookie persistence, session keep-alive). Use for anything running ON a Replit/Nix workspace."
-version: 4.39.0
+version: 4.39.1
 license: MIT
 platforms: [linux]
 compatibility: "Replit workspaces (/home/runner containers) with nix. Camofox additionally needs Node >= 18 and GTK3/ALSA/X11 libs in /nix/store — gate: R=\"$(nix eval --raw nixpkgs#gtk3 2>/dev/null)\"; [ -e \"$R/lib/libgtk-3.so.0\" ] && echo warm (~10s; never glob /nix/store/*/lib/* on this box)."
@@ -281,7 +281,7 @@ without ripgrep.
   is not a valid `nix-env -iA` path). The generated launcher's fix-it command
   is derived from `$SCRIPT_DIR` — never a hardcoded clone path.
 - `dot_replit.py` — structural `.replit [userenv]` edits (tomlkit, no regex).
-  - Verify the pin after every `--fix`: `write_replit_bashrc` needs tomlkit (from `.venv`, `python3`, or `uv`). On a fresh box none of them has tomlkit, so the function prints `python tomlkit not found, write REPLIT_BASHRC manually` and still returns 0. That is a failure: workflow shells then lack the line and break silently. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`. Install tomlkit into `.venv` before running `setup.sh --fix` on a fresh machine, or add the line by hand under `[userenv.shared]`.
+  - Verify the pin after every `--fix`: `write_replit_bashrc` needs a tomlkit-capable python, resolved by `replit_resolve_py` (project `.venv`, PATH `python3`, setup's provisioned venv, then `uv run --with tomlkit` — every candidate must pass `import tomlkit`). When none qualifies, setup PROVISIONS one itself: it installs uv if the lane never ran, creates `$XDG_DATA_HOME/setup/toml-venv` and installs tomlkit into it (user, 2026-11-07 — setup prepares its own TOML writer, it does not warn and skip). The pin therefore lands on fresh boxes too; a miss now means provisioning itself failed (no network to astral.sh/PyPI) and is reported as an `[ERROR]`, not a silent return 0. `--doctor` prints a `toml python:` line naming the resolved source per box. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`.
 - `camofox.py` — **REMOVED in S5d (2026-11-07)**: the refresh-page-era
   scraping/keep-alive CLI. Its client machinery lives on inside
   `tour.py`'s camofox engine (below); there is no standalone camofox
