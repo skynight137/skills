@@ -2,7 +2,9 @@
 
 Lightpanda is a single static headless-browser binary that speaks CDP
 (`lightpanda serve`). In this skill it exists for ONE job: the
-session keep-alive tour — the unified `scripts/tour.py` with
+session keep-alive tour — the unified `scripts/setup/tour.py`, a
+SHARED payload serving both machine kinds (`--machine muse|repl`,
+pinned at the call site; default auto-detect), with
 `--browser lightpanda` (the default engine; `--browser camofox` runs
 the same tour, same verdicts, against the camofox server) — where a
 fleet of Replit workspaces is held inside its idle tolerance by an
@@ -85,6 +87,7 @@ untouched.
 | var | default | meaning |
 |---|---|---|
 | `TOUR_LINKS` (fallback `LP_LINKS`) | — (required) | comma/whitespace-separated project URLs, in stop order. Put the tour's own host FIRST: a pilot that opens itself first heals itself before touring the others |
+| `TOUR_MACHINE` | auto-detect | machine kind (`muse`\|`repl`); `--machine` wins over it. Selects the machine-shaped defaults (engine-home XDG base, jar + log-dir defaults); auto-detect mirrors `setup.sh`: REPL_HOME set → repl, else muse |
 | `TOUR_COOKIES` (fallback `LP_COOKIES`) | `$LIGHTPANDA_HOME/cookies.json` | login jar (browser-export or Playwright JSON) for an account that can open every link |
 | `TOUR_DWELL_S` | 60 | seconds the tab is held per stop |
 | `TOUR_GAP_S` | 0 | sleep between stops (tab closed) |
@@ -103,17 +106,19 @@ margin (see the staged dwell ladder in session-keepalive.md).
 ## Running it
 
 ```bash
-bash scripts/tour.sh --check   # preflight: config sources, binary, jar
-bash scripts/tour.sh           # the tour (stdout = the tour log)
+bash scripts/setup/tour.sh --browser lightpanda --machine repl --check   # preflight: config sources, binary, jar
+bash scripts/setup/tour.sh --browser lightpanda --machine repl           # the tour (stdout = the tour log)
 ```
 
 `tour.sh` is a justified shim, not a wrapper: it assembles the
 env the program cannot assemble for itself — the venv's greenlet
 needs `libstdc++.so.6` from the nix store on `LD_LIBRARY_PATH`
-**before** python starts, and it resolves the venv python. All
+**before** python starts (nix boxes only; skipped where no nix
+store exists), and it resolves the venv python. All
 logic lives in `tour.py`.
 
-For a `.replit` workflow, point the task at `tour.sh` and
+For a `.replit` workflow, point the task at `scripts/setup/tour.sh`
+with `--browser`/`--machine` pinned in the args, and
 redirect stdout to a file under `$REPL_HOME/logs/` (workflow
 consoles never stream runtime logs — references/exposing-ports.md);
 workflow names and wiring stay the operator's, as with every other

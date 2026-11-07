@@ -73,7 +73,7 @@ other lane assumes its persistence rules.
 | get a system lib that isn't installed (GTK, libatomic, any .so), debug `cannot open shared object file` | `references/nix.md` | `scripts/setup/generate-closure.sh`, `libpool.sh` |
 | drive Playwright without downloading a browser (the box ships Chromium) | `references/playwright-chromium.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `start-replit-chromium.sh` |
 | open bot-hardened sites (Cloudflare/Turnstile/WAF), keep logged-in Firefox sessions alive, **agent browsing on Hermes (camofox MCP — `browser_exec` is broken here)** | `references/camofox.md` | `setup.sh --camofox` (npm lane), `camofox-browser`, `camofox.py` |
-| run a session keep-alive tour (one unified tour, engine by flag: Lightpanda CDP by default — ~380 MB per stop, zero idle, one fresh server per stop; camofox server API as the fallback engine, same verdicts) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `tour.sh`, `tour.py` |
+| run a session keep-alive tour (one unified tour, a SHARED payload used by both machine kinds: engine by flag — Lightpanda CDP by default — ~380 MB per stop, zero idle, one fresh server per stop; camofox server API as the fallback engine, same verdicts) | `references/lightpanda.md` (+ the engine comparison in `references/session-keepalive.md`) | `setup.sh --lightpanda` (pinned 1.0.3 binary + tour venv), `scripts/setup/tour.sh --browser lightpanda --machine repl`, `scripts/setup/tour.py` |
 | pick the right browser lane (4 exist: Replit Playwright Chromium, Hermes Chrome 145, agent-browser CLI, Camofox) | `references/browser-lanes.md` | `$REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE`, `.hermes/tools/chromium-1208`, `agent-browser`, `:9377` |
 | run a desktop GUI app (AppImage/Tauri/GTK) headless — Xvfb, window manager, software GL, EGL/loader traps | `headless-gui-linux` skill | `start.sh`-style launcher, `xwininfo -root -tree` gates |
 | tell whether a browser is being detected as a bot; test sites + how to read them | `references/anti-bot-detection.md` | (test pages: sannysoft, CreepJS, BrowserLeaks, NopeCHA) |
@@ -268,23 +268,31 @@ without ripgrep.
   - Verify the pin after every `--fix`: `write_replit_bashrc` needs tomlkit (from `.venv`, `python3`, or `uv`). On a fresh box none of them has tomlkit, so the function prints `python tomlkit not found, write REPLIT_BASHRC manually` and still returns 0. That is a failure: workflow shells then lack the line and break silently. Check with `grep REPLIT_BASHRC $REPL_HOME/.replit`. Install tomlkit into `.venv` before running `setup.sh --fix` on a fresh machine, or add the line by hand under `[userenv.shared]`.
 - `camofox.py` — the scraping CLI (open/nav/eval/screenshot, cookie import,
   keep-alive loop). See camofox.md for its env-file contract.
-- `tour.py` / `tour.sh` — the unified keep-alive tour (supersedes
-  lp-tour): sequential stops over `TOUR_LINKS` (fallback `LP_LINKS`),
-  engine by `--browser lightpanda|camofox` (env `TOUR_BROWSER`,
+- `scripts/setup/tour.py` / `scripts/setup/tour.sh` — the unified
+  keep-alive tour (supersedes lp-tour), a SHARED payload: it lives in
+  the shared setup tree and serves both machine kinds — `--machine
+  muse|repl` (env `TOUR_MACHINE`; default auto-detect, REPL_HOME set
+  → repl else muse, mirroring `scripts/setup.sh`), with the machine
+  choosing the engine-home/jar/log-dir defaults. Sequential stops over
+  `TOUR_LINKS` (fallback `LP_LINKS`), engine by
+  `--browser lightpanda|camofox` (env `TOUR_BROWSER`,
   default lightpanda). Both engines produce the same per-stop verdicts
   (SHELL / LOGGED-OUT-WALL / CF-STALL / ERROR / UNKNOWN, time-to-shell,
   dwell hold, circuit breaker). Lightpanda: one fresh `lightpanda
   serve` per stop, native `--cookie` jar planting, optional jar
   write-back (`TOUR_JAR_WRITEBACK`). Camofox: drives the resident
-  camofox server via `camofox.py`'s client (cookie import path,
+  camofox server via `camofox.py`'s client — `camofox.py` stays a
+  repl-tree payload, resolved cross-tree at `scripts/replit/camofox.py`
+  (clean ERROR when absent, e.g. on a muse box) — cookie import path,
   session per stop, health surfaced as ERROR — the tour never spawns
-  the server). Config from the system env / the engine home's `.env`
+  the server. Config from the system env / the engine home's `.env`
   with the resolution logged per var; log lines are
   `[YYYY-MM-DD HH:MM:SS] [LEVEL] msg`, colour opt-in via `--colour`.
   The `.sh` is a justified shim — it only assembles `LD_LIBRARY_PATH`
-  (the venv's greenlet needs the nix-store `libstdc++.so.6` before
-  python starts) and resolves the venv python. `tour.sh --check` is
-  the no-open preflight. See `references/lightpanda.md`.
+  (nix boxes only: the venv's greenlet needs the nix-store
+  `libstdc++.so.6` before python starts) and resolves the venv
+  python. `tour.sh --check` is the no-open preflight. See
+  `references/lightpanda.md`.
 - `scripts/setup/generate-closure.sh` / `libpool.sh` — transitive lib closure (per-process) + pool healing (additive-only).
 - `$XDG_BIN_HOME/launch-camofox-browser` — **generated at install** (not a repo
   file): sources the closure `env.sh`, preflights the install, then starts
