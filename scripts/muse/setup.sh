@@ -87,6 +87,18 @@ while [[ $# -gt 0 ]]; do
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+# Shared primitives (logging, verify_sha256, tailscale_asset_name)
+# live in scripts/setup/core.sh — one copy for both setups (shared
+# setup refactor, S2). This script runs from a clone of the repo;
+# the SKILL.md payload flow fetches this file's sibling with it.
+_SETUP_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$_SETUP_DIR/../setup/core.sh" ]]; then
+  source "$_SETUP_DIR/../setup/core.sh"
+else
+  echo "setup: missing shared library $_SETUP_DIR/../setup/core.sh — run from a full clone of skynight137/skills" >&2
+  exit 2
+fi
+unset _SETUP_DIR
 WS="$HOME/workspace"
 # The stack tree's home: fresh installs use the OFFICIAL location,
 # ~/.ssh, as a REAL directory — the path standard tooling (ssh, git
@@ -728,18 +740,17 @@ phase_tailscale() {
 say "tailscale binaries (pinned $TSVER, checksum verified)"
 if [[ ! -x "$BINDIR/tailscaled" ]]; then
   mkdir -p "$BINDIR"
-  TGZ="tailscale_${TSVER}_amd64.tgz"
+  TGZ="$(tailscale_asset_name "$TSVER")"
   curl -fsSL -o "/tmp/$TGZ" "https://pkgs.tailscale.com/stable/$TGZ"
-  curl -fsSL -o "/tmp/$TGZ.sha256" "https://pkgs.tailscale.com/stable/$TGZ.sha256"
-  # Upstream's .sha256 is now a bare hash with no filename, which makes
-  # `sha256sum -c` fail ("no properly formatted checksum lines") — compare
-  # the first field manually; robust to both formats.
-  EXPECTED="$(awk '{print $1}' "/tmp/$TGZ.sha256")"
-  ACTUAL="$(sha256sum "/tmp/$TGZ" | awk '{print $1}')"
-  [[ "$EXPECTED" == "$ACTUAL" ]] || { echo "checksum mismatch for $TGZ: expected $EXPECTED got $ACTUAL" >&2; exit 1; }
+  # Upstream's .sha256 may be a bare hash with no filename, which makes
+  # `sha256sum -c` fail ("no properly formatted checksum lines") — take
+  # the first field, robust to both formats, and let core's verifier
+  # do the comparison.
+  EXPECTED="$(curl -fsSL "https://pkgs.tailscale.com/stable/$TGZ.sha256" | awk '{print $1}')"
+  verify_sha256 "/tmp/$TGZ" "$EXPECTED" "tailscale ($TGZ)"
   tar -xzf "/tmp/$TGZ" -C /tmp
-  install -m755 "/tmp/tailscale_${TSVER}_amd64/tailscale" "/tmp/tailscale_${TSVER}_amd64/tailscaled" "$BINDIR/"
-  rm -rf "/tmp/$TGZ" "/tmp/$TGZ.sha256" "/tmp/tailscale_${TSVER}_amd64"
+  install -m755 "/tmp/${TGZ%.tgz}/tailscale" "/tmp/${TGZ%.tgz}/tailscaled" "$BINDIR/"
+  rm -rf "/tmp/$TGZ" "/tmp/${TGZ%.tgz}"
 fi
 chown "$SSH_USER:$SSH_USER" "$TSDIR" 2>/dev/null || true
 
