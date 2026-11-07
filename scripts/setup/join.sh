@@ -7,8 +7,9 @@
 # loop, session-env content) stays in the profiles.
 #
 # S3a: sshd render + validate + start. S3b: tailscaled start +
-# identity + tailnet join. The repl profile adopts them here; the
-# muse profile adopts them when its profile is built (S4).
+# identity + tailnet join. S3c: tree prepare + host key + key
+# seeding. The repl profile adopts them here; the muse profile
+# adopts them when its profile is built (S4).
 
 # engine_banner <host> <port> — read one banner line over raw TCP.
 engine_banner() {
@@ -135,4 +136,32 @@ engine_tailnet_join() {
   fi
   ENGINE_TS_IP="$("$tsc" --socket="$sock" ip -4 2>/dev/null | head -1)"
   [ -n "$ENGINE_TS_IP" ] && ok "tailnet: $ENGINE_TS_IP" || warn "node belum punya alamat tailnet"
+}
+
+# engine_join_tree <dir> — prepare the join tree: the dir itself
+# (700), sshd's privsep dirs (a non-root sshd exits immediately
+# without /run/sshd), the host key (generated once — a new host key
+# on every boot is an ssh warning cascade), and an empty
+# authorized_keys. Everything idempotent, everything 600.
+engine_join_tree() {
+  local dir="$1" d
+  mkdir -p "$dir" && chmod 700 "$dir"
+  for d in /run/sshd /var/empty; do
+    [ -d "$d" ] || mkdir -p "$d" 2>/dev/null || true
+  done
+  [ -f "$dir/host_ed25519" ] || ssh-keygen -q -t ed25519 -N '' -f "$dir/host_ed25519"
+  [ -f "$dir/authorized_keys" ] || : >"$dir/authorized_keys"
+  chmod 600 "$dir/host_ed25519" "$dir/authorized_keys"
+}
+
+# engine_seed_key <dir> <full-key-line> — additive seeding: append
+# the key only if the file does not already contain it. Takes ONE
+# full key line per call (the pre-engine loop word-split its input,
+# which only ever worked because the in-code default is quoted as a
+# single word — an operator-supplied multi-word value would have
+# been appended as fragments).
+engine_seed_key() {
+  local dir="$1" k="$2"
+  [ -n "$k" ] || return 0
+  grep -qF "$k" "$dir/authorized_keys" 2>/dev/null || printf '%s\n' "$k" >>"$dir/authorized_keys"
 }

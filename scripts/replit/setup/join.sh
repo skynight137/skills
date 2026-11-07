@@ -158,25 +158,11 @@ install_join() {
   [ -n "$sshd" ] || { warn "sshd tidak tersedia di box ini"; return 1; }
 
   __rs_persist_ssh
-  mkdir -p "$RS_DIR" && chmod 700 "$RS_DIR"
   [ -n "$RS_SKILL_ROOT" ] || { warn "tak bisa menentukan root skill"; return 1; }
-
-  # privsep dirs: sshd as non-root exits immediately without /run/sshd.
-  local d
-  for d in /run/sshd /var/empty; do
-    [ -d "$d" ] || mkdir -p "$d" 2>/dev/null || true
-  done
-
-  [ -f "$RS_DIR/host_ed25519" ] || ssh-keygen -q -t ed25519 -N '' -f "$RS_DIR/host_ed25519"
-  [ -f "$RS_DIR/authorized_keys" ] || : >"$RS_DIR/authorized_keys"
-  chmod 600 "$RS_DIR/host_ed25519" "$RS_DIR/authorized_keys"
+  engine_join_tree "$RS_DIR"
 
   # the operator pastes hop keys here; a key already present is not duplicated
-  local k
-  for k in ${RS_AUTHORIZED_KEYS:-"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA7sltdUAAm1gZGopAj3je5mpEX73kSGTiFH74NmPfxh repl-hop"}; do
-    [ -n "$k" ] || continue
-    grep -qF "$k" "$RS_DIR/authorized_keys" 2>/dev/null || printf '%s\n' "$k" >>"$RS_DIR/authorized_keys"
-  done
+  engine_seed_key "$RS_DIR" "${RS_AUTHORIZED_KEYS:-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA7sltdUAAm1gZGopAj3je5mpEX73kSGTiFH74NmPfxh repl-hop}"
 
   # detached loopback hop for the operator's own box lives in ~/.ssh/authorized_keys
   # too, because the platform's port-22 proxy honours only that file.
