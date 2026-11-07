@@ -44,6 +44,29 @@ lanes in `scripts/setup/`. On a target box, land the payload tree where that box
 already point (each `SKILL.md`'s "Payloads" section gives the exact runtime
 layout); keep the tree intact — modules resolve via `$SCRIPT_DIR`.
 
+## Repository layout
+
+```
+skills/                      skill bundles — curated memory only (SKILL.md + references/)
+  muse/                      the Muse VM toolkit
+  replit/                    the Replit/Nix workspace toolkit
+scripts/                     executable payloads, referenced by the skills by path
+  setup.sh                   THE setup entry point (--machine muse|repl);
+                             setup PREPARES a box — it never runs workloads
+  setup/                     shared setup tree: profiles, lanes and the join engine
+    llm-wiki/                the llm-wiki app bundle (installed by the llm-wiki lane)
+  tour.py                    the shared keepalive tour — a ready-to-run script, NOT part of setup
+  tour.sh                    the tour's launcher (env assembly only; all logic is tour.py)
+  socks5-probe.py            one-shot SOCKS5 reachability diagnostic through tailscaled
+  muse/                      Muse-VM-only payloads
+    ts_proxy_connect.py      ssh ProxyCommand transport (CONNECT via the runtime tunnel proxy)
+  replit/                    Replit-only payloads: the nix machinery (nixenv, resolve-libs.sh,
+                             generate-closure.sh, libpool.sh), dot_replit.py (.replit editor),
+                             probe-tailnet-peers.sh, start-replit-chromium.sh, join-lifecycle-test.sh
+tests/                       CI tool-setup driver (tool-setup.sh) + test scripts
+.github/workflows/ci.yml     CI: payload checks + one isolated setup lane per tool
+```
+
 ## Skills
 
 | Skill | Purpose |
