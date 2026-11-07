@@ -1,22 +1,6 @@
 # shellcheck shell=bash
 # Interactive install/clean pick-menu (arrow keys). Sourced by setup.sh.
-# Helpers ───────────────────────────────────────────────────────────────────
-COL_GREEN=$'\033[0;32m'
-COL_YELLOW=$'\033[1;33m'
-COL_RED=$'\033[0;31m'
-COL_CYAN=$'\033[0;36m'
-COL_DIM=$'\033[2m'
-COL_RESET=$'\033[0m'
-COL_BOLD=$'\033[1m'
-
-step() { echo -e "\n${COL_BOLD}$*${COL_RESET}"; }
-ok()   { echo "${COL_GREEN}✓${COL_RESET} $*"; }
-skip() { echo "${COL_YELLOW}→ skip:${COL_RESET} $*"; }
-warn() { echo "${COL_YELLOW}⚠${COL_RESET} $*"; }
-die()  { echo -e "\n${COL_RED}✗ ERROR:${COL_RESET} $*\n"; exit 1; }
-
-need_cmd() { command -v "$1" &>/dev/null || die "'$1' not found and is required to continue"; }
-need_cmd_or_install() { need_cmd "$1"; }  # reserved for future auto-install of deps
+# Logging/cmd helpers live in scripts/setup/core.sh (shared library).
 
 # ── Interactive arrow-key menu (cb.sh pattern, set -e-safe) ──────────────────
 _MENU_ITEMS=(

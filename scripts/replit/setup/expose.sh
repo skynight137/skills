@@ -65,13 +65,7 @@ install_cloudflared() {
 # tailscale — official stable channel. The tarball name embeds the version, so
 # the version is resolved from the channel's JSON index; each archive ships a
 # `<tarball>.sha256` next to it, which is verified.
-tailscale_asset_name() {  # $1 = version from the channel index
-  case "$(uname -m)" in
-    x86_64|amd64)   echo "tailscale_${1}_amd64.tgz" ;;
-    aarch64|arm64)  echo "tailscale_${1}_arm64.tgz" ;;
-    *)              die "tailscale: unsupported arch $(uname -m)" ;;
-  esac
-}
+# tailscale_asset_name lives in scripts/setup/core.sh (shared library).
 
 # The daemon cannot be started by an installer (it needs a tailnet login first),
 # but it CAN be started from a stable path. This launcher is that path: written
